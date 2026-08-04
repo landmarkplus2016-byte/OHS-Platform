@@ -51,6 +51,46 @@ var AUTHENTICATED_ACTIONS = {
   },
   'reset_user_password': function (session, payload) {
     return handleResetUserPassword(session, payload);
+  },
+
+  // --- Employees (Section 3.5) ---------------------------------------------
+  'list_employees': function (session, payload) {
+    return handleListEmployees(session, payload);
+  },
+  'get_employee': function (session, payload) {
+    return handleGetEmployee(session, payload);
+  },
+  'create_employee': function (session, payload) {
+    return handleCreateEmployee(session, payload);
+  },
+  'update_employee': function (session, payload) {
+    return handleUpdateEmployee(session, payload);
+  },
+  'archive_employee': function (session, payload) {
+    return handleArchiveEmployee(session, payload);
+  },
+  'unarchive_employee': function (session, payload) {
+    return handleUnarchiveEmployee(session, payload);
+  },
+  'list_renewal_history': function (session, payload) {
+    return handleListRenewalHistory(session, payload);
+  },
+  'bulk_import_employees': function (session, payload) {
+    return handleBulkImportEmployees(session, payload);
+  },
+  'list_rdt_eligible': function (session, payload) {
+    return handleListRdtEligible(session, payload);
+  },
+  'record_rdt_wave': function (session, payload) {
+    return handleRecordRdtWave(session, payload);
+  },
+
+  // --- Field options (Section 3.7) -----------------------------------------
+  'list_field_options': function (session, payload) {
+    return handleListFieldOptions(session, payload);
+  },
+  'update_field_options': function (session, payload) {
+    return handleUpdateFieldOptions(session, payload);
   }
 };
 

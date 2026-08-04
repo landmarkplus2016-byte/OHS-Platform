@@ -30,6 +30,45 @@ function applyDocumentLang(lang) {
 }
 
 /**
+ * Merge a module's own strings into the global dictionaries (Section 5.1).
+ *
+ * Called at import time from js/modules/<name>/i18n.js, which every manifest
+ * imports — so by the time main.js registers the modules, their keys are in.
+ *
+ * A key that already exists is a hard boot error (rule 12.4). Two modules
+ * quietly overwriting each other's strings is the kind of bug that only shows
+ * up on the one page nobody opened before shipping.
+ *
+ * @param {string} moduleName for the error message
+ * @param {{en: Object, ar: Object}} dicts
+ */
+export function registerModuleDict(moduleName, dicts) {
+  Object.keys(DICTS).forEach((lang) => {
+    const incoming = (dicts && dicts[lang]) || {};
+    const target = DICTS[lang];
+
+    Object.keys(incoming).forEach((key) => {
+      if (key in target) {
+        throw new Error(
+          `[i18n] Module "${moduleName}" redefines existing ${lang} key "${key}".`
+        );
+      }
+      target[key] = incoming[key];
+    });
+  });
+
+  // Every key must exist in both languages (Section 8.1). Missing translations
+  // fall back to the key itself, which is visible but easy to miss — so say so
+  // in the console rather than letting it ship silently.
+  const missing = Object.keys((dicts && dicts.en) || {})
+    .filter((key) => !((dicts && dicts.ar) || {})[key]);
+
+  if (missing.length) {
+    console.warn(`[i18n] Module "${moduleName}" is missing Arabic for:`, missing);
+  }
+}
+
+/**
  * Translate a key, substituting {placeholder} params. Unknown keys fall back to
  * the key itself, which makes a missing translation obvious in the UI instead of
  * rendering blank.

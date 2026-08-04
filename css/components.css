@@ -4,16 +4,14 @@
    Ported from OHS-DB — if a component exists there, it looks identical here.
    Colors always come from tokens.css; never a literal hex.
 
-   Built so far: buttons, cards, form fields, inline messages, theme swatches.
+   Built so far: buttons, cards, form fields, inline messages, theme swatches,
+   badges, tables, filter bar, detail grid, cert rows, pager, banners, toasts,
+   modal.
 
    Still to come:
-     - .badge-*        cert state badges (valid / soon / urgent / expired /
-                       missing / suspended)
-     - .verdict-*      verdict badges + hero card (cleared / warning / blocked)
-     - .modal, .modal-backdrop
-     - .toast, .toast-stack
-     - .sync-strip     officer "data as of" strip
-     - .empty-state, .spinner, .skeleton
+     - .verdict-hero   the officer verdict card (Stage 8)
+     - .sync-strip     officer "data as of" strip (Stage 8)
+     - .kpi-*, .chart-* dashboard tiles (Stage 7)
    ========================================================================== */
 
 /* ---------- Buttons ---------- */
@@ -112,3 +110,255 @@
 /* ---------- Inline messages ---------- */
 .err { color: var(--danger); font-size: 12px; margin-block-start: 6px; min-height: 16px; }
 .ok  { color: var(--success); font-size: 12px; margin-block-start: 6px; }
+
+/* ---------- Page head ----------
+   Title, subtitle and page actions, above the filter bar. Distinct from the
+   topbar: the topbar belongs to the shell and shows the route's name, this
+   belongs to the page and carries its buttons. */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block-end: 14px;
+}
+.page-head-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.page-head-sub { font-size: 12.5px; color: var(--text2); margin-block-start: 3px; }
+.page-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Section header ---------- */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  margin: 18px 0 10px;
+  color: var(--text);
+}
+.section-head::before {
+  content: "";
+  width: 3px;
+  height: 16px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+/* ---------- Badges ---------- */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.badge-cleared  { background: var(--cleared-bg);   color: var(--cleared-dark); }
+.badge-warning  { background: var(--warn-bg);      color: var(--warn-dark); }
+.badge-blocked  { background: var(--blocked-bg);   color: var(--blocked-dark); }
+.badge-active   { background: var(--cleared-bg);   color: var(--cleared-dark); }
+.badge-inactive { background: var(--missing-bg);   color: var(--missing-tx); }
+
+.badge-team-field  { background: var(--team-field-bg);  color: var(--team-field-tx); }
+.badge-team-safety { background: var(--team-safety-bg); color: var(--team-safety-tx); }
+
+.badge-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-block-end: 16px; }
+
+/* ---------- Certificate state pills (Section 6.1) ----------
+   Six states, worst to best. No `plan` tier — anything past soon_days is
+   `valid`, so --plan-bg deliberately goes unused here. */
+.cert-state {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cs-suspended { background: var(--suspended-bg); color: var(--suspended-tx); }
+.cs-expired   { background: var(--blocked-bg);   color: var(--blocked-dark); }
+.cs-urgent    { background: var(--urgent-bg);    color: var(--urgent-tx); }
+.cs-soon      { background: var(--warn-bg);      color: var(--warn-dark); }
+.cs-missing   { background: var(--missing-bg);   color: var(--missing-tx); }
+.cs-valid     { background: var(--cleared-bg);   color: var(--cleared-dark); }
+
+/* ---------- Tables ---------- */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.tbl th,
+.tbl td {
+  padding: 11px 14px;
+  text-align: start;
+  border-block-end: 1px solid var(--border);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.tbl th {
+  background: var(--surface-sunken);
+  color: var(--text2);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.tbl tr:last-child td { border-block-end: none; }
+.tbl tbody tr:hover td { background: var(--surface-sunken); }
+
+/* Dropped inside a .card, which already draws the frame. */
+.tbl-flush { border: none; border-radius: 0; }
+
+.row-clickable { cursor: pointer; }
+.row-selected td { background: var(--primary-soft); }
+
+/* Cell variants used across every list. */
+.cell-sub   { color: var(--muted); font-size: 11.5px; margin-block-start: 2px; }
+.cell-mono  { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; }
+.cell-danger { color: var(--danger); font-size: 11px; margin-inline-start: 6px; }
+.cell-check { width: 40px; }
+.cell-empty {
+  text-align: center;
+  padding: 40px 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* A leading edge stripe keyed to the row's compliance state, for lists sorted
+   by urgency. Subtler than tinting the whole row, and it survives the hover
+   background. */
+.row-suspended td:first-child { box-shadow: inset 3px 0 0 var(--suspended-tx); }
+.row-expired   td:first-child { box-shadow: inset 3px 0 0 var(--blocked); }
+.row-urgent    td:first-child { box-shadow: inset 3px 0 0 var(--urgent-tx); }
+.row-soon      td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+
+/* ---------- Filter bar ---------- */
+.filter-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 14px;
+  margin-block-end: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.filter-bar .field { margin-block-end: 0; min-width: 180px; }
+.filter-bar .filter-search { flex: 1; max-width: 340px; }
+.filter-bar .count {
+  margin-inline-start: auto;
+  color: var(--text2);
+  font-size: 12.5px;
+  padding-block-end: 9px;
+}
+
+/* ---------- Pager ---------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-block-start: 14px;
+}
+.pager-label { font-size: 12.5px; color: var(--text2); }
+
+/* ---------- Detail grid ---------- */
+.detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.field-disp { display: flex; flex-direction: column; gap: 3px; }
+.field-disp .lab {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.field-disp .val { font-size: 13.5px; font-weight: 500; }
+.field-disp .val.muted { color: var(--muted); font-style: italic; }
+
+/* ---------- Certificate rows ---------- */
+.cert-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cert-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+.cert-info .name { font-weight: 600; font-size: 13px; }
+.cert-info .date { font-size: 12px; color: var(--text2); margin-block-start: 2px; }
+.cert-days { color: var(--muted); }
+.cert-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+/* ---------- Checkbox rows ---------- */
+.check-row { display: flex; gap: 20px; flex-wrap: wrap; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+
+/* ---------- Banners ----------
+   A page-level message that stays put, unlike a toast. */
+.banner {
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  margin-block-end: 14px;
+}
+.banner-warn   { background: var(--warn-bg);    color: var(--warn-dark); }
+.banner-danger { background: var(--blocked-bg); color: var(--blocked-dark); }
+
+/* ---------- Toasts ----------
+   Mounted on body, outside #app, so a redraw cannot remove a message the user
+   has not read yet. */
+.toast-stack {
+  position: fixed;
+  inset-block-end: 20px;
+  inset-inline-end: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 99;
+  pointer-events: none;
+}
+.toast {
+  background: var(--text);
+  color: var(--navy-text-strong);
+  padding: 12px 18px;
+  border-radius: 9px;
+  font-size: 13px;
+  box-shadow: var(--shadow-md);
+  max-width: 380px;
+  transition: opacity .2s ease;
+}
+.toast-success { background: var(--cleared-dark); }
+.toast-error   { background: var(--blocked-dark); }
+.toast-out     { opacity: 0; }
+
+/* ---------- Modal ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.modal {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 22px;
+  max-width: 460px;
+  width: 100%;
+  max-height: 88vh;
+  overflow: auto;
+  box-shadow: var(--shadow-md);
+}
+.modal h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+.modal-body { margin: 0 0 14px; font-size: 13px; line-height: 1.6; color: var(--text2); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-block-start: 16px; }

@@ -23,11 +23,15 @@ import { go } from './router.js';
  * developer console only and is never shown to a user.
  */
 export class ApiError extends Error {
-  constructor(code, message, fieldErrors) {
+  constructor(code, message, fieldErrors, rowErrors) {
     super(message || code);
     this.name = 'ApiError';
     this.code = code;
     this.field_errors = fieldErrors || null;
+
+    // Only the bulk-import actions set this: a per-row [{row, errors}] array,
+    // which a flat field map cannot express (Section 3.5). Null everywhere else.
+    this.row_errors = rowErrors || null;
   }
 }
 
@@ -94,7 +98,12 @@ async function call(action, payload) {
     go('login');
   }
 
-  throw new ApiError(code, message, envelope && envelope.field_errors);
+  throw new ApiError(
+    code,
+    message,
+    envelope && envelope.field_errors,
+    envelope && envelope.row_errors
+  );
 }
 
 export const api = { call };

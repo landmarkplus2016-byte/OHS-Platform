@@ -87,29 +87,61 @@ export const en = {
   group_system: 'System',
 
   /* ---------- Navigation ----------
-     The nav_* keys for module items live here rather than in each module's
-     i18n.js because the module i18n merge does not exist yet — it lands with
-     the first module in Stage 5, and these move across with it. */
+     Module nav labels moved into js/modules/<name>/i18n.js with Stage 5. What
+     is left here belongs to the shell itself. */
   nav_dashboard: 'Dashboard',
-  nav_field_team: 'Field Team',
-  nav_safety_team: 'Safety Team',
-  nav_renewals: 'Renewals',
-  nav_rdt: 'RDT',
-  nav_resigned: 'Resigned & Terminated',
   nav_equipment_active: 'Active Equipment',
   nav_equipment_rejected: 'Rejected Equipment',
   nav_export: 'Export',
   nav_settings: 'Settings',
 
+  /* ---------- Certificate states (Section 6.1) ----------
+     Shared: components/badge.js renders these for every module. There is no
+     `plan` tier — anything past soon_days is plain `valid`. */
+  state_suspended: 'Suspended',
+  state_expired: 'Expired',
+  state_urgent: 'Urgent',
+  state_soon: 'Soon',
+  state_missing: 'Missing',
+  state_valid: 'Valid',
+
+  /* ---------- Verdicts (Sections 6.2, 6.3) ---------- */
+  verdict_cleared: 'Cleared',
+  verdict_warning: 'Warning',
+  verdict_blocked: 'Blocked',
+
+  /* ---------- Teams ----------
+     Shared rather than module-local: badge.js draws team badges, and the
+     officer app labels employees by team too. */
+  team_field: 'Field',
+  team_safety: 'Safety',
+
+  /* ---------- Shared UI verbs and nouns ---------- */
+  cancel: 'Cancel',
+  confirm: 'Confirm',
+  edit: 'Edit',
+  view: 'View',
+  back: 'Back',
+  refresh: 'Refresh',
+  search: 'Search',
+  saving: 'Saving…',
+  actions: 'Actions',
+  filter_all: 'All',
+  select_all: 'Select all',
+  clear_selection: 'Clear',
+  no_results: 'Nothing matches the current filters.',
+  loading_data: 'Loading…',
+  field_required: 'This field is required.',
+  showing_count: 'Showing {shown} of {total}',
+  page_x_of_y: 'Page {page} of {pages}',
+  prev_page: 'Previous',
+  next_page: 'Next',
+  open_link: 'Open',
+
   /* ---------- Placeholders (each is replaced by its real page) ---------- */
   placeholder_dashboard: 'Dashboard placeholder',
   placeholder_settings: 'Settings placeholder',
   placeholder_export: 'Export placeholder',
-  placeholder_employees_field: 'Field team list placeholder',
-  placeholder_employees_safety: 'Safety team list placeholder',
-  placeholder_employees_renewals: 'Renewals placeholder',
-  placeholder_employees_rdt: 'RDT placeholder',
-  placeholder_employees_resigned: 'Resigned & terminated placeholder',
   placeholder_equipment_active: 'Active equipment placeholder',
   placeholder_equipment_rejected: 'Rejected equipment placeholder',
   placeholder_officer_home: 'Officer home placeholder',

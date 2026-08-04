@@ -239,6 +239,43 @@ function hasKeys_(obj) {
   return false;
 }
 
+/**
+ * Flags every own key of `obj` that is not in `allowedKeys`, as a field_errors
+ * map of {key: 'unknown'}.
+ *
+ * CLAUDE.md Section 3.1: unknown fields inside `payload` are a
+ * validation_failed, not something to ignore — a typo'd key silently dropping a
+ * value is worse than a rejected call. Callers add server-set-but-tolerated
+ * columns to `allowedKeys` so those stay ignored rather than rejected
+ * (Section 3.9).
+ *
+ * @param {Object} obj
+ * @param {Array<string>} allowedKeys
+ * @return {Object<string, string>} empty when every key is allowed
+ */
+function collectUnknownKeys_(obj, allowedKeys) {
+  var errors = {};
+  if (!obj || typeof obj !== 'object') return errors;
+
+  for (var key in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+    if (allowedKeys.indexOf(key) === -1) errors[key] = 'unknown';
+  }
+  return errors;
+}
+
+/**
+ * Left-pads a number with zeros: padNumber_(7, 4) → '0007'.
+ * @param {number} value
+ * @param {number} width
+ * @return {string}
+ */
+function padNumber_(value, width) {
+  var str = String(Math.floor(Math.abs(Number(value) || 0)));
+  while (str.length < width) str = '0' + str;
+  return str;
+}
+
 // ---------------------------------------------------------------------------
 // Private formatting helpers
 // ---------------------------------------------------------------------------

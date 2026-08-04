@@ -6,19 +6,28 @@
    reads `routes` to build the route table, `sidebar` to build the nav, and
    `group` to decide which header those nav items sit under.
 
-   Stage 4 registers the module with placeholder pages so the shell can be built
-   and navigated against something real. Stage 5 swaps every `page` below for
-   the actual renderer from ./pages/ — nothing else in this file changes, and
-   nothing outside this file changes either. That is the point of the manifest.
+   Each route carries two functions: `page` returns the HTML for the current
+   state, and `bind` runs once that HTML is in the DOM. `bind` is also where a
+   page starts loading the data it does not have yet — `page` is synchronous, so
+   it cannot await anything.
+
+   Importing ./i18n.js is what merges the module's strings into the global
+   dictionaries. It has to happen before the first render, and it does, because
+   main.js imports this file at boot.
    ========================================================================== */
 
 import { MODULE_NAMES } from '../../constants/globals.js';
-import { t } from '../../i18n/i18n.js';
+import './i18n.js';
 
-/** Temporary Stage 4 page body. Removed when the real pages land in Stage 5. */
-function placeholder(key) {
-  return `<div class="page-placeholder">${t(key)}</div>`;
-}
+import {
+  renderFieldListPage, bindFieldListPageEvents,
+  renderSafetyListPage, bindSafetyListPageEvents,
+} from './pages/listPage.js';
+import { renderEmployeeDetailPage, bindEmployeeDetailPageEvents } from './pages/detailPage.js';
+import { renderEmployeeFormPage, bindEmployeeFormEvents } from './pages/formPage.js';
+import { renderRenewalsPage, bindRenewalsPageEvents } from './pages/renewalsPage.js';
+import { renderRdtPage, bindRdtPageEvents } from './pages/rdtPage.js';
+import { renderResignedPage, bindResignedPageEvents } from './pages/resignedPage.js';
 
 export const manifest = {
   name: MODULE_NAMES.EMPLOYEES,
@@ -26,11 +35,19 @@ export const manifest = {
   group: 'EMPLOYEES',
 
   routes: [
-    { path: 'field',     page: () => placeholder('placeholder_employees_field') },
-    { path: 'safety',    page: () => placeholder('placeholder_employees_safety') },
-    { path: 'renewals',  page: () => placeholder('placeholder_employees_renewals') },
-    { path: 'rdt',       page: () => placeholder('placeholder_employees_rdt') },
-    { path: 'resigned',  page: () => placeholder('placeholder_employees_resigned') },
+    { path: 'field',    page: renderFieldListPage,  bind: bindFieldListPageEvents },
+    { path: 'safety',   page: renderSafetyListPage, bind: bindSafetyListPageEvents },
+    { path: 'renewals', page: renderRenewalsPage,   bind: bindRenewalsPageEvents },
+    { path: 'rdt',      page: renderRdtPage,        bind: bindRdtPageEvents },
+    { path: 'resigned', page: renderResignedPage,   bind: bindResignedPageEvents },
+
+    // Detail and form routes have no sidebar entry, so the topbar falls back to
+    // the module's display name. `employee/new/:team` is registered before
+    // `employee/:id/edit` for readability only — the router resolves literals
+    // ahead of ':' segments whatever the order.
+    { path: 'employee/:id',      page: renderEmployeeDetailPage, bind: bindEmployeeDetailPageEvents },
+    { path: 'employee/new/:team', page: renderEmployeeFormPage,  bind: bindEmployeeFormEvents },
+    { path: 'employee/:id/edit',  page: renderEmployeeFormPage,  bind: bindEmployeeFormEvents },
   ],
 
   sidebar: [

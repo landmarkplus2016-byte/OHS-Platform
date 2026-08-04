@@ -31,6 +31,18 @@
      No cert state currently maps to them. */
   --plan-bg:      #fef9c3;  --plan-tx:      #854d0e;
 
+  /* Team badges. Not compliance colors — they identify which roster someone is
+     on, and must not read as a state, so they sit outside the ladder above. */
+  --team-field-bg:  #e0e7ff;  --team-field-tx:  #3730a3;
+  --team-safety-bg: #fce7f3;  --team-safety-tx: #9d174d;
+
+  /* Surfaces that sit one step back from --card: table headers, cert rows,
+     the inner panels on the employee form. */
+  --surface-sunken: #fafbfd;
+
+  /* Modal backdrop. */
+  --overlay: rgba(20, 22, 40, 0.45);
+
   --radius-card: 14px;
   --radius-control: 8px;
   --radius-mobile: 10px;

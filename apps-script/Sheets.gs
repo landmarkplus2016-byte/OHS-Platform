@@ -231,6 +231,109 @@ function appendRow(sheetName, rowObject) {
 }
 
 /**
+ * Appends many rows in a single write.
+ *
+ * The per-row appendRow re-reads getLastRow() and issues its own setValues, so
+ * a 2,000-row import would spend the whole execution budget on round trips.
+ * This builds the full block in memory and writes it once.
+ *
+ * @param {string} sheetName
+ * @param {Array<Object>} rowObjects
+ * @return {number} the 1-based row number of the first row written, or 0 when
+ *     `rowObjects` was empty.
+ */
+function appendRows(sheetName, rowObjects) {
+  if (!rowObjects || rowObjects.length === 0) return 0;
+
+  var sheet = getSheet(sheetName);
+  var headers = getHeaders(sheetName);
+
+  var values = [];
+  for (var i = 0; i < rowObjects.length; i++) {
+    warnUnknownKeys_(sheetName, headers, rowObjects[i]);
+    values.push(objectToRowValues_(headers, rowObjects[i]));
+  }
+
+  var startRow = sheet.getLastRow() + 1;
+  var range = sheet.getRange(startRow, 1, values.length, headers.length);
+  range.setNumberFormat('@');
+  range.setValues(values);
+  return startRow;
+}
+
+/**
+ * Merges `updatesObject` into a row identified by its sheet row number.
+ *
+ * The counterpart to updateRowByKey for callers that already know the row —
+ * either because they hold it from readAllRowsWithIndex, or because the tab has
+ * a composite key (FieldOptions is keyed by list_key + option_value) that
+ * single-column matching cannot express.
+ *
+ * @param {string} sheetName
+ * @param {number} rowNumber  1-based; must be >= 2 (row 1 is the header).
+ * @param {Object} updatesObject
+ * @return {Object|null} the merged row, or null when the row number is out of range
+ */
+function updateRowAt(sheetName, rowNumber, updatesObject) {
+  var sheet = getSheet(sheetName);
+  var headers = getHeaders(sheetName);
+  if (!(rowNumber >= 2) || rowNumber > sheet.getLastRow()) return null;
+
+  warnUnknownKeys_(sheetName, headers, updatesObject);
+
+  var current = rowValuesToObject_(
+    headers,
+    sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0]
+  );
+
+  var values = objectToRowValues_(headers, mergeRow_(headers, current, updatesObject));
+  writeRow_(sheet, headers, rowNumber, values);
+  return rowValuesToObject_(headers, values);
+}
+
+/**
+ * Merges updates into many rows with one read and one write.
+ *
+ * Used by the batch paths — bulk import overwrites and RDT wave recording —
+ * where the per-row helpers would cost two range operations per employee.
+ * Rewriting the whole data range is last-write-wins against a concurrent
+ * editor, which is the concurrency model CLAUDE.md already accepts; callers
+ * still take a script lock so two batch writes cannot interleave.
+ *
+ * @param {string} sheetName
+ * @param {Array<{row: number, data: Object}>} updates
+ * @return {number} how many rows were merged
+ */
+function updateRowsAt(sheetName, updates) {
+  if (!updates || updates.length === 0) return 0;
+
+  var sheet = getSheet(sheetName);
+  var headers = getHeaders(sheetName);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+
+  var range = sheet.getRange(2, 1, lastRow - 1, headers.length);
+  var values = range.getValues();
+  var touched = 0;
+
+  for (var i = 0; i < updates.length; i++) {
+    var index = updates[i].row - 2;
+    if (index < 0 || index >= values.length) continue;
+
+    warnUnknownKeys_(sheetName, headers, updates[i].data);
+    var current = rowValuesToObject_(headers, values[index]);
+    values[index] = objectToRowValues_(headers, mergeRow_(headers, current, updates[i].data));
+    touched++;
+  }
+
+  if (touched === 0) return 0;
+
+  range.setNumberFormat('@');
+  range.setValues(values);
+  return touched;
+}
+
+/**
  * Merges `updatesObject` into the row matched by `keyColumn`/`keyValue` and
  * writes it back. Fields absent from `updatesObject` keep their current value.
  *
@@ -247,15 +350,7 @@ function updateRowByKey(sheetName, keyColumn, keyValue, updatesObject) {
   var headers = getHeaders(sheetName);
   warnUnknownKeys_(sheetName, headers, updatesObject);
 
-  var merged = {};
-  for (var i = 0; i < headers.length; i++) {
-    var h = headers[i];
-    merged[h] = Object.prototype.hasOwnProperty.call(updatesObject, h)
-      ? updatesObject[h]
-      : found.data[h];
-  }
-
-  var values = objectToRowValues_(headers, merged);
+  var values = objectToRowValues_(headers, mergeRow_(headers, found.data, updatesObject));
   writeRow_(getSheet(sheetName), headers, found.row, values);
   return rowValuesToObject_(headers, values);
 }
@@ -318,6 +413,23 @@ function findRowByKey_(sheetName, keyColumn, keyValue) {
     if (normalizeKey_(pairs[i].data[keyColumn]) === target) return pairs[i];
   }
   return null;
+}
+
+/**
+ * @private
+ * Builds a full header-keyed row from a current row plus a set of updates.
+ * Only keys that are real headers are taken from `updates`; everything else
+ * keeps its current value, so a partial update never blanks a column.
+ */
+function mergeRow_(headers, current, updates) {
+  var merged = {};
+  for (var i = 0; i < headers.length; i++) {
+    var h = headers[i];
+    merged[h] = (updates && Object.prototype.hasOwnProperty.call(updates, h))
+      ? updates[h]
+      : current[h];
+  }
+  return merged;
 }
 
 /** @private Normalizes any key-ish value to a comparable string. */

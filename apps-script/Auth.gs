@@ -94,6 +94,89 @@ function validateSession(token) {
 }
 
 // ---------------------------------------------------------------------------
+// Module permission gates (CLAUDE.md rule 5 — the server is the security gate)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a session may read a module's data through the admin actions.
+ *
+ * Officers are excluded on purpose. They carry implicit view across every
+ * module (loadPermissions_), but that grant is for the officer_* actions only —
+ * the admin list/get actions return links, comments, and audit fields that
+ * Section 7.6 strips from anything an officer sees.
+ *
+ * @param {{user: Object, permissions: Array<Object>}} session
+ * @param {string} module
+ * @return {boolean}
+ */
+function canViewModule(session, module) {
+  if (!session || !session.user) return false;
+  if (session.user.role === ROLES.OFFICER) return false;
+  if (session.user.is_super_admin) return true;
+  return hasGrant_(session.permissions, module, 'can_view');
+}
+
+/**
+ * Whether a session may mutate a module's data. Officers never edit anything,
+ * under any circumstance (CLAUDE.md rule 16).
+ *
+ * @param {{user: Object, permissions: Array<Object>}} session
+ * @param {string} module
+ * @return {boolean}
+ */
+function canEditModule(session, module) {
+  if (!session || !session.user) return false;
+  if (session.user.role === ROLES.OFFICER) return false;
+  if (session.user.is_super_admin) return true;
+  return hasGrant_(session.permissions, module, 'can_edit');
+}
+
+/**
+ * Guard for the top of a read action: returns a `forbidden` envelope to return
+ * immediately, or null when the caller may proceed.
+ *
+ *   var denied = requireModuleView(session, 'employees');
+ *   if (denied) return denied;
+ *
+ * @param {Object} session
+ * @param {string} module
+ * @return {GoogleAppsScript.Content.TextOutput|null}
+ */
+function requireModuleView(session, module) {
+  if (canViewModule(session, module)) return null;
+  console.warn('view denied: ' + describeSession_(session) + ' → ' + module);
+  return errResponse('forbidden', 'module_view_denied');
+}
+
+/**
+ * Guard for the top of a write action. Same contract as requireModuleView.
+ *
+ * @param {Object} session
+ * @param {string} module
+ * @return {GoogleAppsScript.Content.TextOutput|null}
+ */
+function requireModuleEdit(session, module) {
+  if (canEditModule(session, module)) return null;
+  console.warn('edit denied: ' + describeSession_(session) + ' → ' + module);
+  return errResponse('forbidden', 'module_edit_denied');
+}
+
+/** @private Looks up one flag in a resolved permissions array. */
+function hasGrant_(permissions, module, flag) {
+  var list = permissions || [];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].module === module) return list[i][flag] === true;
+  }
+  return false;
+}
+
+/** @private Identifies a session in a log line without leaking anything. */
+function describeSession_(session) {
+  if (!session || !session.user) return 'anonymous';
+  return session.user.user_id + ' (' + session.user.role + ')';
+}
+
+// ---------------------------------------------------------------------------
 // Action handlers
 // ---------------------------------------------------------------------------
 

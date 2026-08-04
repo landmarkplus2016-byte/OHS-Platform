@@ -64,7 +64,7 @@ let MODULES = [];
 /* ---------- Registration -------------------------------------------------- */
 
 /**
- * @param {Object} entry {path, page?, module?, titleKey?, superAdminOnly?}
+ * @param {Object} entry {path, page?, bind?, module?, titleKey?, superAdminOnly?}
  */
 function addRoute(entry) {
   const path = entry.path;
@@ -83,6 +83,12 @@ function addRoute(entry) {
     segments,
     paramCount: segments.filter((s) => s.charAt(0) === ':').length,
     page: entry.page || null,
+
+    // Runs after the page's HTML is in the DOM. It attaches listeners, and it
+    // is also where a page kicks off the fetch for data it does not have yet —
+    // `page` is synchronous and returns a string, so it cannot await anything.
+    bind: entry.bind || null,
+
     module: entry.module || null,
     titleKey: entry.titleKey || null,
     superAdminOnly: entry.superAdminOnly === true,
@@ -121,6 +127,7 @@ export function registerModules(modules) {
       addRoute({
         path: route.path,
         page: route.page,
+        bind: route.bind,
         module: PERMISSION_MODULES.has(manifest.name) ? manifest.name : null,
         titleKey: titleKeys.get(route.path) || manifest.displayNameKey || null,
       });

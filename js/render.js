@@ -57,6 +57,75 @@ function renderPageBody(entry) {
   return shellPage ? shellPage() : renderPlaceholder('placeholder_not_found');
 }
 
+/** Attach the current page's listeners, once its HTML is in the DOM. */
+function bindPage(entry) {
+  if (!entry || !entry.bind) return;
+
+  try {
+    entry.bind(ROUTE_PARAMS);
+  } catch (err) {
+    // A page that throws while binding must not take the shell down with it —
+    // the sidebar is already drawn, so the user can still navigate away.
+    console.error('[render] bind failed for route "' + ROUTE + '":', err);
+  }
+}
+
+/* ---------- Caret preservation across a redraw ---------------------------- */
+
+/**
+ * Every draw replaces #app wholesale, which destroys the focused control. On a
+ * page where a text input drives a live filter, that is how OHS-DB lost focus
+ * on every keystroke (Section 9.3).
+ *
+ * Rather than leave each page to remember, the draw path itself snapshots the
+ * focused control and puts the caret back afterwards. A page opts in simply by
+ * giving its input a stable `id`.
+ *
+ * @returns {{id: string, route: string, start: ?number, end: ?number}|null}
+ */
+function captureFocus() {
+  const el = document.activeElement;
+  if (!el || !el.id) return null;
+
+  const tag = el.tagName;
+  if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') return null;
+
+  const snapshot = { id: el.id, route: ROUTE, start: null, end: null };
+
+  // selectionStart throws on input types that have no text selection
+  // (date, number, checkbox…). Those still get focus back, just no caret.
+  try {
+    snapshot.start = el.selectionStart;
+    snapshot.end = el.selectionEnd;
+  } catch (err) {
+    /* no selection on this input type */
+  }
+
+  return snapshot;
+}
+
+/**
+ * Restore focus and caret, but only if we are still on the route the snapshot
+ * was taken on — a navigation that happens to reuse an id must not steal focus
+ * on arrival.
+ */
+function restoreFocus(snapshot) {
+  if (!snapshot || snapshot.route !== ROUTE) return;
+
+  const el = document.getElementById(snapshot.id);
+  if (!el || el === document.activeElement) return;
+
+  el.focus();
+
+  if (snapshot.start !== null && typeof el.setSelectionRange === 'function') {
+    try {
+      el.setSelectionRange(snapshot.start, snapshot.end);
+    } catch (err) {
+      /* input type does not support selection ranges */
+    }
+  }
+}
+
 export function render() {
   const app = document.getElementById('app');
   if (!app) return;
@@ -68,16 +137,20 @@ export function render() {
     return;
   }
 
+  const focusSnapshot = captureFocus();
+
   // ---- Shell-less screens -------------------------------------------------
   if (!CURRENT_USER) {
     app.innerHTML = renderLoginPage(CONFIG);
     bindLoginPageEvents();
+    restoreFocus(focusSnapshot);
     return;
   }
 
   if (ROUTE === 'change-password') {
     app.innerHTML = renderChangePasswordPage();
     bindChangePasswordEvents();
+    restoreFocus(focusSnapshot);
     return;
   }
 
@@ -89,6 +162,8 @@ export function render() {
   // the phone frame from js/shell/officerShell.js; for now the page draws bare.
   if (CURRENT_USER.role === ROLES.OFFICER) {
     app.innerHTML = renderPageBody(entry);
+    bindPage(entry);
+    restoreFocus(focusSnapshot);
     return;
   }
 
@@ -103,4 +178,6 @@ export function render() {
     </div>`;
 
   bindSidebarEvents();
+  bindPage(entry);
+  restoreFocus(focusSnapshot);
 }

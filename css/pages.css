@@ -4,12 +4,10 @@
    If a rule here would be useful to a second page, it belongs in
    components.css instead.
 
-   Built so far: the login screen.
+   Built so far: the login screen, the employee module's pages.
 
    Still to come:
-     - Change-password screen
      - Dashboard: KPI row, chart cards, "Recently Updated" list
-     - Employee list / detail / form pages (incl. cert grid, renewals, RDT)
      - Equipment list / detail / form / rejection pages
      - Settings page tabs (Users, Lists, Thresholds, Data)
      - Export page
@@ -78,6 +76,39 @@
   font-size: 12.5px;
   text-align: center;
   margin-block-end: 16px;
+}
+
+/* ---------- Employee form ----------
+   The certificate editor is the only part of the form with a shape of its own:
+   one bordered panel per certificate, each holding an expiry date and a Drive
+   link. Everything else reuses .detail-grid and .field from components.css. */
+.cert-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.cert-edit {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 12px;
+  background: var(--surface-sunken);
+}
+.cert-edit-title { font-weight: 600; font-size: 13px; margin-block-end: 8px; }
+.cert-edit .field:last-child { margin-block-end: 0; }
+
+/* ---------- Narrow desktops ----------
+   The sidebar is fixed at 230px, so below roughly 1100px the three-column
+   detail grid and the two-column certificate grids stop fitting. They collapse
+   rather than scrolling sideways — a horizontal scrollbar on a form is worse
+   than a taller form. */
+@media (max-width: 1100px) {
+  .detail-grid { grid-template-columns: repeat(2, 1fr); }
+  .cert-list,
+  .cert-edit-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .detail-grid { grid-template-columns: 1fr; }
 }
 
 /* ---------- Placeholder bodies (removed once real pages land) ----------

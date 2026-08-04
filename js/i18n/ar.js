@@ -86,25 +86,54 @@ export const ar = {
 
   /* ---------- Navigation ---------- */
   nav_dashboard: 'لوحة المعلومات',
-  nav_field_team: 'الفريق الميداني',
-  nav_safety_team: 'فريق السلامة',
-  nav_renewals: 'التجديدات',
-  nav_rdt: 'اختبار المخدرات',
-  nav_resigned: 'المستقيلون والمنتهية خدمتهم',
   nav_equipment_active: 'المعدات النشطة',
   nav_equipment_rejected: 'المعدات المرفوضة',
   nav_export: 'التصدير',
   nav_settings: 'الإعدادات',
 
+  /* ---------- Certificate states (Section 6.1) ---------- */
+  state_suspended: 'موقوفة',
+  state_expired: 'منتهية',
+  state_urgent: 'عاجلة',
+  state_soon: 'قريبة',
+  state_missing: 'غير مسجلة',
+  state_valid: 'سارية',
+
+  /* ---------- Verdicts (Sections 6.2, 6.3) ---------- */
+  verdict_cleared: 'مسموح',
+  verdict_warning: 'تحذير',
+  verdict_blocked: 'ممنوع',
+
+  /* ---------- Teams ---------- */
+  team_field: 'ميداني',
+  team_safety: 'سلامة',
+
+  /* ---------- Shared UI verbs and nouns ---------- */
+  cancel: 'إلغاء',
+  confirm: 'تأكيد',
+  edit: 'تعديل',
+  view: 'عرض',
+  back: 'رجوع',
+  refresh: 'تحديث',
+  search: 'بحث',
+  saving: 'جارٍ الحفظ…',
+  actions: 'إجراءات',
+  filter_all: 'الكل',
+  select_all: 'تحديد الكل',
+  clear_selection: 'مسح',
+  no_results: 'لا توجد نتائج مطابقة للفلاتر الحالية.',
+  loading_data: 'جارٍ التحميل…',
+  field_required: 'هذا الحقل مطلوب.',
+  showing_count: 'عرض {shown} من {total}',
+  page_x_of_y: 'صفحة {page} من {pages}',
+  prev_page: 'السابق',
+  next_page: 'التالي',
+  open_link: 'فتح',
+
   /* ---------- Placeholders (each is replaced by its real page) ---------- */
   placeholder_dashboard: 'لوحة المعلومات (مؤقت)',
   placeholder_settings: 'الإعدادات (مؤقت)',
   placeholder_export: 'التصدير (مؤقت)',
-  placeholder_employees_field: 'قائمة الفريق الميداني (مؤقت)',
-  placeholder_employees_safety: 'قائمة فريق السلامة (مؤقت)',
-  placeholder_employees_renewals: 'التجديدات (مؤقت)',
-  placeholder_employees_rdt: 'اختبار المخدرات (مؤقت)',
-  placeholder_employees_resigned: 'المستقيلون والمنتهية خدمتهم (مؤقت)',
   placeholder_equipment_active: 'المعدات النشطة (مؤقت)',
   placeholder_equipment_rejected: 'المعدات المرفوضة (مؤقت)',
   placeholder_officer_home: 'الصفحة الرئيسية للمفتش (مؤقت)',
