@@ -86,8 +86,6 @@ export const ar = {
 
   /* ---------- Navigation ---------- */
   nav_dashboard: 'لوحة المعلومات',
-  nav_equipment_active: 'المعدات النشطة',
-  nav_equipment_rejected: 'المعدات المرفوضة',
   nav_export: 'التصدير',
   nav_settings: 'الإعدادات',
 
@@ -134,8 +132,6 @@ export const ar = {
   placeholder_dashboard: 'لوحة المعلومات (مؤقت)',
   placeholder_settings: 'الإعدادات (مؤقت)',
   placeholder_export: 'التصدير (مؤقت)',
-  placeholder_equipment_active: 'المعدات النشطة (مؤقت)',
-  placeholder_equipment_rejected: 'المعدات المرفوضة (مؤقت)',
   placeholder_officer_home: 'الصفحة الرئيسية للمفتش (مؤقت)',
   placeholder_officer_sync: 'مزامنة بيانات المفتش (مؤقت)',
   placeholder_officer_locked: 'قفل بسبب قدم البيانات (مؤقت)',

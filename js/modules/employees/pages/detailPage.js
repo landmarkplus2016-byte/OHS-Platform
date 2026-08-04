@@ -153,6 +153,11 @@ function renderHistory(history) {
  * admin has no view permission on the equipment module, so an empty list here
  * means "none assigned" only for someone who can see equipment at all — which
  * is why the section is skipped entirely for everyone else.
+ *
+ * Rows link into the equipment module's detail route. That is a route name, not
+ * an import: modules never reach into each other's folders (rule 12), and the
+ * router owns the mapping from '#/equipment/LM-EQP-0001' to whichever module
+ * registered it.
  */
 function renderAssignedEquipment(equipment) {
   if (!equipment || equipment.length === 0) {
@@ -171,7 +176,7 @@ function renderAssignedEquipment(equipment) {
         </thead>
         <tbody>
           ${equipment.map((item) => `
-            <tr>
+            <tr class="row-clickable" data-equipment-id="${escapeHtml(item.equipment_id)}">
               <td>
                 <b>${escapeHtml(item.item)}</b>
                 <div class="cell-sub">${escapeHtml(item.brand)} · ${escapeHtml(item.equipment_id)}</div>
@@ -403,6 +408,12 @@ export function bindEmployeeDetailPageEvents(params) {
 
   root.querySelectorAll('[data-action="open-cert"]').forEach((btn) => {
     btn.addEventListener('click', () => openCertificate(btn.dataset.url));
+  });
+
+  // Assigned equipment → that item's detail page. Only these rows carry
+  // data-equipment-id, so the selector needs no further scoping.
+  root.querySelectorAll('tr[data-equipment-id]').forEach((row) => {
+    row.addEventListener('click', () => go('equipment/:id', { id: row.dataset.equipmentId }));
   });
 }
 

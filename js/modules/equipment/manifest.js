@@ -6,16 +6,24 @@
    no code and never import from each other (rule 12); the only thing they have
    in common is that the shell reads both the same way.
 
-   Stage 4 registers placeholder pages. Stage 7 swaps them for ./pages/.
+   Each route carries two functions: `page` returns the HTML for the current
+   state, and `bind` runs once that HTML is in the DOM. `bind` is also where a
+   page starts loading the data it does not have yet — `page` is synchronous, so
+   it cannot await anything.
+
+   Importing ./i18n.js is what merges the module's strings into the global
+   dictionaries. It has to happen before the first render, and it does, because
+   main.js imports this file at boot.
    ========================================================================== */
 
 import { MODULE_NAMES } from '../../constants/globals.js';
-import { t } from '../../i18n/i18n.js';
+import './i18n.js';
 
-/** Temporary Stage 4 page body. Removed when the real pages land in Stage 7. */
-function placeholder(key) {
-  return `<div class="page-placeholder">${t(key)}</div>`;
-}
+import { renderEquipmentListPage, bindEquipmentListPageEvents } from './pages/listPage.js';
+import { renderRejectedEquipmentPage, bindRejectedEquipmentPageEvents } from './pages/rejectedPage.js';
+import { renderEquipmentDetailPage, bindEquipmentDetailPageEvents } from './pages/detailPage.js';
+import { renderEquipmentFormPage, bindEquipmentFormEvents } from './pages/formPage.js';
+import { renderEquipmentRejectPage, bindEquipmentRejectPageEvents } from './pages/rejectFormPage.js';
 
 export const manifest = {
   name: MODULE_NAMES.EQUIPMENT,
@@ -23,8 +31,18 @@ export const manifest = {
   group: 'EQUIPMENT',
 
   routes: [
-    { path: 'equipment',          page: () => placeholder('placeholder_equipment_active') },
-    { path: 'equipment/rejected', page: () => placeholder('placeholder_equipment_rejected') },
+    { path: 'equipment',          page: renderEquipmentListPage,     bind: bindEquipmentListPageEvents },
+    { path: 'equipment/rejected', page: renderRejectedEquipmentPage, bind: bindRejectedEquipmentPageEvents },
+
+    // Detail and form routes have no sidebar entry, so the topbar falls back to
+    // the module's display name. 'equipment/new' and 'equipment/rejected' are
+    // two-segment literals competing with 'equipment/:id'; the router resolves
+    // the one with the fewest ':' segments first, so a literal always wins
+    // whatever the registration order.
+    { path: 'equipment/new',        page: renderEquipmentFormPage,   bind: bindEquipmentFormEvents },
+    { path: 'equipment/:id',        page: renderEquipmentDetailPage, bind: bindEquipmentDetailPageEvents },
+    { path: 'equipment/:id/edit',   page: renderEquipmentFormPage,   bind: bindEquipmentFormEvents },
+    { path: 'equipment/:id/reject', page: renderEquipmentRejectPage, bind: bindEquipmentRejectPageEvents },
   ],
 
   sidebar: [

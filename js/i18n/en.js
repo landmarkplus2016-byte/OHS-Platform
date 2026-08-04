@@ -90,8 +90,6 @@ export const en = {
      Module nav labels moved into js/modules/<name>/i18n.js with Stage 5. What
      is left here belongs to the shell itself. */
   nav_dashboard: 'Dashboard',
-  nav_equipment_active: 'Active Equipment',
-  nav_equipment_rejected: 'Rejected Equipment',
   nav_export: 'Export',
   nav_settings: 'Settings',
 
@@ -142,8 +140,6 @@ export const en = {
   placeholder_dashboard: 'Dashboard placeholder',
   placeholder_settings: 'Settings placeholder',
   placeholder_export: 'Export placeholder',
-  placeholder_equipment_active: 'Active equipment placeholder',
-  placeholder_equipment_rejected: 'Rejected equipment placeholder',
   placeholder_officer_home: 'Officer home placeholder',
   placeholder_officer_sync: 'Officer sync placeholder',
   placeholder_officer_locked: 'Officer lockout placeholder',

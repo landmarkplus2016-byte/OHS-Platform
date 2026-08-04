@@ -85,6 +85,32 @@ var AUTHENTICATED_ACTIONS = {
     return handleRecordRdtWave(session, payload);
   },
 
+  // --- Equipment (Section 3.6) ---------------------------------------------
+  'list_equipment': function (session, payload) {
+    return handleListEquipment(session, payload);
+  },
+  'get_equipment': function (session, payload) {
+    return handleGetEquipment(session, payload);
+  },
+  'create_equipment': function (session, payload) {
+    return handleCreateEquipment(session, payload);
+  },
+  'update_equipment': function (session, payload) {
+    return handleUpdateEquipment(session, payload);
+  },
+  'reject_equipment': function (session, payload) {
+    return handleRejectEquipment(session, payload);
+  },
+  'unreject_equipment': function (session, payload) {
+    return handleUnrejectEquipment(session, payload);
+  },
+  'list_inspection_history': function (session, payload) {
+    return handleListInspectionHistory(session, payload);
+  },
+  'bulk_import_equipment': function (session, payload) {
+    return handleBulkImportEquipment(session, payload);
+  },
+
   // --- Field options (Section 3.7) -----------------------------------------
   'list_field_options': function (session, payload) {
     return handleListFieldOptions(session, payload);
