@@ -13,9 +13,21 @@
 
 import { SCRIPT_URL, setScriptUrl, setConfig } from './state.js';
 import { api } from './api.js';
-import { initRouter } from './router.js';
+import { initRouter, registerModules } from './router.js';
 import { render } from './render.js';
 import { t, setLanguage, hasDeviceLanguagePreference } from './i18n/i18n.js';
+
+import { manifest as employeesManifest } from './modules/employees/manifest.js';
+import { manifest as equipmentManifest } from './modules/equipment/manifest.js';
+import { manifest as officerManifest } from './modules/officer/manifest.js';
+
+/**
+ * Every module the platform knows about, in the order the sidebar shows their
+ * groups (Section 5.3). This list and the import above it are the *only* two
+ * lines that change when a new module is added — the router, sidebar, dashboard
+ * and officer search all compose themselves from the manifests.
+ */
+const MODULES = [employeesManifest, equipmentManifest, officerManifest];
 
 /** localStorage key holding this device's Apps Script Web App URL. Never in code. */
 const SCRIPT_URL_KEY = 'ohsp_script_url';
@@ -255,6 +267,9 @@ async function start(app) {
     setLanguage(config.primary_language);
   }
 
+  // Modules first: initRouter() parses the opening hash against the route
+  // table, so the table has to exist before it runs.
+  registerModules(MODULES);
   initRouter();
   render();
 }

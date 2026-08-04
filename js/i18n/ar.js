@@ -63,8 +63,54 @@ export const ar = {
   lang_en: 'EN',
   lang_ar: 'ع',
 
-  /* ---------- Stage 3 placeholders (replaced in Stage 4+) ---------- */
+  /* ---------- Themes (swatch tooltips) ---------- */
+  theme_blue: 'أزرق',
+  theme_teal: 'أزرق مخضر',
+  theme_purple: 'بنفسجي',
+  theme_crimson: 'قرمزي',
+
+  /* ---------- Roles (sidebar user chip) ---------- */
+  role_super_admin: 'مدير عام',
+  role_module_admin: 'مدير وحدة',
+  role_officer: 'مسؤول سلامة',
+
+  /* ---------- Module display names ---------- */
+  module_employees: 'الموظفون',
+  module_equipment: 'المعدات',
+  module_officer: 'فحص الموقع',
+
+  /* ---------- Sidebar group headers (Section 8.5) ---------- */
+  group_employees: 'الموظفون',
+  group_equipment: 'المعدات',
+  group_system: 'النظام',
+
+  /* ---------- Navigation ---------- */
+  nav_dashboard: 'لوحة المعلومات',
+  nav_field_team: 'الفريق الميداني',
+  nav_safety_team: 'فريق السلامة',
+  nav_renewals: 'التجديدات',
+  nav_rdt: 'اختبار المخدرات',
+  nav_resigned: 'المستقيلون والمنتهية خدمتهم',
+  nav_equipment_active: 'المعدات النشطة',
+  nav_equipment_rejected: 'المعدات المرفوضة',
+  nav_export: 'التصدير',
+  nav_settings: 'الإعدادات',
+
+  /* ---------- Placeholders (each is replaced by its real page) ---------- */
   placeholder_dashboard: 'لوحة المعلومات (مؤقت)',
+  placeholder_settings: 'الإعدادات (مؤقت)',
+  placeholder_export: 'التصدير (مؤقت)',
+  placeholder_employees_field: 'قائمة الفريق الميداني (مؤقت)',
+  placeholder_employees_safety: 'قائمة فريق السلامة (مؤقت)',
+  placeholder_employees_renewals: 'التجديدات (مؤقت)',
+  placeholder_employees_rdt: 'اختبار المخدرات (مؤقت)',
+  placeholder_employees_resigned: 'المستقيلون والمنتهية خدمتهم (مؤقت)',
+  placeholder_equipment_active: 'المعدات النشطة (مؤقت)',
+  placeholder_equipment_rejected: 'المعدات المرفوضة (مؤقت)',
   placeholder_officer_home: 'الصفحة الرئيسية للمفتش (مؤقت)',
+  placeholder_officer_sync: 'مزامنة بيانات المفتش (مؤقت)',
+  placeholder_officer_locked: 'قفل بسبب قدم البيانات (مؤقت)',
+  placeholder_officer_verdict_employee: 'نتيجة فحص الموظف (مؤقت)',
+  placeholder_officer_verdict_equipment: 'نتيجة فحص المعدة (مؤقت)',
   placeholder_not_found: 'الصفحة غير موجودة.',
 };

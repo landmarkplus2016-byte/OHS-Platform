@@ -4,7 +4,7 @@
    Ported from OHS-DB — if a component exists there, it looks identical here.
    Colors always come from tokens.css; never a literal hex.
 
-   Built so far: buttons, cards, form fields, inline messages.
+   Built so far: buttons, cards, form fields, inline messages, theme swatches.
 
    Still to come:
      - .badge-*        cert state badges (valid / soon / urgent / expired /
@@ -12,7 +12,6 @@
      - .verdict-*      verdict badges + hero card (cleared / warning / blocked)
      - .modal, .modal-backdrop
      - .toast, .toast-stack
-     - .swatches       four-swatch theme picker
      - .sync-strip     officer "data as of" strip
      - .empty-state, .spinner, .skeleton
    ========================================================================== */
@@ -84,6 +83,31 @@
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 .field.inline { flex-direction: row; align-items: center; gap: 8px; }
+
+/* ---------- Theme swatches (Section 8.3) ----------
+   Four accent themes. The picker sits on the navy sidebar today and on the navy
+   officer header in Stage 8, so the active ring is drawn against navy. */
+.swatches {
+  display: flex;
+  gap: 8px;
+  margin-block-end: 12px;
+}
+.swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+.swatch.blue    { background: var(--theme-color-blue); }
+.swatch.teal    { background: var(--theme-color-teal); }
+.swatch.purple  { background: var(--theme-color-purple); }
+.swatch.crimson { background: var(--theme-color-crimson); }
+.swatch.active {
+  border-color: var(--navy-text-strong);
+  box-shadow: 0 0 0 2px var(--navy);
+}
 
 /* ---------- Inline messages ---------- */
 .err { color: var(--danger); font-size: 12px; margin-block-start: 6px; min-height: 16px; }

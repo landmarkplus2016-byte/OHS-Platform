@@ -80,12 +80,26 @@
   margin-block-end: 16px;
 }
 
-/* ---------- Stage 3 placeholder body (removed once real pages land) ---------- */
+/* ---------- Placeholder bodies (removed once real pages land) ----------
+   .stage-placeholder fills the viewport, for screens that draw without a shell
+   around them. .page-placeholder sits inside .content, under the topbar. */
 .stage-placeholder {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.page-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-card);
   color: var(--muted);
   font-size: 14px;
 }

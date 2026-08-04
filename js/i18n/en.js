@@ -64,8 +64,58 @@ export const en = {
   lang_en: 'EN',
   lang_ar: 'ع',
 
-  /* ---------- Stage 3 placeholders (replaced in Stage 4+) ---------- */
+  /* ---------- Themes (swatch tooltips) ---------- */
+  theme_blue: 'Blue',
+  theme_teal: 'Teal',
+  theme_purple: 'Purple',
+  theme_crimson: 'Crimson',
+
+  /* ---------- Roles (sidebar user chip) ---------- */
+  role_super_admin: 'Super admin',
+  role_module_admin: 'Module admin',
+  role_officer: 'Safety officer',
+
+  /* ---------- Module display names ---------- */
+  module_employees: 'Employees',
+  module_equipment: 'Equipment',
+  module_officer: 'Site check',
+
+  /* ---------- Sidebar group headers (Section 8.5) ----------
+     Keyed by the manifest's `group`, lower-cased: group: 'EMPLOYEES' → group_employees. */
+  group_employees: 'Employees',
+  group_equipment: 'Equipment',
+  group_system: 'System',
+
+  /* ---------- Navigation ----------
+     The nav_* keys for module items live here rather than in each module's
+     i18n.js because the module i18n merge does not exist yet — it lands with
+     the first module in Stage 5, and these move across with it. */
+  nav_dashboard: 'Dashboard',
+  nav_field_team: 'Field Team',
+  nav_safety_team: 'Safety Team',
+  nav_renewals: 'Renewals',
+  nav_rdt: 'RDT',
+  nav_resigned: 'Resigned & Terminated',
+  nav_equipment_active: 'Active Equipment',
+  nav_equipment_rejected: 'Rejected Equipment',
+  nav_export: 'Export',
+  nav_settings: 'Settings',
+
+  /* ---------- Placeholders (each is replaced by its real page) ---------- */
   placeholder_dashboard: 'Dashboard placeholder',
+  placeholder_settings: 'Settings placeholder',
+  placeholder_export: 'Export placeholder',
+  placeholder_employees_field: 'Field team list placeholder',
+  placeholder_employees_safety: 'Safety team list placeholder',
+  placeholder_employees_renewals: 'Renewals placeholder',
+  placeholder_employees_rdt: 'RDT placeholder',
+  placeholder_employees_resigned: 'Resigned & terminated placeholder',
+  placeholder_equipment_active: 'Active equipment placeholder',
+  placeholder_equipment_rejected: 'Rejected equipment placeholder',
   placeholder_officer_home: 'Officer home placeholder',
+  placeholder_officer_sync: 'Officer sync placeholder',
+  placeholder_officer_locked: 'Officer lockout placeholder',
+  placeholder_officer_verdict_employee: 'Employee verdict placeholder',
+  placeholder_officer_verdict_equipment: 'Equipment verdict placeholder',
   placeholder_not_found: 'Page not found.',
 };

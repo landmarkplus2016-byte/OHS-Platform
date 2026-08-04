@@ -1,14 +1,223 @@
 /* ==========================================================================
    layout.css — structural shells only. No component styling, no page styling.
 
-   Will contain:
-     - .app-shell            admin desktop grid (sidebar + topbar + content)
-     - .sidebar              navy sidebar, group headers, nav items, active state
-     - .topbar               admin topbar (page title, language switch, user menu)
-     - .content              scrollable main content region
-     - .phone-shell          officer mobile frame (header, sync strip, body)
-     - Responsive breakpoints and the RTL flip rules for the above
+   Built so far: the admin desktop shell (sidebar + topbar + content).
+   Still to come: .phone-shell, the officer mobile frame (Stage 8).
 
-   All spacing uses logical properties (margin-inline-start, padding-inline-end,
-   inset-inline-start, …) — never margin-left / padding-right. See Section 8.2.
+   Ported from design/admin_prototype.html. All spacing uses logical properties
+   (margin-inline-start, padding-inline-end, inset-inline-start, …) — never
+   margin-left / padding-right — so the whole shell flips in Arabic without a
+   single RTL override. See Section 8.2.
    ========================================================================== */
+
+/* ---------- Admin shell ---------- */
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main {
+  flex: 1;
+  min-width: 0; /* lets wide tables scroll inside .content instead of stretching the shell */
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  padding: 26px;
+  flex: 1;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--navy);
+  color: var(--navy-text);
+  display: flex;
+  flex-direction: column;
+  border-inline-end: 1px solid var(--navy-border);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.side-logo {
+  padding: 20px 22px;
+  border-block-end: 1px solid var(--navy-border);
+}
+.side-logo .mark {
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: .5px;
+}
+.side-logo .name {
+  color: var(--navy-text-strong);
+  font-weight: 700;
+  font-size: 15px;
+  margin-block-start: 2px;
+}
+.side-logo .sub {
+  color: var(--navy-muted);
+  font-size: 11px;
+  margin-block-start: 2px;
+}
+
+/* ---------- Sidebar navigation ---------- */
+.nav {
+  padding: 12px 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  color: var(--navy-text);
+  text-decoration: none;
+  font-size: 13.5px;
+  /* The active marker sits on the leading edge, so it moves to the right in Arabic. */
+  border-inline-start: 3px solid transparent;
+}
+.nav-link:hover {
+  background: rgba(255, 255, 255, .04);
+  color: var(--navy-text-strong);
+}
+.nav-link.active {
+  background: rgba(255, 255, 255, .08);
+  color: var(--navy-text-strong);
+  border-inline-start-color: var(--primary);
+}
+.nav-link .ic {
+  width: 16px;
+  text-align: center;
+  opacity: .8;
+  flex-shrink: 0;
+}
+
+/* Group headers: always visible, never collapsible (Section 8.5). */
+.nav-group {
+  margin-block-start: 14px;
+}
+.nav-group-label {
+  padding: 0 22px 6px;
+  color: var(--navy-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+
+/* ---------- Sidebar footer ---------- */
+.side-bottom {
+  padding: 14px 22px;
+  border-block-start: 1px solid var(--navy-border);
+}
+
+.lang-toggle {
+  display: flex;
+  gap: 6px;
+  margin-block-end: 12px;
+}
+.lang-toggle button {
+  flex: 1;
+  background: transparent;
+  color: var(--navy-text);
+  border: 1px solid var(--navy-border);
+  border-radius: 6px;
+  padding: 5px;
+  font-size: 12px;
+}
+.lang-toggle button.active {
+  background: var(--primary);
+  color: var(--navy-text-strong);
+  border-color: var(--primary);
+}
+
+.userchip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--navy-text);
+}
+.userchip .avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--navy-text-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+.userchip .who {
+  font-size: 12.5px;
+  color: var(--navy-text-strong);
+}
+.userchip .role {
+  font-size: 10.5px;
+  color: var(--navy-muted);
+}
+
+.side-signout {
+  margin-block-start: 10px;
+  background: transparent;
+  color: var(--navy-muted);
+  border: none;
+  font-size: 12px;
+  text-align: start;
+  padding: 0;
+  text-decoration: underline;
+}
+.side-signout:hover {
+  color: var(--navy-text-strong);
+}
+
+/* ---------- Topbar ---------- */
+.topbar {
+  background: var(--card);
+  border-block-end: 1px solid var(--border);
+  padding: 16px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 9;
+}
+.topbar .title {
+  font-weight: 700;
+  font-size: 18px;
+}
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---------- Narrow screens ----------
+   Admins work on desktop (Section 1), so this is a graceful-degradation rule
+   rather than a mobile layout: the sidebar stops being sticky-full-height and
+   scrolls with the page instead of eating the viewport. */
+@media (max-width: 900px) {
+  .app {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    border-inline-end: none;
+    border-block-end: 1px solid var(--navy-border);
+  }
+  .content {
+    padding: 18px;
+  }
+}

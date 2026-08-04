@@ -11,11 +11,12 @@
    other sessions.
    ========================================================================== */
 
-import { CURRENT_USER, clearSession } from '../state.js';
+import { CURRENT_USER } from '../state.js';
 import { t } from '../i18n/i18n.js';
 import { api } from '../api.js';
 import { sha256Hex } from '../utils/crypto.js';
 import { go, homeRoute } from '../router.js';
+import { signOut } from './sidebar.js';
 
 /** Section 4.2 — enforced here, and re-checked as a hash-format test server-side. */
 const MIN_PASSWORD_LENGTH = 8;
@@ -147,24 +148,9 @@ export function bindChangePasswordEvents() {
     }
   }
 
-  /**
-   * Escape hatch. Without it, a user who cannot recall their current password is
-   * stuck on this screen — the guard blocks every other route.
-   *
-   * When the topbar lands (Stage 4) this moves into a shared sign-out helper;
-   * today this is the app's only sign-out control.
-   */
-  async function signOut() {
-    try {
-      await api.call('logout');
-    } catch (err) {
-      // Already gone server-side, or offline. Either way, drop the local session.
-      console.warn('[change-password] logout call failed, clearing locally:', err);
-    }
-    clearSession();
-    go('login'); // draws the login screen, since CURRENT_USER is now null
-  }
-
+  // Escape hatch. Without it, a user who cannot recall their current password is
+  // stuck on this screen — the guard blocks every other route. Shared with the
+  // sidebar's Sign out so both do exactly the same thing.
   saveBtn.addEventListener('click', save);
   root.querySelector('[data-action="signout"]').addEventListener('click', signOut);
 

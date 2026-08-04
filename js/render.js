@@ -2,82 +2,105 @@
    render.js — the single draw path. Every state change ends here.
 
    One job: pick the right shell and the right page for the current state, write
-   it into #app, and bind that page's events. The guards live here rather than in
-   the router so they apply on every draw, however it was triggered — a
-   navigation, a language switch, or a data refresh.
+   it into #app, and bind that page's events.
 
-   Stage 3 draws the login screen for real and placeholders for everything else.
-   The admin and officer shells arrive in Stage 4.
+   The route guards are defined in router.js — they are rules about routes — but
+   they are applied here, so they run on every draw however it was triggered: a
+   navigation, a language switch, a theme change, or a session cleared out from
+   under the app by api.js.
+
+   Three shells:
+     - none        login and change-password, which draw a centered card
+     - officer     the phone frame (Stage 8); Stage 4 draws the bare page
+     - admin       sidebar + topbar + content
    ========================================================================== */
 
-import { CONFIG, CURRENT_USER, ROUTE } from './state.js';
+import { CONFIG, CURRENT_USER, ROUTE, ROUTE_PARAMS } from './state.js';
 import { renderLoginPage, bindLoginPageEvents } from './shell/loginPage.js';
 import { renderChangePasswordPage, bindChangePasswordEvents } from './shell/changePasswordPage.js';
-import { go, homeRoute, KNOWN_ROUTES } from './router.js';
+import { renderSidebar, bindSidebarEvents } from './shell/sidebar.js';
+import { renderTopbar } from './shell/topbar.js';
+import { go, guardRoute, findRoute, getModules } from './router.js';
+import { ROLES } from './constants/globals.js';
 import { t } from './i18n/i18n.js';
 
 /**
- * Routes a user with must_change_password = TRUE may still reach. Everything
- * else redirects to the change-password screen (Section 4.3, step 9).
+ * Shell-owned routes have no page function in the route table (router.js
+ * SHELL_ROUTES) — they are drawn from here instead.
  *
- * 'logout' is exempt so the user is never trapped: someone who cannot recall
- * their current password must still be able to sign out.
+ * Dashboard, Settings and Export are placeholders until Stages 6 and 9 build
+ * js/shell/dashboardPage.js, settingsPage.js and exportPage.js.
  */
-const PASSWORD_CHANGE_EXEMPT_ROUTES = new Set(['change-password', 'logout']);
+const SHELL_PAGES = new Map([
+  ['dashboard', () => renderPlaceholder('placeholder_dashboard')],
+  ['settings',  () => renderPlaceholder('placeholder_settings')],
+  ['export',    () => renderPlaceholder('placeholder_export')],
+]);
 
-/** Temporary Stage 3 body for routes whose real page has not been built yet. */
+/** Temporary page body for routes whose real page has not been built yet. */
 function renderPlaceholder(key) {
-  return `<div class="stage-placeholder">${t(key)}</div>`;
+  return `<div class="page-placeholder">${t(key)}</div>`;
+}
+
+/** The topbar title for a route: its own label, or the app name as a fallback. */
+function pageTitle(entry) {
+  return t(entry && entry.titleKey ? entry.titleKey : 'app_name');
+}
+
+/** The body for the current route, or a not-found. */
+function renderPageBody(entry) {
+  if (!entry) return renderPlaceholder('placeholder_not_found');
+
+  if (entry.page) return entry.page(ROUTE_PARAMS);
+
+  const shellPage = SHELL_PAGES.get(entry.path);
+  return shellPage ? shellPage() : renderPlaceholder('placeholder_not_found');
 }
 
 export function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
-  // ---- Guard 1: no session → login, whatever the hash says. --------------
-  // Refreshing the page lands here by design: the token is memory-only
-  // (Section 4.5).
+  // ---- Guards ------------------------------------------------------------
+  const redirect = guardRoute(CURRENT_USER, ROUTE);
+  if (redirect) {
+    go(redirect); // re-enters render() with the corrected route
+    return;
+  }
+
+  // ---- Shell-less screens -------------------------------------------------
   if (!CURRENT_USER) {
     app.innerHTML = renderLoginPage(CONFIG);
     bindLoginPageEvents();
     return;
   }
 
-  // ---- Guard 2: forced password change blocks every other route. ---------
-  // Section 4.1.c / 4.3 step 9. UI-only enforcement, by design — the account is
-  // already authenticated, so this is a usability policy, not a security one.
-  if (CURRENT_USER.must_change_password && !PASSWORD_CHANGE_EXEMPT_ROUTES.has(ROUTE)) {
-    go('change-password');
+  if (ROUTE === 'change-password') {
+    app.innerHTML = renderChangePasswordPage();
+    bindChangePasswordEvents();
     return;
   }
 
-  // ---- Guard 3: signed in but pointed at '' or the login screen. ---------
-  if (!ROUTE || ROUTE === 'login') {
-    go(homeRoute(CURRENT_USER));
+  const entry = findRoute(ROUTE);
+
+  // ---- Officer shell ------------------------------------------------------
+  // Guard 4 in router.js has already pinned officers inside 'check/*', so
+  // reaching here as an officer means an officer route. Stage 8 wraps this in
+  // the phone frame from js/shell/officerShell.js; for now the page draws bare.
+  if (CURRENT_USER.role === ROLES.OFFICER) {
+    app.innerHTML = renderPageBody(entry);
     return;
   }
 
-  // ---- Pages --------------------------------------------------------------
-  if (!KNOWN_ROUTES.has(ROUTE)) {
-    app.innerHTML = renderPlaceholder('placeholder_not_found');
-    return;
-  }
+  // ---- Admin shell --------------------------------------------------------
+  app.innerHTML = `
+    <div class="app">
+      ${renderSidebar(getModules())}
+      <div class="main">
+        ${renderTopbar(pageTitle(entry))}
+        <div class="content">${renderPageBody(entry)}</div>
+      </div>
+    </div>`;
 
-  switch (ROUTE) {
-    case 'dashboard':
-      app.innerHTML = renderPlaceholder('placeholder_dashboard');
-      break;
-
-    case 'change-password':
-      app.innerHTML = renderChangePasswordPage();
-      bindChangePasswordEvents();
-      break;
-
-    case 'check/home':
-      app.innerHTML = renderPlaceholder('placeholder_officer_home');
-      break;
-
-    default:
-      app.innerHTML = renderPlaceholder('placeholder_not_found');
-  }
+  bindSidebarEvents();
 }
