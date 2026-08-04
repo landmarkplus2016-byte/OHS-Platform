@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="blue">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OHS DB — Admin Prototype</title>
+<style>
+:root{
+  --bg:#f5f6fa; --card:#ffffff; --border:#e2e4ed;
+  --text:#1a1d2e; --text2:#4a4f6a; --muted:#9095b0;
+  --primary:#3d5af1; --primary-dark:#2d47d4; --primary-soft:#3d5af11f;
+  --success:#16a34a; --warning:#d97706; --danger:#e05252;
+  --purple:#7c3aed; --teal:#0d9488;
+  --st-complete-bg:#dcfce7; --st-complete-tx:#15803d;
+  --st-prog-bg:#fef3c7;    --st-prog-tx:#b45309;
+  --st-new-bg:#ede9fe;     --st-new-tx:#6d28d9;
+  --st-danger-bg:#fee2e2;  --st-danger-tx:#991b1b;
+  --st-warn-bg:#ffedd5;    --st-warn-tx:#9a3412;
+  --radius-card:14px; --radius-control:8px;
+  --shadow-sm:0 1px 2px rgba(16,24,64,.05);
+  --shadow-md:0 4px 14px rgba(16,24,64,.08);
+  --font-base:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --navy:#0f1942; --navy-soft:#16215a; --navy-border:#232c63;
+  --navy-text:#aab2d8; --navy-text-strong:#ffffff; --navy-muted:#6b74a8;
+  --theme-color-blue:#3d5af1; --theme-color-teal:#0d9488;
+  --theme-color-purple:#7c3aed; --theme-color-crimson:#be123c;
+}
+[data-theme="blue"]{--primary:#3d5af1;--primary-dark:#2d47d4;--primary-soft:#3d5af11f;}
+[data-theme="teal"]{--primary:#0d9488;--primary-dark:#0b7a70;--primary-soft:#0d94881f;}
+[data-theme="purple"]{--primary:#7c3aed;--primary-dark:#6425c9;--primary-soft:#7c3aed1f;}
+[data-theme="crimson"]{--primary:#be123c;--primary-dark:#9f0f32;--primary-soft:#be123c1f;}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-base);font-size:14px}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+[dir="rtl"]{font-family:'Segoe UI','Tahoma',system-ui,sans-serif}
+
+/* ---------- Shell ---------- */
+.app{display:flex;min-height:100vh}
+.sidebar{width:230px;background:var(--navy);color:var(--navy-text);display:flex;flex-direction:column;border-inline-end:1px solid var(--navy-border);position:sticky;top:0;height:100vh}
+.side-logo{padding:20px 22px;border-block-end:1px solid var(--navy-border)}
+.side-logo .mark{color:var(--primary);font-weight:800;font-size:20px;letter-spacing:.5px}
+.side-logo .name{color:var(--navy-text-strong);font-weight:700;font-size:15px;margin-top:2px}
+.side-logo .sub{color:var(--navy-muted);font-size:11px;margin-top:2px}
+.nav{padding:12px 0;flex:1;overflow-y:auto}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 22px;color:var(--navy-text);text-decoration:none;font-size:13.5px;border-inline-start:3px solid transparent}
+.nav a:hover{background:rgba(255,255,255,.04);color:var(--navy-text-strong)}
+.nav a.active{background:rgba(255,255,255,.08);color:var(--navy-text-strong);border-inline-start-color:var(--primary)}
+.nav a .ic{width:16px;text-align:center;opacity:.8}
+.side-bottom{padding:14px 22px;border-block-start:1px solid var(--navy-border)}
+.swatches{display:flex;gap:8px;margin-bottom:12px}
+.swatch{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.swatch.blue{background:var(--theme-color-blue)}
+.swatch.teal{background:var(--theme-color-teal)}
+.swatch.purple{background:var(--theme-color-purple)}
+.swatch.crimson{background:var(--theme-color-crimson)}
+.swatch.active{border-color:#fff;box-shadow:0 0 0 2px var(--navy)}
+.lang-toggle{display:flex;gap:6px;margin-bottom:12px}
+.lang-toggle button{flex:1;background:transparent;color:var(--navy-text);border:1px solid var(--navy-border);border-radius:6px;padding:5px;font-size:12px}
+.lang-toggle button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.userchip{display:flex;align-items:center;gap:9px;color:var(--navy-text)}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.userchip .who{font-size:12.5px;color:var(--navy-text-strong)}
+.userchip .role{font-size:10.5px;color:var(--navy-muted)}
+.side-signout{margin-top:10px;background:transparent;color:var(--navy-muted);border:none;font-size:12px;text-align:start;padding:0;text-decoration:underline}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:#fff;border-block-end:1px solid var(--border);padding:16px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:9}
+.topbar .title{font-weight:700;font-size:18px}
+.topbar .sub{color:var(--text2);font-size:12.5px;margin-top:1px}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+.dirty-dot{width:8px;height:8px;background:var(--warning);border-radius:50%;display:inline-block;margin-inline-end:6px}
+.dirty-txt{color:var(--warning);font-size:12px}
+.content{padding:26px;flex:1}
+
+/* ---------- Buttons ---------- */
+.btn{border-radius:var(--radius-control);padding:9px 15px;font-size:13px;border:1px solid transparent;font-weight:600;display:inline-flex;align-items:center;gap:7px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-ghost{background:transparent;border-color:var(--border);color:var(--text2)}
+.btn-ghost:hover{background:var(--bg)}
+.btn-danger{background:#fbeaea;color:var(--danger)}
+.btn-danger:hover{background:#f6d5d5}
+.btn-sm{padding:6px 10px;font-size:12px}
+
+/* ---------- Cards ---------- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);box-shadow:var(--shadow-sm);padding:18px}
+.card h3{margin:0 0 10px;font-size:15px;font-weight:700}
+
+/* ---------- Badges ---------- */
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11.5px;font-weight:700}
+.badge-cleared{background:var(--st-complete-bg);color:var(--st-complete-tx)}
+.badge-warning{background:var(--st-warn-bg);color:var(--st-warn-tx)}
+.badge-blocked{background:var(--st-danger-bg);color:var(--st-danger-tx)}
+.badge-new{background:var(--st-new-bg);color:var(--st-new-tx)}
+.badge-active{background:var(--st-complete-bg);color:var(--st-complete-tx)}
+.badge-inactive{background:#f3f4f6;color:#6b7280}
+.badge-team-field{background:#e0e7ff;color:#3730a3}
+.badge-team-safety{background:#fce7f3;color:#9d174d}
+
+/* ---------- KPI cards ---------- */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:var(--radius-card);padding:16px;box-shadow:var(--shadow-sm)}
+.kpi .n{font-size:32px;font-weight:800}
+.kpi .l{color:var(--text2);font-size:12.5px;margin-top:2px}
+.kpi.blue .n{color:var(--primary)}
+.kpi.red .n{color:var(--danger)}
+.kpi.amber .n{color:var(--warning)}
+.kpi.green .n{color:var(--success)}
+.kpi-split{display:flex;gap:14px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.kpi-split span b{color:var(--text)}
+
+/* ---------- Inputs ---------- */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label{font-size:12px;color:var(--text2);font-weight:600}
+.field input,.field select,.field textarea{border:1px solid var(--border);border-radius:var(--radius-control);padding:9px 10px;background:#fff}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.field.inline{flex-direction:row;align-items:center;gap:8px}
+
+/* ---------- Tables ---------- */
+.tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden}
+.tbl th,.tbl td{padding:11px 14px;text-align:start;border-block-end:1px solid var(--border);font-size:13px}
+.tbl th{background:#fafbfd;color:var(--text2);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+.tbl tr:last-child td{border-block-end:none}
+.tbl tr:hover td{background:#fafbfd}
+.tbl .row-clickable{cursor:pointer}
+
+/* ---------- Charts ---------- */
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.donut-wrap{display:flex;align-items:center;gap:20px}
+.donut-legend{display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+.legend-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:7px;vertical-align:middle}
+
+/* ---------- Tabs ---------- */
+.tabs{display:flex;gap:2px;border-block-end:1px solid var(--border);margin-bottom:18px}
+.tab{padding:10px 16px;background:transparent;border:none;color:var(--text2);font-weight:600;font-size:13px;border-block-end:2px solid transparent;margin-block-end:-1px}
+.tab.active{color:var(--primary);border-block-end-color:var(--primary)}
+.tab .dot{display:inline-block;width:6px;height:6px;background:var(--success);border-radius:50%;margin-inline-start:6px;vertical-align:middle}
+
+/* ---------- Detail grid ---------- */
+.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.field-disp{display:flex;flex-direction:column;gap:3px}
+.field-disp .lab{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.field-disp .val{font-size:13.5px;font-weight:500}
+.field-disp .val.muted{color:var(--muted);font-style:italic}
+
+/* ---------- Cert rows ---------- */
+.cert-list{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cert-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fafbfd}
+.cert-info .name{font-weight:600;font-size:13px}
+.cert-info .date{font-size:12px;color:var(--text2);margin-top:2px}
+.cert-state{padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700}
+.cs-valid{background:var(--st-complete-bg);color:var(--st-complete-tx)}
+.cs-plan{background:#fef9c3;color:#854d0e}
+.cs-soon{background:var(--st-warn-bg);color:var(--st-warn-tx)}
+.cs-urgent{background:#ffe4e6;color:#9f1239}
+.cs-expired{background:var(--st-danger-bg);color:var(--st-danger-tx)}
+.cs-missing{background:#f3f4f6;color:#6b7280}
+
+/* ---------- Login ---------- */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f5f6fa 0%,#e8ecf5 100%)}
+.login-card{background:#fff;padding:34px;border-radius:16px;box-shadow:var(--shadow-md);width:400px;max-width:92vw}
+.login-card .mark{color:var(--primary);font-weight:800;font-size:26px;text-align:center;letter-spacing:1px}
+.login-card h1{margin:6px 0 4px;font-size:18px;text-align:center}
+.login-card .sub{color:var(--text2);font-size:12.5px;text-align:center;margin-bottom:22px}
+.upload-box{border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;margin-bottom:20px;background:#fafbfd}
+.upload-box .t{font-size:13px;font-weight:600;margin-bottom:4px}
+.upload-box .s{color:var(--text2);font-size:12px;margin-bottom:12px}
+.upload-inline{display:flex;align-items:center;justify-content:space-between;background:#e0f2fe;border:1px solid #7dd3fc;border-radius:8px;padding:8px 12px;margin-bottom:16px;font-size:12.5px;color:#075985}
+.err{color:var(--danger);font-size:12px;margin-top:6px}
+.ok{color:var(--success);font-size:12px;margin-top:6px}
+
+/* ---------- Filter bar ---------- */
+.filter-bar{background:#fff;border:1px solid var(--border);border-radius:var(--radius-card);padding:14px;margin-bottom:14px;display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.filter-bar .field{margin-bottom:0;min-width:180px}
+.filter-bar .count{margin-inline-start:auto;color:var(--text2);font-size:12.5px}
+
+/* ---------- Toast ---------- */
+.toast{position:fixed;bottom:20px;inset-inline-end:20px;background:#1a1d2e;color:#fff;padding:12px 18px;border-radius:9px;font-size:13px;box-shadow:var(--shadow-md);z-index:99}
+
+/* ---------- Section header ---------- */
+.section-head{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;margin:18px 0 10px;color:var(--text)}
+.section-head::before{content:"";width:3px;height:16px;background:var(--primary);border-radius:2px}
+
+/* ---------- RTL adjustments handled by logical props ---------- */
+.hero-banner{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:18px 22px;border-radius:var(--radius-card);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.hero-banner .h{font-weight:700;font-size:15px}
+.hero-banner .s{opacity:.85;font-size:12.5px;margin-top:2px}
+.hero-banner .btn{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)}
+
+/* ---------- Settings ---------- */
+.settings-panel{background:#fff;border:1px solid var(--border);border-radius:var(--radius-card);padding:20px}
+.list-editor textarea{width:100%;min-height:120px;font-family:ui-monospace,monospace;font-size:12.5px;resize:vertical}
+.thresh-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ---------- Timeline sparkline ---------- */
+.spark{display:flex;gap:2px;align-items:end;height:26px;margin-top:8px}
+.spark span{flex:1;background:var(--primary-soft);border-radius:2px}
+
+/* Preview modal */
+.overlay{position:fixed;inset:0;background:rgba(20,22,40,.45);display:flex;align-items:center;justify-content:center;z-index:20}
+.modal{background:#fff;border-radius:12px;padding:22px;max-width:560px;width:92vw;max-height:88vh;overflow:auto}
+.modal h3{margin:0 0 6px;font-size:16px}
+.modal .mfoot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ===================================================
+   SAMPLE DATA (mock only — real app loads JSON)
+   =================================================== */
+const today = new Date('2026-07-14');
+function d(daysFromToday){
+  const x=new Date(today); x.setDate(x.getDate()+daysFromToday);
+  return x.toISOString().slice(0,10);
+}
+
+const DATA = {
+  meta:{
+    version:'1.0',
+    server_base_path:'Z:\\ohs\\employees\\',
+    warning_thresholds:{urgent_days:30, soon_days:60, plan_days:90},
+    backup_reminder_days:7,
+    field_sync_max_stale_days:30,
+    last_backup_at:'2026-07-10T09:00:00',
+    employee_id_prefix:'LM-EMP-',
+    field_options:{
+      field_titles:['Team Leader','Technician','Rigger','Site Engineer','Engineer','Welder','Helper','Driver','Driver&Helper'],
+      safety_titles:['HSE Director','HSE Manager','Safety Manager','Safety Coordinator','DC Coordinator','Safety Officer'],
+      subcontractors:['Landmark','Upper Telecom','New Plan','DAM Telecom','Basic','Startech','Value','AS Link','Expert','Apex'],
+      contractors:['Landmark'],
+      employment_status:['Active','Suspended','Terminated','Resigned'],
+      legal_permission:['Approved','Not approved','Pending']
+    },
+    field_sync:{ endpoint_url:'', drive_folder_id:'' }
+  },
+  users:[
+    {user_id:'u001',username:'admin',password:'admin123',role:'admin',display_name:'Khaled (Admin)',active:true,can_do_site_check:false},
+    {user_id:'u002',username:'officer1',password:'x',role:'officer',display_name:'Mahmoud Farouk',active:true,can_do_site_check:true},
+    {user_id:'u003',username:'officer2',password:'x',role:'officer',display_name:'Reem Nabil',active:true,can_do_site_check:true},
+  ],
+  employees:[
+    // Field team - mix of states
+    {employee_id:'LM-EMP-0001',national_id:'28612011705414',name:'Ahmed Hassan Ali',team:'field',
+      personal:{title:'Team Leader',contractor:'Landmark',subcontractor:'Landmark',hired_date:'2017-10-08',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(-14),file_link:''},        // EXPIRED
+        wah_theoretical:{expiry_date:d(400),file_link:''},
+        ra:{expiry_date:d(200),file_link:''},
+        fa:{expiry_date:d(180),file_link:''},
+        ff:{expiry_date:d(180),file_link:''},
+        ec:{expiry_date:d(550),file_link:''},
+        mcu:{expiry_date:d(120),file_link:''},
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:d(-40),rdt_2:'',rdt:''},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-06-01',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0002',national_id:'29011121500218',name:'Mohamed Sayed',team:'field',
+      personal:{title:'Rigger',contractor:'Landmark',subcontractor:'Upper Telecom',hired_date:'2019-03-14',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(18),file_link:''},         // URGENT
+        wah_theoretical:{expiry_date:d(18),file_link:''},
+        ra:{expiry_date:d(100),file_link:''},
+        fa:{expiry_date:d(70),file_link:''},
+        ff:{expiry_date:d(70),file_link:''},
+        ec:{expiry_date:d(300),file_link:''},
+        mcu:{expiry_date:d(24),file_link:''},                    // URGENT
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:d(-10),rdt_2:d(-100),rdt:''},
+      renewal_history:[{cert_key:'mcu',old_expiry:'2025-08-08',new_expiry:d(24),renewed_at:'2025-08-01T10:00',renewed_by:'admin'}],
+      meta:{created_at:'2024-01-15',updated_at:'2026-05-10',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0003',national_id:'28806140901234',name:'Bahgat Ali Bahgat',team:'field',
+      personal:{title:'Technician',contractor:'Landmark',subcontractor:'New Plan',hired_date:'2020-07-01',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(620),file_link:''},
+        wah_theoretical:{expiry_date:d(620),file_link:''},
+        ra:{expiry_date:d(200),file_link:''},
+        fa:{expiry_date:d(200),file_link:''},
+        ff:{expiry_date:d(200),file_link:''},
+        ec:{expiry_date:d(400),file_link:''},
+        mcu:{expiry_date:d(110),file_link:''},
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:d(-30),rdt_2:'',rdt:''},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-04-15',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0004',national_id:'27509210500999',name:'Sameh Ibrahim',team:'field',
+      personal:{title:'Site Engineer',contractor:'Landmark',subcontractor:'Landmark',hired_date:'2015-05-20',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(300),file_link:''},
+        wah_theoretical:{expiry_date:d(300),file_link:''},
+        ra:{expiry_date:d(45),file_link:''},                     // SOON
+        fa:{expiry_date:d(45),file_link:''},                     // SOON
+        ff:{expiry_date:d(45),file_link:''},
+        ec:{expiry_date:d(280),file_link:''},
+        mcu:{expiry_date:d(180),file_link:''},
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:d(-5),rdt_2:'',rdt:''},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-06-20',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0005',national_id:'29403180200557',name:'Yasser Hamdy',team:'field',
+      personal:{title:'Rigger',contractor:'Landmark',subcontractor:'Startech',hired_date:'2021-11-02',employment_status:'Suspended',legal_permission:'Not approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(-90),file_link:''},        // EXPIRED (also blocked by status)
+        wah_theoretical:{expiry_date:d(-90),file_link:''},
+        ra:{expiry_date:'',file_link:''},
+        fa:{expiry_date:'',file_link:''},
+        ff:{expiry_date:'',file_link:''},
+        ec:{expiry_date:'',file_link:''},
+        mcu:{expiry_date:d(-60),file_link:''},
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:'',rdt_2:'',rdt:''},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-02-01',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0006',national_id:'28912150400123',name:'Karim Adel',team:'field',
+      personal:{title:'Helper',contractor:'Landmark',subcontractor:'Value',hired_date:'2022-09-10',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(80),file_link:''},          // PLAN
+        wah_theoretical:{expiry_date:d(80),file_link:''},
+        ra:{expiry_date:d(150),file_link:''},
+        fa:{expiry_date:d(150),file_link:''},
+        ff:{expiry_date:d(150),file_link:''},
+        ec:{expiry_date:d(400),file_link:''},
+        mcu:{expiry_date:d(85),file_link:''},                    // PLAN
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:d(-15),rdt_2:'',rdt:''},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-05-05',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0007',national_id:'29112051800987',name:'Ehab Fathi',team:'field',
+      personal:{title:'Welder',contractor:'Landmark',subcontractor:'AS Link',hired_date:'2020-02-14',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(400),file_link:''},
+        wah_theoretical:{expiry_date:d(400),file_link:''},
+        ra:{expiry_date:d(250),file_link:''},
+        fa:{expiry_date:d(250),file_link:''},
+        ff:{expiry_date:d(250),file_link:''},
+        ec:{expiry_date:d(500),file_link:''},
+        mcu:{expiry_date:d(220),file_link:''},
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:d(-20),rdt_2:'',rdt:''},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-06-11',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0008',national_id:'27812301200456',name:'Waleed Nabil',team:'field',
+      personal:{title:'Driver',contractor:'Landmark',subcontractor:'DAM Telecom',hired_date:'2016-06-30',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(500),file_link:''},
+        wah_theoretical:{expiry_date:d(500),file_link:''},
+        ra:{expiry_date:d(300),file_link:''},
+        fa:{expiry_date:d(300),file_link:''},
+        ff:{expiry_date:d(300),file_link:''},
+        ec:{expiry_date:d(600),file_link:''},
+        mcu:{expiry_date:d(75),file_link:''},                    // SOON
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:d(-45),rdt_2:'',rdt:''},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-03-12',updated_by:'admin'}},
+
+    // Safety team
+    {employee_id:'LM-EMP-0101',national_id:'27002140100321',name:'Hesham Abdelrahman',team:'safety',
+      personal:{title:'HSE Manager',contractor:'Landmark',subcontractor:'Landmark',hired_date:'2013-04-20',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(600),file_link:''},
+        wah_theoretical:{expiry_date:d(600),file_link:''},
+        ra:{expiry_date:d(400),file_link:''},
+        fa:{expiry_date:d(400),file_link:''},
+        ff:{expiry_date:d(400),file_link:''},
+        ec:{expiry_date:d(500),file_link:''},
+        mcu:{expiry_date:d(160),file_link:''},
+        ppe_inspection:{expiry_date:d(300),file_link:''},
+        lifting:{expiry_date:d(300),file_link:''},
+        scaffolding:{expiry_date:d(45),file_link:''},            // SOON
+      },
+      qualifications:{nebosh_igc:true,iso_45001:true,osha:true},
+      drug_tests:{rdt_1:'',rdt_2:'',rdt:d(-30)},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-06-01',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0102',national_id:'28502180700654',name:'Mahmoud Farouk',team:'safety',
+      personal:{title:'Safety Coordinator',contractor:'Landmark',subcontractor:'Landmark',hired_date:'2018-08-15',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(20),file_link:''},          // URGENT
+        wah_theoretical:{expiry_date:d(20),file_link:''},
+        ra:{expiry_date:d(180),file_link:''},
+        fa:{expiry_date:d(180),file_link:''},
+        ff:{expiry_date:d(180),file_link:''},
+        ec:{expiry_date:d(280),file_link:''},
+        mcu:{expiry_date:d(80),file_link:''},
+        ppe_inspection:{expiry_date:d(150),file_link:''},
+        lifting:{expiry_date:d(150),file_link:''},
+        scaffolding:{expiry_date:d(150),file_link:''},
+      },
+      qualifications:{nebosh_igc:true,iso_45001:false,osha:true},
+      drug_tests:{rdt_1:'',rdt_2:'',rdt:d(-20)},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-05-22',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0103',national_id:'29008120600432',name:'Reem Nabil',team:'safety',
+      personal:{title:'Safety Officer',contractor:'Landmark',subcontractor:'Landmark',hired_date:'2020-11-05',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(220),file_link:''},
+        wah_theoretical:{expiry_date:d(220),file_link:''},
+        ra:{expiry_date:d(180),file_link:''},
+        fa:{expiry_date:d(180),file_link:''},
+        ff:{expiry_date:d(180),file_link:''},
+        ec:{expiry_date:d(280),file_link:''},
+        mcu:{expiry_date:d(200),file_link:''},
+        ppe_inspection:{expiry_date:d(100),file_link:''},
+        lifting:{expiry_date:d(100),file_link:''},
+        scaffolding:{expiry_date:d(100),file_link:''},
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:true},
+      drug_tests:{rdt_1:'',rdt_2:'',rdt:d(-40)},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-06-14',updated_by:'admin'}},
+
+    {employee_id:'LM-EMP-0104',national_id:'28203270100876',name:'Tarek Sabry',team:'safety',
+      personal:{title:'Safety Officer',contractor:'Landmark',subcontractor:'Landmark',hired_date:'2019-01-08',employment_status:'Active',legal_permission:'Pending',archived:false},
+      certificates:{
+        wah_practical:{expiry_date:d(-30),file_link:''},         // EXPIRED
+        wah_theoretical:{expiry_date:d(-30),file_link:''},
+        ra:{expiry_date:d(80),file_link:''},
+        fa:{expiry_date:d(80),file_link:''},
+        ff:{expiry_date:d(80),file_link:''},
+        ec:{expiry_date:d(280),file_link:''},
+        mcu:{expiry_date:d(80),file_link:''},
+        ppe_inspection:{expiry_date:d(180),file_link:''},
+        lifting:{expiry_date:d(180),file_link:''},
+        scaffolding:{expiry_date:d(180),file_link:''},
+      },
+      qualifications:{nebosh_igc:false,iso_45001:false,osha:false},
+      drug_tests:{rdt_1:'',rdt_2:'',rdt:d(-60)},
+      renewal_history:[],
+      meta:{created_at:'2024-01-15',updated_at:'2026-05-01',updated_by:'admin'}},
+  ]
+};
+
+/* ===================================================
+   I18N
+   =================================================== */
+const I18N = {
+  en:{
+    app_name:'OHS Database', app_sub:'Landmark Occupational Health & Safety',
+    nav_dashboard:'Dashboard', nav_field:'Field Team', nav_safety:'Safety Team',
+    nav_renewals:'Renewals', nav_export:'Export', nav_settings:'Settings',
+    login_title:'Sign in to OHS DB', upload_prompt:'Upload the current data.json to get started',
+    choose_file:'Choose file', file_loaded:'Data loaded — 12 employees, 3 users',
+    username:'Username', password:'Password', sign_in:'Sign in', sign_out:'Sign out',
+    invalid_creds:'Invalid username or password',
+    kpi_total_field:'Field employees', kpi_total_safety:'Safety employees',
+    kpi_expired:'Certs expired', kpi_urgent:'Expiring in ≤30 days', kpi_compliant:'Fully compliant',
+    chart_by_cert:'Expiries in next 90 days by certificate', chart_by_state:'Compliance state',
+    chart_by_sub:'Headcount by subcontractor', recent_activity:'Recently updated',
+    unsaved_changes:'Unsaved changes', export_json:'Export JSON', save_to_drive_note:'Remember to upload the exported file to Google Drive',
+    add_employee:'Add employee', search_ph:'Search name or National ID…',
+    filter_status:'Status', filter_title:'Title', filter_sub:'Subcontractor', filter_all:'All',
+    col_name:'Name', col_natid:'National ID', col_title:'Title', col_sub:'Subcontractor',
+    col_state:'Compliance', col_updated:'Updated', col_actions:'Actions',
+    view:'View', edit:'Edit', archive:'Archive', delete:'Delete',
+    section_personal:'Personal', section_certs:'Certificates', section_quals:'Qualifications',
+    section_drug:'Drug tests', section_history:'Renewal history',
+    field_name:'Full name', field_natid:'National ID', field_title:'Title',
+    field_contractor:'Contractor', field_sub:'Subcontractor', field_hired:'Hired date',
+    field_emp_status:'Employment status', field_legal:'Legal permission',
+    cert_wah_p:'WAH Practical', cert_wah_t:'WAH Theoretical', cert_ra:'Risk Assessment',
+    cert_fa:'First Aid', cert_ff:'Fire Fighting', cert_ec:'Emergency Coordinator', cert_mcu:'Medical Check-Up',
+    cert_ppe:'PPE Inspection', cert_lifting:'Lifting', cert_scaffolding:'Scaffolding',
+    qual_nebosh:'NEBOSH IGC', qual_iso:'ISO 45001', qual_osha:'OSHA',
+    dt_rdt1:'RDT 1', dt_rdt2:'RDT 2', dt_rdt:'RDT',
+    expiry_date:'Expiry date', cert_link:'Certificate link (optional)',
+    open_cert:'Open certificate', no_value:'No value',
+    st_valid:'Valid', st_plan:'Renew soon', st_soon:'Renew in ≤60d', st_urgent:'Renew in ≤30d', st_expired:'Expired', st_missing:'Missing',
+    days_left:'Days left', days_ago:'ago',
+    back:'Back', save:'Save', cancel:'Cancel', confirm:'Confirm',
+    settings_tab_users:'Users', settings_tab_lists:'Lists', settings_tab_thresholds:'Thresholds', settings_tab_data:'Data file',
+    threshold_urgent:'Urgent (days)', threshold_soon:'Soon (days)', threshold_plan:'Plan (days)',
+    backup_reminder:'Backup reminder (days, 0=off)', sync_max_stale:'Field sync max stale (days)',
+    field_titles:'Field Team Titles', safety_titles:'Safety Team Titles',
+    contractors:'Contractors', subcontractors:'Subcontractors',
+    employment_statuses:'Employment Statuses', legal_permissions:'Legal Permission Values',
+    one_per_line:'One option per line',
+    import_excel:'Import from Excel', download_backup:'Download JSON backup',
+    restore_backup:'Restore from JSON backup', publish_snapshot:'Publish field snapshot',
+    apps_script_url:'Apps Script endpoint URL', server_base_path:'Server base path (for cert links)',
+    emp_id_prefix:'Employee ID prefix',
+    excel_import_intro:'Preview showed: 87 new field, 12 new safety, 2 duplicates (skipped), 1 unknown subcontractor',
+    export_page_intro:'Filter, then download in the format you need.',
+    ex_excel:'Excel (.xlsx)', ex_csv:'CSV', ex_pdf:'PDF cards',
+    ex_desc_excel:'Flat spreadsheet, one row per employee', ex_desc_csv:'Comma-separated, same columns',
+    ex_desc_pdf:'One card per employee with all certificates',
+    renewals_intro:'Sorted by soonest expiry. Filter to plan your renewal work.',
+    verdict_cleared:'Cleared', verdict_warning:'Warning', verdict_blocked:'Not cleared',
+    reason_not_active:'Employment status is not Active',
+    reason_archived:'Employee is archived',
+    reason_legal:'Legal permission is not Approved',
+    reason_expired:'{cert} expired {days} days ago',
+    reason_expiring:'{cert} expires in {days} days',
+  },
+  ar:{
+    app_name:'قاعدة بيانات السلامة والصحة المهنية', app_sub:'لاندمارك للسلامة والصحة المهنية',
+    nav_dashboard:'اللوحة الرئيسية', nav_field:'الفريق الميداني', nav_safety:'فريق السلامة',
+    nav_renewals:'التجديدات', nav_export:'تصدير', nav_settings:'الإعدادات',
+    login_title:'تسجيل الدخول', upload_prompt:'ارفع ملف data.json الحالي للبدء',
+    choose_file:'اختر ملف', file_loaded:'تم تحميل البيانات — 12 موظف، 3 مستخدمين',
+    username:'اسم المستخدم', password:'كلمة السر', sign_in:'دخول', sign_out:'خروج',
+    invalid_creds:'اسم المستخدم أو كلمة السر غير صحيحة',
+    kpi_total_field:'موظفو الفريق الميداني', kpi_total_safety:'موظفو فريق السلامة',
+    kpi_expired:'شهادات منتهية', kpi_urgent:'تنتهي خلال ٣٠ يوم', kpi_compliant:'ملتزمون بالكامل',
+    chart_by_cert:'الشهادات المنتهية خلال ٩٠ يوم', chart_by_state:'حالة الالتزام',
+    chart_by_sub:'العدد حسب المقاول الفرعي', recent_activity:'آخر التحديثات',
+    unsaved_changes:'تغييرات غير محفوظة', export_json:'تصدير JSON',
+    save_to_drive_note:'لا تنسَ رفع الملف المُصدّر إلى Google Drive',
+    add_employee:'إضافة موظف', search_ph:'ابحث بالاسم أو الرقم القومي…',
+    filter_status:'الحالة', filter_title:'المسمى', filter_sub:'المقاول الفرعي', filter_all:'الكل',
+    col_name:'الاسم', col_natid:'الرقم القومي', col_title:'المسمى', col_sub:'المقاول الفرعي',
+    col_state:'الالتزام', col_updated:'آخر تحديث', col_actions:'إجراءات',
+    view:'عرض', edit:'تعديل', archive:'أرشفة', delete:'حذف',
+    section_personal:'البيانات الشخصية', section_certs:'الشهادات', section_quals:'المؤهلات',
+    section_drug:'اختبارات المخدرات', section_history:'سجل التجديدات',
+    field_name:'الاسم بالكامل', field_natid:'الرقم القومي', field_title:'المسمى الوظيفي',
+    field_contractor:'المقاول', field_sub:'المقاول الفرعي', field_hired:'تاريخ التعيين',
+    field_emp_status:'حالة التوظيف', field_legal:'التصريح القانوني',
+    cert_wah_p:'العمل على ارتفاع - عملي', cert_wah_t:'العمل على ارتفاع - نظري',
+    cert_ra:'تقييم المخاطر', cert_fa:'الإسعافات الأولية', cert_ff:'مكافحة الحريق',
+    cert_ec:'منسق الطوارئ', cert_mcu:'الفحص الطبي',
+    cert_ppe:'فحص معدات الحماية', cert_lifting:'الرفع', cert_scaffolding:'السقالات',
+    qual_nebosh:'NEBOSH IGC', qual_iso:'ISO 45001', qual_osha:'OSHA',
+    dt_rdt1:'RDT 1', dt_rdt2:'RDT 2', dt_rdt:'RDT',
+    expiry_date:'تاريخ الانتهاء', cert_link:'رابط الشهادة (اختياري)',
+    open_cert:'فتح الشهادة', no_value:'غير مدخل',
+    st_valid:'ساري', st_plan:'قريباً للتجديد', st_soon:'خلال ٦٠ يوم', st_urgent:'خلال ٣٠ يوم', st_expired:'منتهي', st_missing:'مفقود',
+    days_left:'يوم متبقي', days_ago:'مضى',
+    back:'رجوع', save:'حفظ', cancel:'إلغاء', confirm:'تأكيد',
+    settings_tab_users:'المستخدمون', settings_tab_lists:'القوائم', settings_tab_thresholds:'التحذيرات', settings_tab_data:'ملف البيانات',
+    threshold_urgent:'عاجل (يوم)', threshold_soon:'قريب (يوم)', threshold_plan:'مخطط (يوم)',
+    backup_reminder:'تذكير النسخ الاحتياطي (يوم، ٠=معطل)', sync_max_stale:'أقصى فترة قبل مزامنة الميدان (يوم)',
+    field_titles:'مسميات الفريق الميداني', safety_titles:'مسميات فريق السلامة',
+    contractors:'المقاولون', subcontractors:'المقاولون الفرعيون',
+    employment_statuses:'حالات التوظيف', legal_permissions:'قيم التصريح القانوني',
+    one_per_line:'خيار واحد في كل سطر',
+    import_excel:'استيراد من Excel', download_backup:'تحميل نسخة احتياطية',
+    restore_backup:'استعادة من نسخة', publish_snapshot:'نشر لقطة الميدان',
+    apps_script_url:'رابط Apps Script', server_base_path:'مسار السيرفر',
+    emp_id_prefix:'بادئة رقم الموظف',
+    excel_import_intro:'المعاينة: ٨٧ موظف ميداني جديد، ١٢ سلامة جديد، ٢ مكرر، ١ مقاول فرعي غير معروف',
+    export_page_intro:'صفِّ ثم حمّل بالصيغة التي تريدها.',
+    ex_excel:'Excel (.xlsx)', ex_csv:'CSV', ex_pdf:'بطاقات PDF',
+    ex_desc_excel:'جدول بصف لكل موظف', ex_desc_csv:'صيغة CSV بنفس الأعمدة',
+    ex_desc_pdf:'بطاقة لكل موظف بجميع الشهادات',
+    renewals_intro:'مرتبة حسب أقرب انتهاء. صفِّ لتخطيط أعمال التجديد.',
+    verdict_cleared:'مصرح له', verdict_warning:'تحذير', verdict_blocked:'غير مصرح',
+    reason_not_active:'حالة التوظيف ليست نشطاً',
+    reason_archived:'الموظف مؤرشف',
+    reason_legal:'التصريح القانوني ليس معتمداً',
+    reason_expired:'{cert} انتهت منذ {days} يوم',
+    reason_expiring:'{cert} تنتهي خلال {days} يوم',
+  }
+};
+let LANG = localStorage.getItem('lmp_lang')||'en';
+function t(k, params){
+  let s = (I18N[LANG]&&I18N[LANG][k])||k;
+  if(params){for(const p in params){s=s.replace('{'+p+'}',params[p]);}}
+  return s;
+}
+function setLang(l){LANG=l;localStorage.setItem('lmp_lang',l);document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';render();}
+
+/* ===================================================
+   THEME
+   =================================================== */
+let THEME = localStorage.getItem('lmp_theme')||'blue';
+function setTheme(t){THEME=t;localStorage.setItem('lmp_theme',t);document.documentElement.dataset.theme=t;render();}
+document.documentElement.dataset.theme = THEME;
+
+/* ===================================================
+   STATE + ROUTER
+   =================================================== */
+let CURRENT_USER = null;
+let ROUTE = 'login';
+let ROUTE_PARAM = null;
+let IS_DIRTY = false;
+let UI = {};
+
+function go(route, param){
+  ROUTE = route; ROUTE_PARAM = param||null;
+  location.hash = '#/'+route+(param?'/'+param:'');
+  render();
+}
+window.addEventListener('hashchange', ()=>{
+  const parts = location.hash.replace(/^#\//,'').split('/');
+  ROUTE = parts[0]||(CURRENT_USER?'dashboard':'login');
+  ROUTE_PARAM = parts[1]||null;
+  render();
+});
+
+/* ===================================================
+   COMPLIANCE LOGIC
+   =================================================== */
+const CERT_KEYS = ['wah_practical','wah_theoretical','ra','fa','ff','ec','mcu'];
+const SAFETY_ONLY_KEYS = ['ppe_inspection','lifting','scaffolding'];
+const CERT_LABEL_KEYS = {
+  wah_practical:'cert_wah_p', wah_theoretical:'cert_wah_t',
+  ra:'cert_ra', fa:'cert_fa', ff:'cert_ff', ec:'cert_ec', mcu:'cert_mcu',
+  ppe_inspection:'cert_ppe', lifting:'cert_lifting', scaffolding:'cert_scaffolding'
+};
+
+function applicableCerts(emp){
+  return emp.team==='safety' ? [...CERT_KEYS,...SAFETY_ONLY_KEYS] : CERT_KEYS;
+}
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr);
+  return Math.round((d - today)/86400000);
+}
+function deriveCertState(dateStr, thr){
+  if(!dateStr) return 'missing';
+  const d = daysUntil(dateStr);
+  if(d < 0) return 'expired';
+  if(d <= thr.urgent_days) return 'urgent';
+  if(d <= thr.soon_days) return 'soon';
+  if(d <= thr.plan_days) return 'plan';
+  return 'valid';
+}
+function stateRank(s){return {expired:5,urgent:4,soon:3,plan:2,missing:1,valid:0}[s]||0;}
+
+function deriveEmployeeCompliance(emp, thr){
+  const keys = applicableCerts(emp);
+  const per_cert = {};
+  let worst='valid';
+  let expiring_soon_count=0, expired_count=0;
+  keys.forEach(k=>{
+    const s = deriveCertState(emp.certificates[k]?.expiry_date, thr);
+    per_cert[k]=s;
+    if(stateRank(s)>stateRank(worst)) worst=s;
+    if(s==='expired') expired_count++;
+    if(['urgent','soon','plan'].includes(s)) expiring_soon_count++;
+  });
+  return {per_cert, worst, expiring_soon_count, expired_count};
+}
+
+function deriveSiteCheckVerdict(emp, thr){
+  const reasons_blocked = [];
+  const reasons_warning = [];
+  if(emp.personal.employment_status !== 'Active') reasons_blocked.push(t('reason_not_active'));
+  if(emp.personal.archived) reasons_blocked.push(t('reason_archived'));
+  if(emp.personal.legal_permission !== 'Approved') reasons_blocked.push(t('reason_legal'));
+  const BLOCKER_CERTS = ['wah_practical','wah_theoretical','mcu'];
+  const WARNING_CERTS = ['fa','ff','ra','ec'];
+  BLOCKER_CERTS.forEach(k=>{
+    const dt = emp.certificates[k]?.expiry_date;
+    const d = daysUntil(dt);
+    if(!dt) return;
+    if(d < 0) reasons_blocked.push(t('reason_expired',{cert:t(CERT_LABEL_KEYS[k]),days:Math.abs(d)}));
+    else if(d <= thr.urgent_days) reasons_warning.push(t('reason_expiring',{cert:t(CERT_LABEL_KEYS[k]),days:d}));
+  });
+  WARNING_CERTS.forEach(k=>{
+    const dt = emp.certificates[k]?.expiry_date;
+    const d = daysUntil(dt);
+    if(!dt) return;
+    if(d < 0) reasons_warning.push(t('reason_expired',{cert:t(CERT_LABEL_KEYS[k]),days:Math.abs(d)}));
+    else if(d <= thr.urgent_days) reasons_warning.push(t('reason_expiring',{cert:t(CERT_LABEL_KEYS[k]),days:d}));
+  });
+  if(reasons_blocked.length) return {verdict:'blocked', reasons:reasons_blocked};
+  if(reasons_warning.length) return {verdict:'warning', reasons:reasons_warning};
+  return {verdict:'cleared', reasons:[]};
+}
+
+/* ===================================================
+   UTIL
+   =================================================== */
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);}
+function fmtDate(s){if(!s)return '—';const d=new Date(s);return d.toLocaleDateString(LANG==='ar'?'ar-EG':'en-GB',{day:'2-digit',month:'short',year:'numeric'});}
+function initials(n){return n.split(' ').slice(0,2).map(x=>x[0]||'').join('').toUpperCase();}
+function toast(msg){const el=document.createElement('div');el.className='toast';el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2000);}
+
+/* ===================================================
+   COMPONENTS
+   =================================================== */
+function renderSidebar(){
+  const items = [
+    {r:'dashboard',ic:'◇',k:'nav_dashboard'},
+    {r:'field',ic:'⚙',k:'nav_field'},
+    {r:'safety',ic:'⛑',k:'nav_safety'},
+    {r:'renewals',ic:'⏱',k:'nav_renewals'},
+    {r:'export',ic:'↓',k:'nav_export'},
+    {r:'settings',ic:'⚙',k:'nav_settings',admin:true},
+  ];
+  return `
+    <aside class="sidebar">
+      <div class="side-logo">
+        <div class="mark">OHS</div>
+        <div class="name">${t('app_name')}</div>
+        <div class="sub">${t('app_sub')}</div>
+      </div>
+      <nav class="nav">
+        ${items.filter(i=>!i.admin || CURRENT_USER.role==='admin').map(i=>`
+          <a href="javascript:go('${i.r}')" class="${ROUTE===i.r?'active':''}"><span class="ic">${i.ic}</span> ${t(i.k)}</a>
+        `).join('')}
+      </nav>
+      <div class="side-bottom">
+        <div class="swatches">
+          ${['blue','teal','purple','crimson'].map(c=>`<div class="swatch ${c} ${THEME===c?'active':''}" onclick="setTheme('${c}')"></div>`).join('')}
+        </div>
+        <div class="lang-toggle">
+          <button class="${LANG==='en'?'active':''}" onclick="setLang('en')">EN</button>
+          <button class="${LANG==='ar'?'active':''}" onclick="setLang('ar')">ع</button>
+        </div>
+        <div class="userchip">
+          <div class="avatar">${initials(CURRENT_USER.display_name)}</div>
+          <div>
+            <div class="who">${esc(CURRENT_USER.display_name)}</div>
+            <div class="role">${CURRENT_USER.role}</div>
+          </div>
+        </div>
+        <button class="side-signout" onclick="signOut()">${t('sign_out')}</button>
+      </div>
+    </aside>`;
+}
+
+function renderTopbar(title, sub, actions){
+  return `
+    <div class="topbar">
+      <div>
+        <div class="title">${title}</div>
+        ${sub?`<div class="sub">${sub}</div>`:''}
+      </div>
+      <div class="topbar-actions">
+        ${IS_DIRTY?`<span><span class="dirty-dot"></span><span class="dirty-txt">${t('unsaved_changes')}</span></span>`:''}
+        ${actions||''}
+        <button class="btn btn-primary btn-sm" onclick="onExportJson()">↓ ${t('export_json')}</button>
+      </div>
+    </div>`;
+}
+
+function certStateBadge(s){
+  const m={valid:'cs-valid',plan:'cs-plan',soon:'cs-soon',urgent:'cs-urgent',expired:'cs-expired',missing:'cs-missing'};
+  const l={valid:'st_valid',plan:'st_plan',soon:'st_soon',urgent:'st_urgent',expired:'st_expired',missing:'st_missing'};
+  return `<span class="cert-state ${m[s]}">${t(l[s])}</span>`;
+}
+function complianceBadge(worst){
+  const m={valid:['badge-cleared','st_valid'],plan:['badge-warning','st_plan'],soon:['badge-warning','st_soon'],urgent:['badge-warning','st_urgent'],expired:['badge-blocked','st_expired'],missing:['badge-inactive','st_missing']};
+  const [cls,key]=m[worst]||['badge-inactive','st_missing'];
+  return `<span class="badge ${cls}">${t(key)}</span>`;
+}
+
+/* ===================================================
+   PAGES
+   =================================================== */
+function pageLogin(){
+  const isFirstBoot = DATA.employees.length===0; // in prototype we always have data, we simulate the initial upload state below
+  const dataLoaded = UI.dataLoaded !== false;
+  return `
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="mark">OHS</div>
+        <h1>${t('app_name')}</h1>
+        <div class="sub">${t('app_sub')}</div>
+
+        ${dataLoaded ? `
+          <div class="upload-inline">
+            ✓ ${t('file_loaded')} <button class="btn btn-ghost btn-sm" onclick="UI.dataLoaded=false;render()">↻</button>
+          </div>
+        ` : `
+          <div class="upload-box">
+            <div class="t">${t('upload_prompt')}</div>
+            <div class="s">data.json from Google Drive</div>
+            <button class="btn btn-primary btn-sm" onclick="UI.dataLoaded=true;render()">${t('choose_file')}</button>
+          </div>
+        `}
+
+        <div class="field">
+          <label>${t('username')}</label>
+          <input id="uname" placeholder="admin" value="admin">
+        </div>
+        <div class="field">
+          <label>${t('password')}</label>
+          <input id="pwd" type="password" value="admin123">
+        </div>
+        <div id="login-err"></div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="onLogin()">${t('sign_in')}</button>
+
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:18px">
+          <button class="btn btn-ghost btn-sm" onclick="setLang('en')">EN</button>
+          <button class="btn btn-ghost btn-sm" onclick="setLang('ar')">ع</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function pageDashboard(){
+  const thr = DATA.meta.warning_thresholds;
+  const active = DATA.employees.filter(e=>!e.personal.archived);
+  const fieldEmp = active.filter(e=>e.team==='field');
+  const safetyEmp = active.filter(e=>e.team==='safety');
+  const comp = active.map(e=>({e,c:deriveEmployeeCompliance(e,thr)}));
+  const expired = comp.reduce((s,x)=>s+x.c.expired_count,0);
+  const urgent30 = comp.filter(x=>['urgent','expired'].includes(x.c.worst)).length;
+  const compliant = comp.filter(x=>x.c.worst==='valid').length;
+
+  // by cert type expiring next 90 days
+  const byCert = {};
+  active.forEach(e=>applicableCerts(e).forEach(k=>{
+    const d = daysUntil(e.certificates[k]?.expiry_date);
+    if(d!=null && d>=0 && d<=90){byCert[k]=(byCert[k]||0)+1;}
+  }));
+  const maxByCert = Math.max(1,...Object.values(byCert));
+
+  // by state
+  const byState = {valid:0,plan:0,soon:0,urgent:0,expired:0,missing:0};
+  comp.forEach(x=>byState[x.c.worst]++);
+  const totalCS = comp.length;
+
+  // by subcontractor
+  const bySub = {};
+  active.forEach(e=>{const s=e.personal.subcontractor||'—';bySub[s]=(bySub[s]||0)+1;});
+
+  // donut svg
+  const stateColors = {valid:'#16a34a',plan:'#eab308',soon:'#f59e0b',urgent:'#f97316',expired:'#dc2626',missing:'#94a3b8'};
+  let acc=0;
+  const donutSegs = Object.entries(byState).filter(([,v])=>v>0).map(([k,v])=>{
+    const frac = v/totalCS;
+    const start = acc*2*Math.PI-Math.PI/2;
+    const end = (acc+frac)*2*Math.PI-Math.PI/2;
+    acc+=frac;
+    const large = frac>.5?1:0;
+    const r=54,cx=60,cy=60;
+    const x1=cx+r*Math.cos(start),y1=cy+r*Math.sin(start);
+    const x2=cx+r*Math.cos(end),y2=cy+r*Math.sin(end);
+    return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z" fill="${stateColors[k]}"/>`;
+  }).join('');
+
+  return `
+    ${renderTopbar(t('nav_dashboard'), fmtDate(today.toISOString().slice(0,10)))}
+    <div class="content">
+      <div class="hero-banner">
+        <div>
+          <div class="h">${t('save_to_drive_note')}</div>
+          <div class="s">Last backup: ${fmtDate(DATA.meta.last_backup_at)}</div>
+        </div>
+        <button class="btn">${t('download_backup')}</button>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi blue">
+          <div class="n">${fieldEmp.length+safetyEmp.length}</div>
+          <div class="l">Total active employees</div>
+          <div class="kpi-split"><span><b>${fieldEmp.length}</b> ${t('nav_field')}</span><span><b>${safetyEmp.length}</b> ${t('nav_safety')}</span></div>
+        </div>
+        <div class="kpi red">
+          <div class="n">${expired}</div>
+          <div class="l">${t('kpi_expired')}</div>
+          <div class="spark">${[3,5,4,6,8,7,expired].map(v=>`<span style="height:${v*3}px"></span>`).join('')}</div>
+        </div>
+        <div class="kpi amber">
+          <div class="n">${urgent30}</div>
+          <div class="l">${t('kpi_urgent')}</div>
+          <div class="spark">${[2,4,3,5,6,5,urgent30].map(v=>`<span style="height:${v*3}px"></span>`).join('')}</div>
+        </div>
+        <div class="kpi green">
+          <div class="n">${compliant}</div>
+          <div class="l">${t('kpi_compliant')}</div>
+          <div class="spark">${[8,9,10,9,10,10,compliant].map(v=>`<span style="height:${v*2.5}px"></span>`).join('')}</div>
+        </div>
+      </div>
+
+      <div class="chart-row">
+        <div class="card">
+          <h3>${t('chart_by_cert')}</h3>
+          ${Object.entries(byCert).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
+            <div style="margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px"><span>${t(CERT_LABEL_KEYS[k])}</span><span><b>${v}</b></span></div>
+              <div style="height:8px;background:#eef1f7;border-radius:4px;overflow:hidden"><div style="width:${(v/maxByCert)*100}%;height:100%;background:var(--primary);border-radius:4px"></div></div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="card">
+          <h3>${t('chart_by_state')}</h3>
+          <div class="donut-wrap">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              ${donutSegs}
+              <circle cx="60" cy="60" r="30" fill="#fff"/>
+              <text x="60" y="58" text-anchor="middle" font-weight="800" font-size="18" fill="#1a1d2e">${totalCS}</text>
+              <text x="60" y="74" text-anchor="middle" font-size="10" fill="#4a4f6a">employees</text>
+            </svg>
+            <div class="donut-legend">
+              ${Object.entries(byState).filter(([,v])=>v>0).map(([k,v])=>`
+                <div><span class="legend-dot" style="background:${stateColors[k]}"></span>${t('st_'+k)} <b>${v}</b></div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-row">
+        <div class="card">
+          <h3>${t('chart_by_sub')}</h3>
+          ${Object.entries(bySub).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`
+            <div style="margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px"><span>${esc(k)}</span><span><b>${v}</b></span></div>
+              <div style="height:8px;background:#eef1f7;border-radius:4px;overflow:hidden"><div style="width:${(v/Math.max(...Object.values(bySub)))*100}%;height:100%;background:var(--teal);border-radius:4px"></div></div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="card">
+          <h3>${t('recent_activity')}</h3>
+          ${[...DATA.employees].sort((a,b)=>b.meta.updated_at.localeCompare(a.meta.updated_at)).slice(0,6).map(e=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div class="avatar" style="width:26px;height:26px;font-size:10px;background:var(--muted)">${initials(e.name)}</div>
+              <div style="flex:1;font-size:12.5px"><b>${esc(e.name)}</b> <span style="color:var(--muted)">${e.employee_id}</span></div>
+              <div style="font-size:11.5px;color:var(--muted)">${fmtDate(e.meta.updated_at)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function pageEmployeeList(team){
+  const thr = DATA.meta.warning_thresholds;
+  const all = DATA.employees.filter(e=>e.team===team && !e.personal.archived);
+  const search = (UI.search||'').toLowerCase();
+  const statusFilter = UI.statusFilter||'all';
+  const subFilter = UI.subFilter||'all';
+  const titleFilter = UI.titleFilter||'all';
+
+  const filtered = all.filter(e=>{
+    if(search && !e.name.toLowerCase().includes(search) && !e.national_id.includes(search)) return false;
+    if(subFilter!=='all' && e.personal.subcontractor!==subFilter) return false;
+    if(titleFilter!=='all' && e.personal.title!==titleFilter) return false;
+    if(statusFilter!=='all'){
+      const c = deriveEmployeeCompliance(e,thr);
+      if(statusFilter==='expired' && c.worst!=='expired') return false;
+      if(statusFilter==='urgent' && !['urgent','expired'].includes(c.worst)) return false;
+      if(statusFilter==='valid' && c.worst!=='valid') return false;
+    }
+    return true;
+  });
+
+  const subs = DATA.meta.field_options.subcontractors;
+  const titles = team==='field'?DATA.meta.field_options.field_titles:DATA.meta.field_options.safety_titles;
+  const teamLabel = team==='field'?t('nav_field'):t('nav_safety');
+
+  return `
+    ${renderTopbar(teamLabel, all.length+' employees', `<button class="btn btn-primary btn-sm" onclick="go('employee-form','new-'+team+'-${team}')">+ ${t('add_employee')}</button>`)}
+    <div class="content">
+      <div class="filter-bar">
+        <div class="field" style="flex:1;max-width:340px">
+          <label>Search</label>
+          <input placeholder="${t('search_ph')}" value="${esc(UI.search||'')}" oninput="UI.search=this.value;render()">
+        </div>
+        <div class="field">
+          <label>${t('filter_status')}</label>
+          <select onchange="UI.statusFilter=this.value;render()">
+            <option value="all" ${statusFilter==='all'?'selected':''}>${t('filter_all')}</option>
+            <option value="expired" ${statusFilter==='expired'?'selected':''}>${t('st_expired')}</option>
+            <option value="urgent" ${statusFilter==='urgent'?'selected':''}>${t('st_urgent')}</option>
+            <option value="valid" ${statusFilter==='valid'?'selected':''}>${t('st_valid')}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>${t('filter_title')}</label>
+          <select onchange="UI.titleFilter=this.value;render()">
+            <option value="all">${t('filter_all')}</option>
+            ${titles.map(x=>`<option value="${esc(x)}" ${titleFilter===x?'selected':''}>${esc(x)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>${t('filter_sub')}</label>
+          <select onchange="UI.subFilter=this.value;render()">
+            <option value="all">${t('filter_all')}</option>
+            ${subs.map(x=>`<option value="${esc(x)}" ${subFilter===x?'selected':''}>${esc(x)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="count">${filtered.length} of ${all.length}</div>
+      </div>
+
+      <table class="tbl">
+        <thead><tr>
+          <th>${t('col_name')}</th><th>${t('col_natid')}</th><th>${t('col_title')}</th>
+          <th>${t('col_sub')}</th><th>${t('col_state')}</th>
+          ${team==='safety'?'<th>Quals</th>':''}
+          <th>${t('col_updated')}</th><th>${t('col_actions')}</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.map(e=>{
+            const c = deriveEmployeeCompliance(e,thr);
+            const qs = team==='safety'?[e.qualifications.nebosh_igc?'NEBOSH':null,e.qualifications.iso_45001?'ISO':null,e.qualifications.osha?'OSHA':null].filter(Boolean).join(', '):null;
+            return `<tr class="row-clickable" onclick="go('employee','${e.employee_id}')">
+              <td><b>${esc(e.name)}</b><br><span style="color:var(--muted);font-size:11.5px">${e.employee_id}</span></td>
+              <td style="font-family:ui-monospace,monospace;font-size:12px">${esc(e.national_id)}</td>
+              <td>${esc(e.personal.title)}</td>
+              <td>${esc(e.personal.subcontractor)}</td>
+              <td>${complianceBadge(c.worst)} ${c.expired_count?`<span style="color:var(--danger);font-size:11px;margin-inline-start:6px">${c.expired_count} expired</span>`:''}</td>
+              ${team==='safety'?`<td style="font-size:11.5px;color:var(--muted)">${qs||'—'}</td>`:''}
+              <td>${fmtDate(e.meta.updated_at)}</td>
+              <td onclick="event.stopPropagation()">
+                <button class="btn btn-ghost btn-sm" onclick="go('employee','${e.employee_id}')">${t('view')}</button>
+                <button class="btn btn-ghost btn-sm" onclick="go('employee-form','${e.employee_id}')">${t('edit')}</button>
+              </td>
+            </tr>`;
+          }).join('')}
+          ${filtered.length===0?`<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">No employees match the current filters.</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function pageEmployeeDetail(){
+  const emp = DATA.employees.find(x=>x.employee_id===ROUTE_PARAM);
+  if(!emp) return `<div class="content">Employee not found. <button class="btn" onclick="go('dashboard')">Back</button></div>`;
+  const thr = DATA.meta.warning_thresholds;
+  const comp = deriveEmployeeCompliance(emp,thr);
+  const teamBadge = emp.team==='field'?'badge-team-field':'badge-team-safety';
+
+  const certKeys = applicableCerts(emp);
+  const certHtml = certKeys.map(k=>{
+    const c = emp.certificates[k]||{};
+    const s = comp.per_cert[k];
+    const d = daysUntil(c.expiry_date);
+    return `<div class="cert-row">
+      <div class="cert-info">
+        <div class="name">${t(CERT_LABEL_KEYS[k])}</div>
+        <div class="date">${fmtDate(c.expiry_date)} ${d!=null?`<span style="color:var(--muted)">(${d>=0?d+' '+t('days_left'):Math.abs(d)+' '+t('days_ago')})</span>`:''}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        ${certStateBadge(s)}
+        ${c.file_link?`<a class="btn btn-ghost btn-sm" href="${esc(c.file_link)}" target="_blank">${t('open_cert')}</a>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const actions = `
+    <button class="btn btn-ghost btn-sm" onclick="go(emp.team==='field'?'field':'safety')">${t('back')}</button>
+    <button class="btn btn-primary btn-sm" onclick="go('employee-form','${emp.employee_id}')">${t('edit')}</button>
+  `.replace("emp.team==='field'?'field':'safety'", "'"+(emp.team==='field'?'field':'safety')+"'");
+
+  return `
+    ${renderTopbar(esc(emp.name), emp.employee_id+' · '+esc(emp.national_id), actions)}
+    <div class="content">
+      <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center">
+        <span class="badge ${teamBadge}">${emp.team==='field'?t('nav_field'):t('nav_safety')}</span>
+        ${complianceBadge(comp.worst)}
+        <span class="badge ${emp.personal.employment_status==='Active'?'badge-active':'badge-inactive'}">${esc(emp.personal.employment_status)}</span>
+        <span class="badge ${emp.personal.legal_permission==='Approved'?'badge-cleared':'badge-blocked'}">${esc(emp.personal.legal_permission)}</span>
+      </div>
+
+      <div class="section-head">${t('section_personal')}</div>
+      <div class="card">
+        <div class="detail-grid">
+          <div class="field-disp"><div class="lab">${t('field_name')}</div><div class="val">${esc(emp.name)}</div></div>
+          <div class="field-disp"><div class="lab">${t('field_natid')}</div><div class="val" style="font-family:ui-monospace,monospace">${esc(emp.national_id)}</div></div>
+          <div class="field-disp"><div class="lab">${t('field_title')}</div><div class="val">${esc(emp.personal.title)}</div></div>
+          <div class="field-disp"><div class="lab">${t('field_contractor')}</div><div class="val">${esc(emp.personal.contractor)}</div></div>
+          <div class="field-disp"><div class="lab">${t('field_sub')}</div><div class="val">${esc(emp.personal.subcontractor)}</div></div>
+          <div class="field-disp"><div class="lab">${t('field_hired')}</div><div class="val">${fmtDate(emp.personal.hired_date)}</div></div>
+        </div>
+      </div>
+
+      <div class="section-head">${t('section_certs')}</div>
+      <div class="card">
+        <div class="cert-list">${certHtml}</div>
+      </div>
+
+      ${emp.team==='safety'?`
+        <div class="section-head">${t('section_quals')}</div>
+        <div class="card">
+          <div style="display:flex;gap:10px">
+            <span class="badge ${emp.qualifications.nebosh_igc?'badge-cleared':'badge-inactive'}">${t('qual_nebosh')} ${emp.qualifications.nebosh_igc?'✓':'—'}</span>
+            <span class="badge ${emp.qualifications.iso_45001?'badge-cleared':'badge-inactive'}">${t('qual_iso')} ${emp.qualifications.iso_45001?'✓':'—'}</span>
+            <span class="badge ${emp.qualifications.osha?'badge-cleared':'badge-inactive'}">${t('qual_osha')} ${emp.qualifications.osha?'✓':'—'}</span>
+          </div>
+        </div>
+      `:''}
+
+      <div class="section-head">${t('section_drug')}</div>
+      <div class="card">
+        <div class="detail-grid">
+          ${emp.team==='field'?`
+            <div class="field-disp"><div class="lab">${t('dt_rdt1')}</div><div class="val">${fmtDate(emp.drug_tests.rdt_1)}</div></div>
+            <div class="field-disp"><div class="lab">${t('dt_rdt2')}</div><div class="val ${!emp.drug_tests.rdt_2?'muted':''}">${emp.drug_tests.rdt_2?fmtDate(emp.drug_tests.rdt_2):t('no_value')}</div></div>
+          `:`
+            <div class="field-disp"><div class="lab">${t('dt_rdt')}</div><div class="val">${fmtDate(emp.drug_tests.rdt)}</div></div>
+          `}
+        </div>
+      </div>
+
+      ${emp.renewal_history.length?`
+        <div class="section-head">${t('section_history')}</div>
+        <div class="card">
+          <table class="tbl" style="border:none">
+            <thead><tr><th>Cert</th><th>Old expiry</th><th>New expiry</th><th>Renewed</th><th>By</th></tr></thead>
+            <tbody>
+              ${emp.renewal_history.map(r=>`<tr><td>${t(CERT_LABEL_KEYS[r.cert_key])}</td><td>${fmtDate(r.old_expiry)}</td><td>${fmtDate(r.new_expiry)}</td><td>${fmtDate(r.renewed_at)}</td><td>${esc(r.renewed_by)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      `:''}
+    </div>`;
+}
+
+function pageEmployeeForm(){
+  const isNew = String(ROUTE_PARAM||'').startsWith('new-');
+  const team = isNew ? (ROUTE_PARAM.includes('safety')?'safety':'field') : DATA.employees.find(e=>e.employee_id===ROUTE_PARAM)?.team;
+  const emp = isNew ? {
+    employee_id:'(new)', national_id:'', name:'', team,
+    personal:{title:'',contractor:'Landmark',subcontractor:'',hired_date:'',employment_status:'Active',legal_permission:'Pending',archived:false},
+    certificates:{}, qualifications:{nebosh_igc:false,iso_45001:false,osha:false}, drug_tests:{rdt_1:'',rdt_2:'',rdt:''}
+  } : DATA.employees.find(e=>e.employee_id===ROUTE_PARAM);
+  if(!emp) return '<div class="content">Not found</div>';
+
+  const titles = team==='field'?DATA.meta.field_options.field_titles:DATA.meta.field_options.safety_titles;
+  const certKeys = applicableCerts(emp);
+  const teamBadge = team==='field'?'badge-team-field':'badge-team-safety';
+
+  return `
+    ${renderTopbar(isNew?t('add_employee'):esc(emp.name), emp.employee_id, `
+      <button class="btn btn-ghost btn-sm" onclick="history.back()">${t('cancel')}</button>
+      <button class="btn btn-primary btn-sm" onclick="onSaveEmployee('${emp.employee_id}')">✓ ${t('save')}</button>
+    `)}
+    <div class="content">
+      <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center">
+        <span class="badge ${teamBadge}">${team==='field'?t('nav_field'):t('nav_safety')}</span>
+      </div>
+
+      <div class="section-head">${t('section_personal')}</div>
+      <div class="card">
+        <div class="detail-grid">
+          <div class="field"><label>${t('field_name')} *</label><input value="${esc(emp.name)}"></div>
+          <div class="field"><label>${t('field_natid')} *</label><input value="${esc(emp.national_id)}"></div>
+          <div class="field"><label>${t('field_title')}</label>
+            <select><option value="">—</option>${titles.map(x=>`<option ${emp.personal.title===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>${t('field_contractor')}</label>
+            <select>${DATA.meta.field_options.contractors.map(x=>`<option ${emp.personal.contractor===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>${t('field_sub')}</label>
+            <select><option value="">—</option>${DATA.meta.field_options.subcontractors.map(x=>`<option ${emp.personal.subcontractor===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>${t('field_hired')}</label><input type="date" value="${esc(emp.personal.hired_date)}"></div>
+          <div class="field"><label>${t('field_emp_status')}</label>
+            <select>${DATA.meta.field_options.employment_status.map(x=>`<option ${emp.personal.employment_status===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>${t('field_legal')}</label>
+            <select>${DATA.meta.field_options.legal_permission.map(x=>`<option ${emp.personal.legal_permission===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-head">${t('section_certs')}</div>
+      <div class="card">
+        <div class="two-col">
+          ${certKeys.map(k=>{
+            const c=emp.certificates[k]||{};
+            return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:#fafbfd">
+              <div style="font-weight:600;font-size:13px;margin-bottom:8px">${t(CERT_LABEL_KEYS[k])}</div>
+              <div class="field"><label>${t('expiry_date')}</label><input type="date" value="${esc(c.expiry_date||'')}"></div>
+              <div class="field" style="margin-bottom:0"><label>${t('cert_link')}</label><input placeholder="https://drive.google.com/..." value="${esc(c.file_link||'')}"></div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      ${team==='safety'?`
+        <div class="section-head">${t('section_quals')}</div>
+        <div class="card">
+          <div style="display:flex;gap:20px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${emp.qualifications.nebosh_igc?'checked':''}> ${t('qual_nebosh')}</label>
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${emp.qualifications.iso_45001?'checked':''}> ${t('qual_iso')}</label>
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${emp.qualifications.osha?'checked':''}> ${t('qual_osha')}</label>
+          </div>
+        </div>
+      `:''}
+
+      <div class="section-head">${t('section_drug')}</div>
+      <div class="card">
+        <div class="detail-grid">
+          ${team==='field'?`
+            <div class="field"><label>${t('dt_rdt1')}</label><input type="date" value="${esc(emp.drug_tests.rdt_1||'')}"></div>
+            <div class="field"><label>${t('dt_rdt2')}</label><input type="date" value="${esc(emp.drug_tests.rdt_2||'')}"></div>
+          `:`
+            <div class="field"><label>${t('dt_rdt')}</label><input type="date" value="${esc(emp.drug_tests.rdt||'')}"></div>
+          `}
+        </div>
+      </div>
+    </div>`;
+}
+
+function pageRenewals(){
+  const thr = DATA.meta.warning_thresholds;
+  const active = DATA.employees.filter(e=>!e.personal.archived);
+  const rows = [];
+  active.forEach(e=>{
+    applicableCerts(e).forEach(k=>{
+      const dt = e.certificates[k]?.expiry_date;
+      if(!dt) return;
+      const dl = daysUntil(dt);
+      const s = deriveCertState(dt, thr);
+      rows.push({emp:e, cert:k, expiry:dt, days:dl, state:s});
+    });
+  });
+  const windowDays = parseInt(UI.rWindow||'90',10);
+  const teamFilter = UI.rTeam||'all';
+  const filtered = rows.filter(r=>{
+    if(teamFilter!=='all' && r.emp.team!==teamFilter) return false;
+    if(windowDays>0 && r.days>windowDays) return false;
+    return true;
+  }).sort((a,b)=>a.days-b.days);
+
+  const rowColor = s=>({expired:'#fef2f2',urgent:'#fff7ed',soon:'#fefce8',plan:'#fefce8',valid:'#fff',missing:'#fff'})[s];
+
+  return `
+    ${renderTopbar(t('nav_renewals'), t('renewals_intro'))}
+    <div class="content">
+      <div class="filter-bar">
+        <div class="field">
+          <label>Days window</label>
+          <select onchange="UI.rWindow=this.value;render()">
+            <option value="7" ${UI.rWindow==='7'?'selected':''}>Next 7 days</option>
+            <option value="30" ${UI.rWindow==='30'?'selected':''}>Next 30 days</option>
+            <option value="60" ${UI.rWindow==='60'?'selected':''}>Next 60 days</option>
+            <option value="90" ${!UI.rWindow||UI.rWindow==='90'?'selected':''}>Next 90 days</option>
+            <option value="0" ${UI.rWindow==='0'?'selected':''}>All (including expired)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Team</label>
+          <select onchange="UI.rTeam=this.value;render()">
+            <option value="all">${t('filter_all')}</option>
+            <option value="field" ${UI.rTeam==='field'?'selected':''}>${t('nav_field')}</option>
+            <option value="safety" ${UI.rTeam==='safety'?'selected':''}>${t('nav_safety')}</option>
+          </select>
+        </div>
+        <div class="count">${filtered.length} renewals</div>
+      </div>
+
+      <table class="tbl">
+        <thead><tr>
+          <th>Employee</th><th>Team</th><th>Certificate</th><th>Expiry</th><th>Days</th><th>State</th><th>Subcontractor</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.map(r=>`
+            <tr class="row-clickable" style="background:${rowColor(r.state)}" onclick="go('employee','${r.emp.employee_id}')">
+              <td><b>${esc(r.emp.name)}</b><br><span style="color:var(--muted);font-size:11.5px">${r.emp.employee_id}</span></td>
+              <td><span class="badge ${r.emp.team==='field'?'badge-team-field':'badge-team-safety'}">${r.emp.team==='field'?t('nav_field'):t('nav_safety')}</span></td>
+              <td>${t(CERT_LABEL_KEYS[r.cert])}</td>
+              <td>${fmtDate(r.expiry)}</td>
+              <td><b>${r.days>=0?r.days+'d':Math.abs(r.days)+'d '+t('days_ago')}</b></td>
+              <td>${certStateBadge(r.state)}</td>
+              <td>${esc(r.emp.personal.subcontractor)}</td>
+            </tr>
+          `).join('')}
+          ${filtered.length===0?`<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">No renewals match filters.</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function pageExport(){
+  return `
+    ${renderTopbar(t('nav_export'), t('export_page_intro'))}
+    <div class="content">
+      <div class="filter-bar">
+        <div class="field"><label>Team</label>
+          <select><option>${t('filter_all')}</option><option>${t('nav_field')}</option><option>${t('nav_safety')}</option></select>
+        </div>
+        <div class="field"><label>${t('filter_status')}</label>
+          <select><option>${t('filter_all')}</option><option>${t('st_expired')}</option><option>${t('st_urgent')}</option><option>${t('st_valid')}</option></select>
+        </div>
+        <div class="field"><label>${t('filter_sub')}</label>
+          <select><option>${t('filter_all')}</option>${DATA.meta.field_options.subcontractors.map(x=>`<option>${esc(x)}</option>`).join('')}</select>
+        </div>
+        <div class="count">12 employees match</div>
+      </div>
+
+      <div class="two-col">
+        ${[
+          {i:'▤',n:t('ex_excel'),d:t('ex_desc_excel'),c:'primary'},
+          {i:'▤',n:t('ex_csv'),d:t('ex_desc_csv'),c:'ghost'},
+          {i:'▨',n:t('ex_pdf'),d:t('ex_desc_pdf'),c:'ghost'},
+        ].map(x=>`
+          <div class="card" style="cursor:pointer;display:flex;gap:14px;align-items:center;transition:box-shadow .2s" onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow-sm)'" onclick="toast('Downloading ${x.n}…')">
+            <div style="width:44px;height:44px;background:var(--primary-soft);color:var(--primary);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px">${x.i}</div>
+            <div><div style="font-weight:700">${x.n}</div><div style="color:var(--text2);font-size:12.5px;margin-top:2px">${x.d}</div></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+}
+
+function pageSettings(){
+  const tab = UI.setTab||'users';
+  return `
+    ${renderTopbar(t('nav_settings'))}
+    <div class="content">
+      <div class="tabs">
+        ${['users','lists','thresholds','data'].map(x=>`
+          <button class="tab ${tab===x?'active':''}" onclick="UI.setTab='${x}';render()">${t('settings_tab_'+x)}</button>
+        `).join('')}
+      </div>
+
+      ${tab==='users'?`
+        <div class="settings-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h3 style="margin:0">${t('settings_tab_users')}</h3>
+            <button class="btn btn-primary btn-sm">+ Add user</button>
+          </div>
+          <table class="tbl">
+            <thead><tr><th>Username</th><th>Display name</th><th>Role</th><th>Site check</th><th>Active</th><th>Actions</th></tr></thead>
+            <tbody>
+              ${DATA.users.map(u=>`
+                <tr>
+                  <td><b>${esc(u.username)}</b></td>
+                  <td>${esc(u.display_name)}</td>
+                  <td><span class="badge ${u.role==='admin'?'badge-cleared':'badge-team-safety'}">${u.role}</span></td>
+                  <td>${u.can_do_site_check?'✓':'—'}</td>
+                  <td>${u.active?'<span class="badge badge-active">Active</span>':'<span class="badge badge-inactive">Inactive</span>'}</td>
+                  <td>
+                    <button class="btn btn-ghost btn-sm">${t('edit')}</button>
+                    ${u.role!=='admin'?`<button class="btn btn-danger btn-sm">${t('delete')}</button>`:''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `:''}
+
+      ${tab==='lists'?`
+        <div class="settings-panel">
+          <p style="color:var(--text2);margin-top:0">${t('one_per_line')} — changes save when you click ✓ ${t('save')}</p>
+          <div class="two-col">
+            ${[
+              ['field_titles','field_titles'],
+              ['safety_titles','safety_titles'],
+              ['contractors','contractors'],
+              ['subcontractors','subcontractors'],
+              ['employment_status','employment_statuses'],
+              ['legal_permission','legal_permissions'],
+            ].map(([key,label])=>`
+              <div class="list-editor">
+                <div class="field">
+                  <label>${t(label)}</label>
+                  <textarea>${DATA.meta.field_options[key].join('\n')}</textarea>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="text-align:end;margin-top:14px"><button class="btn btn-primary" onclick="IS_DIRTY=true;toast('Lists updated');render()">✓ ${t('save')}</button></div>
+        </div>
+      `:''}
+
+      ${tab==='thresholds'?`
+        <div class="settings-panel">
+          <h3>${t('settings_tab_thresholds')}</h3>
+          <div class="thresh-grid">
+            <div class="field"><label>${t('threshold_urgent')}</label><input type="number" value="${DATA.meta.warning_thresholds.urgent_days}"></div>
+            <div class="field"><label>${t('threshold_soon')}</label><input type="number" value="${DATA.meta.warning_thresholds.soon_days}"></div>
+            <div class="field"><label>${t('threshold_plan')}</label><input type="number" value="${DATA.meta.warning_thresholds.plan_days}"></div>
+          </div>
+          <div class="thresh-grid" style="margin-top:14px">
+            <div class="field"><label>${t('backup_reminder')}</label><input type="number" value="${DATA.meta.backup_reminder_days}"></div>
+            <div class="field"><label>${t('sync_max_stale')}</label><input type="number" value="${DATA.meta.field_sync_max_stale_days}"></div>
+            <div></div>
+          </div>
+          <div style="text-align:end;margin-top:14px"><button class="btn btn-primary" onclick="IS_DIRTY=true;toast('Thresholds updated');render()">✓ ${t('save')}</button></div>
+        </div>
+      `:''}
+
+      ${tab==='data'?`
+        <div class="settings-panel">
+          <h3>Data operations</h3>
+          <div class="two-col">
+            <div style="border:1px solid var(--border);border-radius:10px;padding:16px">
+              <div style="font-weight:700;margin-bottom:4px">${t('import_excel')}</div>
+              <div style="color:var(--text2);font-size:12.5px;margin-bottom:10px">Bulk-add employees from an .xlsx file. Preview before commit.</div>
+              <button class="btn btn-primary btn-sm" onclick="UI.showImportPreview=true;render()">${t('choose_file')}</button>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:10px;padding:16px">
+              <div style="font-weight:700;margin-bottom:4px">${t('download_backup')}</div>
+              <div style="color:var(--text2);font-size:12.5px;margin-bottom:10px">Full JSON snapshot of everything. Save to Drive, restore any time.</div>
+              <button class="btn btn-primary btn-sm" onclick="toast('Downloading backup…')">↓ ${t('download_backup')}</button>
+              <button class="btn btn-ghost btn-sm">${t('restore_backup')}</button>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:10px;padding:16px">
+              <div style="font-weight:700;margin-bottom:4px">${t('publish_snapshot')}</div>
+              <div style="color:var(--text2);font-size:12.5px;margin-bottom:10px">Strips users/passwords. Drag the file into your Drive folder for officers.</div>
+              <button class="btn btn-primary btn-sm" onclick="toast('Field snapshot exported')">↓ ${t('publish_snapshot')}</button>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:10px;padding:16px">
+              <div style="font-weight:700;margin-bottom:4px">${t('apps_script_url')}</div>
+              <input value="https://script.google.com/macros/s/AKfycb…/exec" style="width:100%;border:1px solid var(--border);padding:8px;border-radius:6px;font-family:ui-monospace,monospace;font-size:11.5px">
+              <div style="color:var(--text2);font-size:12px;margin-top:6px">Officer app POSTs credentials here. See BUILD.md for the .gs script.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px">
+            <div class="field"><label>${t('server_base_path')}</label><input value="${esc(DATA.meta.server_base_path)}"></div>
+            <div class="field"><label>${t('emp_id_prefix')}</label><input value="${esc(DATA.meta.employee_id_prefix)}"></div>
+          </div>
+        </div>
+
+        ${UI.showImportPreview?`
+          <div class="overlay" onclick="UI.showImportPreview=false;render()">
+            <div class="modal" onclick="event.stopPropagation()">
+              <h3>Excel import preview</h3>
+              <p style="color:var(--text2);font-size:13px">${t('excel_import_intro')}</p>
+              <table class="tbl" style="font-size:12px">
+                <thead><tr><th>Row</th><th>Name</th><th>Team</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody>
+                  <tr><td>2</td><td>Bahgat Ali Bahgat</td><td>Field</td><td style="color:var(--warning)">Duplicate</td><td><select><option>Skip</option><option>Overwrite</option><option>Add new</option></select></td></tr>
+                  <tr><td>3</td><td>Nasser Ahmed</td><td>Field</td><td style="color:var(--success)">New</td><td>Import</td></tr>
+                  <tr><td>4</td><td>Tamer Khaled</td><td>Field</td><td style="color:var(--danger)">Unknown subcontractor "XyzCo"</td><td><select><option>Add "XyzCo" to list</option><option>Skip</option></select></td></tr>
+                </tbody>
+              </table>
+              <div class="mfoot">
+                <button class="btn btn-ghost" onclick="UI.showImportPreview=false;render()">${t('cancel')}</button>
+                <button class="btn btn-primary" onclick="UI.showImportPreview=false;IS_DIRTY=true;toast('Imported 87 employees');render()">${t('confirm')} import</button>
+              </div>
+            </div>
+          </div>
+        `:''}
+      `:''}
+    </div>`;
+}
+
+/* ===================================================
+   ACTIONS
+   =================================================== */
+function onLogin(){
+  const u = document.getElementById('uname').value;
+  const p = document.getElementById('pwd').value;
+  const user = DATA.users.find(x=>x.username===u && x.password===p && x.active);
+  if(!user){document.getElementById('login-err').innerHTML=`<div class="err">${t('invalid_creds')}</div>`;return;}
+  if(user.role!=='admin'){document.getElementById('login-err').innerHTML=`<div class="err">Desktop app is admin-only. Officers use the mobile app.</div>`;return;}
+  CURRENT_USER = user;
+  go('dashboard');
+}
+function signOut(){CURRENT_USER=null;go('login');}
+function onSaveEmployee(id){IS_DIRTY=true;toast('Employee saved');go('employee',id.startsWith('new-')?DATA.employees[0].employee_id:id);}
+function onExportJson(){IS_DIRTY=false;DATA.meta.last_backup_at=new Date().toISOString();toast('data.json downloaded — drag into Google Drive');render();}
+
+/* ===================================================
+   RENDER
+   =================================================== */
+function render(){
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = LANG==='ar'?'rtl':'ltr';
+  document.documentElement.dataset.theme = THEME;
+  const app = document.getElementById('app');
+  if(!CURRENT_USER){ app.innerHTML = pageLogin(); return; }
+  let page='';
+  switch(ROUTE){
+    case 'dashboard': page = pageDashboard(); break;
+    case 'field':     page = pageEmployeeList('field'); break;
+    case 'safety':    page = pageEmployeeList('safety'); break;
+    case 'employee':  page = pageEmployeeDetail(); break;
+    case 'employee-form': page = pageEmployeeForm(); break;
+    case 'renewals':  page = pageRenewals(); break;
+    case 'export':    page = pageExport(); break;
+    case 'settings':  page = pageSettings(); break;
+    default: page = pageDashboard();
+  }
+  app.innerHTML = `<div class="app">${renderSidebar()}<div class="main">${page}</div></div>`;
+}
+
+/* boot */
+render();
+</script>
+</body>
+</html>

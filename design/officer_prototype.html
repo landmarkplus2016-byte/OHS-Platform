@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="blue">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>OHS Field Check</title>
+<style>
+:root{
+  --bg:#f5f6fa; --card:#ffffff; --border:#e2e4ed;
+  --text:#1a1d2e; --text2:#4a4f6a; --muted:#9095b0;
+  --primary:#3d5af1; --primary-dark:#2d47d4; --primary-soft:#3d5af11f;
+  --success:#16a34a; --warning:#d97706; --danger:#e05252;
+  --cleared:#16a34a; --cleared-bg:#dcfce7; --cleared-dark:#15803d;
+  --warn:#d97706;    --warn-bg:#fef3c7;    --warn-dark:#b45309;
+  --blocked:#dc2626; --blocked-bg:#fee2e2; --blocked-dark:#991b1b;
+  --navy:#0f1942; --navy-text:#aab2d8; --navy-text-strong:#ffffff;
+  --radius-card:14px; --radius-control:10px;
+  --font-base:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --theme-color-blue:#3d5af1; --theme-color-teal:#0d9488;
+  --theme-color-purple:#7c3aed; --theme-color-crimson:#be123c;
+}
+[data-theme="blue"]{--primary:#3d5af1;--primary-dark:#2d47d4;--primary-soft:#3d5af11f;}
+[data-theme="teal"]{--primary:#0d9488;--primary-dark:#0b7a70;--primary-soft:#0d94881f;}
+[data-theme="purple"]{--primary:#7c3aed;--primary-dark:#6425c9;--primary-soft:#7c3aed1f;}
+[data-theme="crimson"]{--primary:#be123c;--primary-dark:#9f0f32;--primary-soft:#be123c1f;}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-base);font-size:15px;min-height:100vh}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none}
+input{font-family:inherit;font-size:inherit;color:inherit}
+
+/* Mobile-first frame — simulates a phone viewport on desktop, full-width on mobile */
+.phone{max-width:420px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;overflow:hidden;border-inline:1px solid var(--border)}
+@media(max-width:440px){.phone{border:none}}
+
+/* Header bar (not on login) */
+.hbar{background:var(--navy);color:#fff;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}
+.hbar .brand{display:flex;align-items:center;gap:10px}
+.hbar .mark{color:var(--primary);font-weight:800;font-size:16px;letter-spacing:.5px}
+.hbar .name{font-weight:700;font-size:14px}
+.hbar .sub{color:var(--navy-text);font-size:11px}
+.hbar-btn{color:#fff;font-size:13px;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,.1)}
+.hbar-btn.icon{padding:8px;font-size:16px}
+
+/* Sync status strip */
+.sync-strip{background:#fff;padding:10px 18px;border-block-end:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12.5px}
+.sync-strip .as-of{color:var(--text2)}
+.sync-strip .as-of b{color:var(--text)}
+.sync-strip .warn{color:var(--warn-dark);font-weight:600}
+.sync-strip button{color:var(--primary);font-weight:700;font-size:13px}
+
+/* Content padding */
+.body{padding:18px}
+
+/* Buttons */
+.btn{border-radius:var(--radius-control);padding:14px 18px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:active{background:var(--primary-dark)}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-lg{padding:18px;font-size:16px}
+
+/* Login */
+.login{padding:32px 22px;min-height:100vh;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(180deg,var(--navy) 0%,#1a2555 100%);color:#fff}
+.login .mark{color:var(--primary);font-weight:800;font-size:36px;text-align:center;letter-spacing:2px}
+.login h1{font-size:20px;text-align:center;margin:6px 0 4px}
+.login .sub{color:var(--navy-text);font-size:13px;text-align:center;margin-bottom:36px}
+.login .field{margin-bottom:14px}
+.login .field label{display:block;font-size:12.5px;color:var(--navy-text);margin-bottom:6px;font-weight:600}
+.login .field input{width:100%;padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#fff;font-size:15px}
+.login .field input::placeholder{color:rgba(255,255,255,.4)}
+.login .lang{display:flex;gap:8px;justify-content:center;margin-top:20px}
+.login .lang button{padding:8px 14px;border-radius:8px;background:rgba(255,255,255,.06);color:var(--navy-text);font-size:13px}
+.login .lang button.active{background:var(--primary);color:#fff}
+.login .err{background:rgba(239,68,68,.15);color:#fecaca;padding:10px;border-radius:8px;font-size:13px;margin-top:12px;text-align:center}
+
+/* Search box */
+.search-box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.search-box input{flex:1;border:none;background:none;font-size:15px;outline:none}
+.search-box .ic{color:var(--muted);font-size:18px}
+
+/* Employee search results */
+.result-list{display:flex;flex-direction:column;gap:8px}
+.result-item{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.result-item:active{background:#fafbfd}
+.avatar{width:42px;height:42px;border-radius:50%;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0}
+.result-info{flex:1;min-width:0}
+.result-name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.result-meta{font-size:12px;color:var(--text2);margin-top:2px}
+.result-verdict{flex-shrink:0}
+.v-dot{width:14px;height:14px;border-radius:50%}
+.v-cleared{background:var(--cleared)}
+.v-warning{background:var(--warn)}
+.v-blocked{background:var(--blocked)}
+
+/* Section heading */
+.section-h{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:6px 4px 8px}
+
+/* Empty state */
+.empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px}
+.empty .big{font-size:48px;margin-bottom:12px;opacity:.3}
+
+/* Verdict view */
+.verdict-hero{padding:26px 22px 22px;color:#fff;position:relative}
+.verdict-hero.cleared{background:linear-gradient(135deg,var(--cleared) 0%,#15803d 100%)}
+.verdict-hero.warning{background:linear-gradient(135deg,var(--warn) 0%,var(--warn-dark) 100%)}
+.verdict-hero.blocked{background:linear-gradient(135deg,var(--blocked) 0%,var(--blocked-dark) 100%)}
+.verdict-back{position:absolute;top:16px;inset-inline-start:16px;color:#fff;font-size:20px;padding:6px 10px;background:rgba(255,255,255,.15);border-radius:8px}
+.verdict-icon{font-size:66px;text-align:center;margin:8px 0 4px;line-height:1}
+.verdict-label{font-size:26px;font-weight:800;text-align:center;letter-spacing:.5px}
+.verdict-sub{font-size:14px;text-align:center;opacity:.9;margin-top:4px}
+
+.emp-card{background:#fff;margin:-12px 14px 14px;border-radius:14px;padding:18px;box-shadow:0 4px 14px rgba(16,24,64,.1);position:relative;z-index:1}
+.emp-name{font-weight:800;font-size:20px}
+.emp-natid{font-family:ui-monospace,monospace;font-size:13px;color:var(--text2);margin-top:4px}
+.emp-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.tag{padding:3px 10px;border-radius:12px;font-size:11.5px;font-weight:700}
+.tag-team-field{background:#e0e7ff;color:#3730a3}
+.tag-team-safety{background:#fce7f3;color:#9d174d}
+.tag-active{background:var(--cleared-bg);color:var(--cleared-dark)}
+.tag-inactive{background:#f3f4f6;color:#6b7280}
+.tag-approved{background:var(--cleared-bg);color:var(--cleared-dark)}
+.tag-not-approved{background:var(--blocked-bg);color:var(--blocked-dark)}
+.tag-pending{background:var(--warn-bg);color:var(--warn-dark)}
+
+.reasons{padding:14px}
+.reasons h3{margin:6px 0 10px;font-size:14px;font-weight:700;color:var(--text)}
+.reason-item{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;font-size:14px}
+.reason-item.blocker{border-inline-start:4px solid var(--blocked)}
+.reason-item.warning{border-inline-start:4px solid var(--warn)}
+.reason-ic{font-size:18px;flex-shrink:0}
+.reason-txt{flex:1}
+
+/* Cert list on verdict page */
+.cert-block{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin:14px}
+.cert-block h3{margin:0 0 12px;font-size:14px;font-weight:700}
+.cert-line{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-block-end:1px solid #f0f2f7;font-size:13.5px}
+.cert-line:last-child{border-block-end:none}
+.cert-line-name{color:var(--text)}
+.cert-line-date{color:var(--text2);font-size:12.5px}
+.cert-line-state{padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;margin-inline-start:8px}
+.cs-valid{background:var(--cleared-bg);color:var(--cleared-dark)}
+.cs-plan{background:#fef9c3;color:#854d0e}
+.cs-soon{background:var(--warn-bg);color:var(--warn-dark)}
+.cs-urgent{background:#ffe4e6;color:#9f1239}
+.cs-expired{background:var(--blocked-bg);color:var(--blocked-dark)}
+.cs-missing{background:#f3f4f6;color:#6b7280}
+
+/* Locked screen */
+.lock{padding:60px 24px;text-align:center;background:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.lock-icon{font-size:64px;margin-bottom:14px}
+.lock h2{font-size:20px;margin:0 0 8px}
+.lock p{color:var(--text2);font-size:14px;line-height:1.5;max-width:280px;margin-bottom:24px}
+.lock .btn{max-width:280px}
+
+/* Stale banner */
+.stale-banner{background:var(--warn-bg);color:var(--warn-dark);padding:10px 16px;font-size:12.5px;text-align:center;font-weight:600;border-block-end:1px solid #fde68a}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;inset-inline-start:50%;transform:translateX(-50%);background:#1a1d2e;color:#fff;padding:12px 18px;border-radius:9px;font-size:13.5px;z-index:99}
+[dir="rtl"] .toast{transform:translateX(50%)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* Shared sample data — same shape as admin JSON, stripped to what officers need */
+const today = new Date('2026-07-14');
+function d(n){const x=new Date(today);x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);}
+
+const SNAPSHOT = {
+  meta:{
+    version:'1.0',
+    warning_thresholds:{urgent_days:30, soon_days:60, plan_days:90},
+    field_sync_max_stale_days:30,
+    published_at:'2026-07-13T18:00:00',
+  },
+  officers:[
+    {username:'officer1',password:'x',display_name:'Mahmoud Farouk'},
+    {username:'officer2',password:'x',display_name:'Reem Nabil'},
+  ],
+  employees:[
+    {employee_id:'LM-EMP-0001',national_id:'28612011705414',name:'Ahmed Hassan Ali',team:'field',
+      personal:{title:'Team Leader',subcontractor:'Landmark',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{wah_practical:{expiry_date:d(-14)},wah_theoretical:{expiry_date:d(400)},ra:{expiry_date:d(200)},fa:{expiry_date:d(180)},ff:{expiry_date:d(180)},ec:{expiry_date:d(550)},mcu:{expiry_date:d(120)}}},
+    {employee_id:'LM-EMP-0002',national_id:'29011121500218',name:'Mohamed Sayed',team:'field',
+      personal:{title:'Rigger',subcontractor:'Upper Telecom',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{wah_practical:{expiry_date:d(18)},wah_theoretical:{expiry_date:d(18)},ra:{expiry_date:d(100)},fa:{expiry_date:d(70)},ff:{expiry_date:d(70)},ec:{expiry_date:d(300)},mcu:{expiry_date:d(24)}}},
+    {employee_id:'LM-EMP-0003',national_id:'28806140901234',name:'Bahgat Ali Bahgat',team:'field',
+      personal:{title:'Technician',subcontractor:'New Plan',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{wah_practical:{expiry_date:d(620)},wah_theoretical:{expiry_date:d(620)},ra:{expiry_date:d(200)},fa:{expiry_date:d(200)},ff:{expiry_date:d(200)},ec:{expiry_date:d(400)},mcu:{expiry_date:d(110)}}},
+    {employee_id:'LM-EMP-0004',national_id:'27509210500999',name:'Sameh Ibrahim',team:'field',
+      personal:{title:'Site Engineer',subcontractor:'Landmark',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{wah_practical:{expiry_date:d(300)},wah_theoretical:{expiry_date:d(300)},ra:{expiry_date:d(45)},fa:{expiry_date:d(45)},ff:{expiry_date:d(45)},ec:{expiry_date:d(280)},mcu:{expiry_date:d(180)}}},
+    {employee_id:'LM-EMP-0005',national_id:'29403180200557',name:'Yasser Hamdy',team:'field',
+      personal:{title:'Rigger',subcontractor:'Startech',employment_status:'Suspended',legal_permission:'Not approved',archived:false},
+      certificates:{wah_practical:{expiry_date:d(-90)},wah_theoretical:{expiry_date:d(-90)},mcu:{expiry_date:d(-60)}}},
+    {employee_id:'LM-EMP-0006',national_id:'28912150400123',name:'Karim Adel',team:'field',
+      personal:{title:'Helper',subcontractor:'Value',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{wah_practical:{expiry_date:d(80)},wah_theoretical:{expiry_date:d(80)},ra:{expiry_date:d(150)},fa:{expiry_date:d(150)},ff:{expiry_date:d(150)},ec:{expiry_date:d(400)},mcu:{expiry_date:d(85)}}},
+    {employee_id:'LM-EMP-0102',national_id:'28502180700654',name:'Mahmoud Farouk',team:'safety',
+      personal:{title:'Safety Coordinator',subcontractor:'Landmark',employment_status:'Active',legal_permission:'Approved',archived:false},
+      certificates:{wah_practical:{expiry_date:d(20)},wah_theoretical:{expiry_date:d(20)},ra:{expiry_date:d(180)},fa:{expiry_date:d(180)},ff:{expiry_date:d(180)},ec:{expiry_date:d(280)},mcu:{expiry_date:d(80)},ppe_inspection:{expiry_date:d(150)},lifting:{expiry_date:d(150)},scaffolding:{expiry_date:d(150)}}},
+    {employee_id:'LM-EMP-0104',national_id:'28203270100876',name:'Tarek Sabry',team:'safety',
+      personal:{title:'Safety Officer',subcontractor:'Landmark',employment_status:'Active',legal_permission:'Pending',archived:false},
+      certificates:{wah_practical:{expiry_date:d(-30)},wah_theoretical:{expiry_date:d(-30)},ra:{expiry_date:d(80)},fa:{expiry_date:d(80)},ff:{expiry_date:d(80)},ec:{expiry_date:d(280)},mcu:{expiry_date:d(80)},ppe_inspection:{expiry_date:d(180)},lifting:{expiry_date:d(180)},scaffolding:{expiry_date:d(180)}}},
+  ]
+};
+
+/* i18n (small subset for officer app) */
+const I18N = {
+  en:{
+    app_name:'OHS Field Check', app_sub:'Landmark',
+    login_title:'Officer sign-in', username:'Username', password:'Password',
+    sign_in:'Sign in', invalid_creds:'Invalid username or password',
+    setup_prompt:'Paste the sync URL from your admin', paste_url:'Paste Apps Script URL',
+    home_hint:'Search a crew member by name or National ID',
+    search_ph:'Search name or National ID…', synced:'Synced', as_of:'Data as of',
+    sync_now:'Sync', stale_warn:'Data is {days} days old — sync soon',
+    locked_title:'Sync required', locked_msg:'Cached data is more than {max} days old. Please sync before checking any employee.',
+    verdict_cleared:'Cleared to work', verdict_warning:'Warning', verdict_blocked:'Not cleared',
+    verdict_sub_cleared:'All certificates valid', verdict_sub_warning:'Cleared but needs attention',
+    verdict_sub_blocked:'Do not allow this person to work',
+    reason_not_active:'Employment status is not Active',
+    reason_archived:'Employee is archived',
+    reason_legal:'Legal permission is not Approved',
+    reason_expired:'{cert} expired {days} days ago',
+    reason_expiring:'{cert} expires in {days} days',
+    section_reasons:'Issues found', section_all_certs:'All certificates',
+    cert_wah_p:'WAH Practical', cert_wah_t:'WAH Theoretical', cert_ra:'Risk Assessment',
+    cert_fa:'First Aid', cert_ff:'Fire Fighting', cert_ec:'Emergency Coordinator', cert_mcu:'Medical Check-Up',
+    cert_ppe:'PPE Inspection', cert_lifting:'Lifting', cert_scaffolding:'Scaffolding',
+    st_valid:'Valid', st_plan:'Renew soon', st_soon:'≤60d', st_urgent:'≤30d', st_expired:'Expired', st_missing:'Missing',
+    days_left:'d left', days_ago:'d ago',
+    sign_out:'Sign out', empty_search:'Type a name or National ID above',
+    empty_none:'No results', recent:'Recent lookups',
+  },
+  ar:{
+    app_name:'فحص الميدان', app_sub:'لاندمارك',
+    login_title:'دخول ضابط السلامة', username:'اسم المستخدم', password:'كلمة السر',
+    sign_in:'دخول', invalid_creds:'اسم المستخدم أو كلمة السر غير صحيحة',
+    setup_prompt:'الصق رابط المزامنة من المدير', paste_url:'الصق رابط Apps Script',
+    home_hint:'ابحث عن العامل بالاسم أو الرقم القومي',
+    search_ph:'ابحث بالاسم أو الرقم القومي…', synced:'تمت المزامنة', as_of:'البيانات حتى',
+    sync_now:'مزامنة', stale_warn:'البيانات عمرها {days} يوم — قم بالمزامنة قريباً',
+    locked_title:'المزامنة مطلوبة', locked_msg:'البيانات المخزنة أقدم من {max} يوم. من فضلك زامن قبل فحص أي عامل.',
+    verdict_cleared:'مصرح له بالعمل', verdict_warning:'تحذير', verdict_blocked:'غير مصرح',
+    verdict_sub_cleared:'جميع الشهادات سارية', verdict_sub_warning:'مصرح ولكن يحتاج انتباه',
+    verdict_sub_blocked:'لا تسمح لهذا الشخص بالعمل',
+    reason_not_active:'حالة التوظيف ليست نشطاً',
+    reason_archived:'الموظف مؤرشف',
+    reason_legal:'التصريح القانوني ليس معتمداً',
+    reason_expired:'{cert} انتهت منذ {days} يوم',
+    reason_expiring:'{cert} تنتهي خلال {days} يوم',
+    section_reasons:'المشاكل الموجودة', section_all_certs:'جميع الشهادات',
+    cert_wah_p:'العمل على ارتفاع - عملي', cert_wah_t:'العمل على ارتفاع - نظري',
+    cert_ra:'تقييم المخاطر', cert_fa:'الإسعافات الأولية', cert_ff:'مكافحة الحريق',
+    cert_ec:'منسق الطوارئ', cert_mcu:'الفحص الطبي',
+    cert_ppe:'فحص معدات الحماية', cert_lifting:'الرفع', cert_scaffolding:'السقالات',
+    st_valid:'ساري', st_plan:'قريباً', st_soon:'≤٦٠ يوم', st_urgent:'≤٣٠ يوم', st_expired:'منتهي', st_missing:'مفقود',
+    days_left:'يوم متبقي', days_ago:'يوم مضى',
+    sign_out:'خروج', empty_search:'اكتب الاسم أو الرقم القومي',
+    empty_none:'لا نتائج', recent:'آخر البحث',
+  }
+};
+let LANG = localStorage.getItem('ohs_officer_lang')||'en';
+function t(k,params){let s=I18N[LANG][k]||k;if(params)for(const p in params)s=s.replace('{'+p+'}',params[p]);return s;}
+function setLang(l){LANG=l;localStorage.setItem('ohs_officer_lang',l);render();}
+
+/* Theme (match admin) */
+let THEME = localStorage.getItem('lmp_theme')||'blue';
+document.documentElement.dataset.theme = THEME;
+
+/* State */
+let CURRENT_USER = null;
+let ROUTE = 'login';
+let ROUTE_PARAM = null;
+let SEARCH = '';
+let RECENT = []; // recent employee_ids
+
+// Simulated last sync — start "recent" so lockout doesn't fire by default. Toggle via demo button.
+let LAST_SYNCED_DAYS_AGO = 3;
+// Prototype demo mode: change to 40 to see the lockout screen
+
+function go(r,p){ROUTE=r;ROUTE_PARAM=p||null;render();}
+
+/* Compliance logic (same as admin) */
+const CERT_KEYS = ['wah_practical','wah_theoretical','ra','fa','ff','ec','mcu'];
+const SAFETY_ONLY_KEYS = ['ppe_inspection','lifting','scaffolding'];
+const CERT_LABEL_KEYS = {
+  wah_practical:'cert_wah_p', wah_theoretical:'cert_wah_t',
+  ra:'cert_ra', fa:'cert_fa', ff:'cert_ff', ec:'cert_ec', mcu:'cert_mcu',
+  ppe_inspection:'cert_ppe', lifting:'cert_lifting', scaffolding:'cert_scaffolding'
+};
+function applicableCerts(emp){return emp.team==='safety'?[...CERT_KEYS,...SAFETY_ONLY_KEYS]:CERT_KEYS;}
+function daysUntil(dt){if(!dt)return null;return Math.round((new Date(dt)-today)/86400000);}
+function deriveCertState(dt,thr){if(!dt)return 'missing';const d=daysUntil(dt);if(d<0)return 'expired';if(d<=thr.urgent_days)return 'urgent';if(d<=thr.soon_days)return 'soon';if(d<=thr.plan_days)return 'plan';return 'valid';}
+
+function deriveVerdict(emp){
+  const thr = SNAPSHOT.meta.warning_thresholds;
+  const blockers = [];
+  const warnings = [];
+  if(emp.personal.employment_status!=='Active') blockers.push({type:'status',text:t('reason_not_active')});
+  if(emp.personal.archived) blockers.push({type:'status',text:t('reason_archived')});
+  if(emp.personal.legal_permission!=='Approved') blockers.push({type:'legal',text:t('reason_legal')});
+  const BLOCKER_CERTS = ['wah_practical','wah_theoretical','mcu'];
+  const WARNING_CERTS = ['fa','ff','ra','ec'];
+  BLOCKER_CERTS.forEach(k=>{
+    const dt = emp.certificates[k]?.expiry_date;
+    const d = daysUntil(dt);
+    if(!dt) return;
+    if(d<0) blockers.push({type:'cert',text:t('reason_expired',{cert:t(CERT_LABEL_KEYS[k]),days:Math.abs(d)})});
+    else if(d<=thr.urgent_days) warnings.push({type:'cert',text:t('reason_expiring',{cert:t(CERT_LABEL_KEYS[k]),days:d})});
+  });
+  WARNING_CERTS.forEach(k=>{
+    const dt = emp.certificates[k]?.expiry_date;
+    const d = daysUntil(dt);
+    if(!dt) return;
+    if(d<0) warnings.push({type:'cert',text:t('reason_expired',{cert:t(CERT_LABEL_KEYS[k]),days:Math.abs(d)})});
+    else if(d<=thr.urgent_days) warnings.push({type:'cert',text:t('reason_expiring',{cert:t(CERT_LABEL_KEYS[k]),days:d})});
+  });
+  if(blockers.length) return {verdict:'blocked',blockers,warnings};
+  if(warnings.length) return {verdict:'warning',blockers:[],warnings};
+  return {verdict:'cleared',blockers:[],warnings:[]};
+}
+
+/* Utils */
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);}
+function initials(n){return n.split(' ').slice(0,2).map(x=>x[0]||'').join('').toUpperCase();}
+function fmtDate(s){if(!s)return '—';return new Date(s).toLocaleDateString(LANG==='ar'?'ar-EG':'en-GB',{day:'2-digit',month:'short',year:'numeric'});}
+function toast(msg){const el=document.createElement('div');el.className='toast';el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2000);}
+
+/* PAGES */
+function pageLogin(){
+  return `
+    <div class="login">
+      <div class="mark">OHS</div>
+      <h1>${t('app_name')}</h1>
+      <div class="sub">${t('app_sub')} · ${t('login_title')}</div>
+
+      <div class="field">
+        <label>${t('username')}</label>
+        <input id="uname" placeholder="officer1" value="officer1">
+      </div>
+      <div class="field">
+        <label>${t('password')}</label>
+        <input id="pwd" type="password" value="x">
+      </div>
+      <div id="login-err"></div>
+      <button class="btn btn-primary btn-lg" style="margin-top:16px" onclick="onLogin()">${t('sign_in')}</button>
+
+      <div class="lang">
+        <button class="${LANG==='en'?'active':''}" onclick="setLang('en')">EN</button>
+        <button class="${LANG==='ar'?'active':''}" onclick="setLang('ar')">ع</button>
+      </div>
+
+      <div style="color:var(--navy-text);font-size:11.5px;text-align:center;margin-top:26px;line-height:1.5;opacity:.6">
+        Demo: officer1 / x<br>Toggle stale-data lockout: <button onclick="LAST_SYNCED_DAYS_AGO=40;go('home')" style="color:var(--primary);text-decoration:underline;background:none;font-size:11.5px">simulate 40 days stale</button>
+      </div>
+    </div>`;
+}
+
+function renderHeader(){
+  return `
+    <div class="hbar">
+      <div class="brand">
+        <div class="mark">OHS</div>
+        <div>
+          <div class="name">${t('app_name')}</div>
+          <div class="sub">${esc(CURRENT_USER.display_name)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="hbar-btn icon" onclick="setLang(LANG==='en'?'ar':'en')">${LANG==='en'?'ع':'EN'}</button>
+        <button class="hbar-btn icon" onclick="signOut()">⏻</button>
+      </div>
+    </div>`;
+}
+
+function renderSyncStrip(){
+  const thr = SNAPSHOT.meta.field_sync_max_stale_days;
+  const stale = LAST_SYNCED_DAYS_AGO >= thr-5;
+  return `
+    <div class="sync-strip">
+      <div class="as-of">${t('as_of')} <b>${fmtDate(SNAPSHOT.meta.published_at)}</b> · ${LAST_SYNCED_DAYS_AGO}d</div>
+      <button onclick="onSync()">↻ ${t('sync_now')}</button>
+    </div>
+    ${stale?`<div class="stale-banner">⚠ ${t('stale_warn',{days:LAST_SYNCED_DAYS_AGO})}</div>`:''}
+  `;
+}
+
+function pageHome(){
+  // check lockout
+  if(LAST_SYNCED_DAYS_AGO > SNAPSHOT.meta.field_sync_max_stale_days){
+    return pageLocked();
+  }
+  const results = SEARCH.trim().length===0 ? [] :
+    SNAPSHOT.employees.filter(e=>{
+      const q = SEARCH.toLowerCase();
+      return e.name.toLowerCase().includes(q) || e.national_id.includes(q);
+    }).slice(0,20);
+
+  const recentEmps = RECENT.map(id=>SNAPSHOT.employees.find(e=>e.employee_id===id)).filter(Boolean).slice(0,5);
+
+  return `
+    ${renderHeader()}
+    ${renderSyncStrip()}
+    <div class="body">
+      <div class="search-box">
+        <span class="ic">🔍</span>
+        <input placeholder="${t('search_ph')}" value="${esc(SEARCH)}" oninput="SEARCH=this.value;render();document.querySelector('.search-box input').focus()" autofocus>
+        ${SEARCH?`<button onclick="SEARCH='';render()" style="color:var(--muted);font-size:18px">×</button>`:''}
+      </div>
+
+      ${SEARCH.trim().length===0 ? `
+        ${recentEmps.length ? `
+          <div class="section-h">${t('recent')}</div>
+          <div class="result-list">
+            ${recentEmps.map(e=>resultItem(e)).join('')}
+          </div>
+        ` : `
+          <div class="empty">
+            <div class="big">🔎</div>
+            <div>${t('empty_search')}</div>
+          </div>
+        `}
+      ` : results.length===0 ? `
+        <div class="empty">
+          <div class="big">–</div>
+          <div>${t('empty_none')}</div>
+        </div>
+      ` : `
+        <div class="result-list">
+          ${results.map(e=>resultItem(e)).join('')}
+        </div>
+      `}
+    </div>`;
+}
+
+function resultItem(e){
+  const v = deriveVerdict(e);
+  return `<div class="result-item" onclick="openEmployee('${e.employee_id}')">
+    <div class="avatar">${initials(e.name)}</div>
+    <div class="result-info">
+      <div class="result-name">${esc(e.name)}</div>
+      <div class="result-meta">${esc(e.personal.title)} · ${e.employee_id}</div>
+    </div>
+    <div class="result-verdict"><div class="v-dot v-${v.verdict}"></div></div>
+  </div>`;
+}
+
+function pageVerdict(){
+  const emp = SNAPSHOT.employees.find(e=>e.employee_id===ROUTE_PARAM);
+  if(!emp){go('home');return '';}
+  const v = deriveVerdict(emp);
+  const iconMap = {cleared:'✓',warning:'⚠',blocked:'✕'};
+  const teamTag = emp.team==='field'?'tag-team-field':'tag-team-safety';
+  const teamLabel = emp.team==='field'?'Field team':'Safety team';
+  const legalTag = emp.personal.legal_permission==='Approved'?'tag-approved':emp.personal.legal_permission==='Pending'?'tag-pending':'tag-not-approved';
+  const statusTag = emp.personal.employment_status==='Active'?'tag-active':'tag-inactive';
+
+  const thr = SNAPSHOT.meta.warning_thresholds;
+  const certs = applicableCerts(emp);
+
+  return `
+    <div class="verdict-hero ${v.verdict}">
+      <button class="verdict-back" onclick="go('home')">←</button>
+      <div class="verdict-icon">${iconMap[v.verdict]}</div>
+      <div class="verdict-label">${t('verdict_'+v.verdict)}</div>
+      <div class="verdict-sub">${t('verdict_sub_'+v.verdict)}</div>
+    </div>
+
+    <div class="emp-card">
+      <div class="emp-name">${esc(emp.name)}</div>
+      <div class="emp-natid">${esc(emp.national_id)}</div>
+      <div class="emp-tags">
+        <span class="tag ${teamTag}">${teamLabel}</span>
+        <span class="tag" style="background:#eef2ff;color:#3730a3">${esc(emp.personal.title)}</span>
+        <span class="tag ${statusTag}">${esc(emp.personal.employment_status)}</span>
+        <span class="tag ${legalTag}">${esc(emp.personal.legal_permission)}</span>
+      </div>
+    </div>
+
+    ${v.blockers.length ? `
+      <div class="reasons">
+        <h3 style="color:var(--blocked-dark)">${t('section_reasons')}</h3>
+        ${v.blockers.map(r=>`<div class="reason-item blocker"><span class="reason-ic">✕</span><span class="reason-txt">${r.text}</span></div>`).join('')}
+      </div>
+    ` : ''}
+
+    ${v.warnings.length ? `
+      <div class="reasons">
+        ${!v.blockers.length?`<h3 style="color:var(--warn-dark)">${t('section_reasons')}</h3>`:''}
+        ${v.warnings.map(r=>`<div class="reason-item warning"><span class="reason-ic">⚠</span><span class="reason-txt">${r.text}</span></div>`).join('')}
+      </div>
+    ` : ''}
+
+    <div class="cert-block">
+      <h3>${t('section_all_certs')}</h3>
+      ${certs.map(k=>{
+        const c = emp.certificates[k]||{};
+        const s = deriveCertState(c.expiry_date, thr);
+        const dl = daysUntil(c.expiry_date);
+        return `<div class="cert-line">
+          <div>
+            <div class="cert-line-name">${t(CERT_LABEL_KEYS[k])}</div>
+            <div class="cert-line-date">${fmtDate(c.expiry_date)} ${dl!=null?`(${dl>=0?dl+t('days_left'):Math.abs(dl)+t('days_ago')})`:''}</div>
+          </div>
+          <span class="cert-line-state cs-${s}">${t('st_'+s)}</span>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div style="height:20px"></div>
+  `;
+}
+
+function pageLocked(){
+  return `
+    ${renderHeader()}
+    <div class="lock">
+      <div class="lock-icon">🔒</div>
+      <h2>${t('locked_title')}</h2>
+      <p>${t('locked_msg',{max:SNAPSHOT.meta.field_sync_max_stale_days})}</p>
+      <button class="btn btn-primary btn-lg" onclick="onSync()">↻ ${t('sync_now')}</button>
+    </div>`;
+}
+
+/* Actions */
+function onLogin(){
+  const u = document.getElementById('uname').value;
+  const p = document.getElementById('pwd').value;
+  const user = SNAPSHOT.officers.find(x=>x.username===u && x.password===p);
+  if(!user){document.getElementById('login-err').innerHTML=`<div class="err">${t('invalid_creds')}</div>`;return;}
+  CURRENT_USER = user;
+  go('home');
+}
+function signOut(){CURRENT_USER=null;SEARCH='';RECENT=[];go('login');}
+function openEmployee(id){
+  RECENT = [id, ...RECENT.filter(x=>x!==id)].slice(0,5);
+  go('verdict', id);
+}
+function onSync(){
+  toast('Syncing…');
+  setTimeout(()=>{
+    LAST_SYNCED_DAYS_AGO = 0;
+    SNAPSHOT.meta.published_at = new Date().toISOString();
+    toast('✓ '+t('synced'));
+    go('home');
+  },600);
+}
+
+/* Render */
+function render(){
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = LANG==='ar'?'rtl':'ltr';
+  document.documentElement.dataset.theme = THEME;
+  const app = document.getElementById('app');
+  let body='';
+  if(!CURRENT_USER) body = pageLogin();
+  else if(ROUTE==='home') body = pageHome();
+  else if(ROUTE==='verdict') body = pageVerdict();
+  else body = pageHome();
+  app.innerHTML = `<div class="phone">${body}</div>`;
+}
+render();
+</script>
+</body>
+</html>
