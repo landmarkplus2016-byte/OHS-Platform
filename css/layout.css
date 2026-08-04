@@ -1,0 +1,14 @@
+/* ==========================================================================
+   layout.css — structural shells only. No component styling, no page styling.
+
+   Will contain:
+     - .app-shell            admin desktop grid (sidebar + topbar + content)
+     - .sidebar              navy sidebar, group headers, nav items, active state
+     - .topbar               admin topbar (page title, language switch, user menu)
+     - .content              scrollable main content region
+     - .phone-shell          officer mobile frame (header, sync strip, body)
+     - Responsive breakpoints and the RTL flip rules for the above
+
+   All spacing uses logical properties (margin-inline-start, padding-inline-end,
+   inset-inline-start, …) — never margin-left / padding-right. See Section 8.2.
+   ========================================================================== */

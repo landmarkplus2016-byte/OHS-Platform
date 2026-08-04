@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!--
+  OHS Platform — single HTML entry point for the whole app.
+
+  IMPORTANT: This file uses ES modules (<script type="module">). Browsers refuse to
+  load modules over the file:// protocol (CORS). It MUST be served through a static
+  file server — VS Code "Live Server", `python -m http.server`, or GitHub Pages.
+  Double-clicking index.html to open it via file:// will fail with a module/CORS error.
+-->
+<html lang="en" dir="ltr" data-theme="blue">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OHS Platform — Landmark Occupational Health &amp; Safety</title>
+
+  <!-- Design tokens first, then base, layout, components, page-specific (in this order) -->
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+
+  <!-- Third-party libraries via pinned CDN <script> tags — no npm, ever -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

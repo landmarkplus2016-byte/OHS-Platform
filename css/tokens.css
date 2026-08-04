@@ -1,0 +1,63 @@
+/* ==========================================================================
+   tokens.css — the single source of truth for colors, spacing, radii, shadows.
+
+   CLAUDE.md Section 8.3. No hex color may appear anywhere else in the codebase;
+   every other file references these custom properties by name.
+   ========================================================================== */
+
+:root {
+  --bg: #f5f6fa;
+  --card: #ffffff;
+  --border: #e2e4ed;
+  --text: #1a1d2e;
+  --text2: #4a4f6a;
+  --muted: #9095b0;
+  --primary: #3d5af1;
+  --primary-dark: #2d47d4;
+  --primary-soft: #3d5af11f;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #e05252;
+  --purple: #7c3aed;
+  --teal: #0d9488;
+
+  --cleared:      #16a34a;  --cleared-bg:   #dcfce7;  --cleared-dark: #15803d;
+  --warn:         #d97706;  --warn-bg:      #fef3c7;  --warn-dark:    #b45309;
+  --blocked:      #dc2626;  --blocked-bg:   #fee2e2;  --blocked-dark: #991b1b;
+  --urgent-bg:    #ffe4e6;  --urgent-tx:    #9f1239;
+  --missing-bg:   #f3f4f6;  --missing-tx:   #6b7280;
+  --suspended-bg: #ede9fe;  --suspended-tx: #5b21b6;
+  /* --plan-bg / --plan-tx kept available for non-compliance uses (e.g. RDT phase badges).
+     No cert state currently maps to them. */
+  --plan-bg:      #fef9c3;  --plan-tx:      #854d0e;
+
+  --radius-card: 14px;
+  --radius-control: 8px;
+  --radius-mobile: 10px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 64, 0.05);
+  --shadow-md: 0 4px 14px rgba(16, 24, 64, 0.08);
+  --font-base: 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --navy: #0f1942;
+  --navy-soft: #16215a;
+  --navy-border: #232c63;
+  --navy-text: #aab2d8;
+  --navy-text-strong: #ffffff;
+  --navy-muted: #6b74a8;
+
+  --theme-color-blue: #3d5af1;
+  --theme-color-teal: #0d9488;
+  --theme-color-purple: #7c3aed;
+  --theme-color-crimson: #be123c;
+}
+
+/* ---------- Accent themes ----------------------------------------------------
+   Only --primary and its variants change with the selected theme. The navy
+   sidebar/header never follows the accent — buttons, active nav borders, badges
+   and chart accents do.
+   ---------------------------------------------------------------------------- */
+
+[data-theme="blue"]    { --primary: #3d5af1; --primary-dark: #2d47d4; --primary-soft: #3d5af11f; }
+[data-theme="teal"]    { --primary: #0d9488; --primary-dark: #0b7a70; --primary-soft: #0d94881f; }
+[data-theme="purple"]  { --primary: #7c3aed; --primary-dark: #6425c9; --primary-soft: #7c3aed1f; }
+[data-theme="crimson"] { --primary: #be123c; --primary-dark: #9f0f32; --primary-soft: #be123c1f; }

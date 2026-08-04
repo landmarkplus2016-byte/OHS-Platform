@@ -1,0 +1,91 @@
+/* ==========================================================================
+   pages.css — layout that belongs to one page and is not reused elsewhere.
+
+   If a rule here would be useful to a second page, it belongs in
+   components.css instead.
+
+   Built so far: the login screen.
+
+   Still to come:
+     - Change-password screen
+     - Dashboard: KPI row, chart cards, "Recently Updated" list
+     - Employee list / detail / form pages (incl. cert grid, renewals, RDT)
+     - Equipment list / detail / form / rejection pages
+     - Settings page tabs (Users, Lists, Thresholds, Data)
+     - Export page
+     - Officer pages: home + search, verdict card, sync, stale lockout
+
+   The first-time-setup and cannot-reach-server screens are deliberately NOT
+   here — they carry their own styles inside js/main.js so they still render on
+   a device where a stylesheet failed to load.
+   ========================================================================== */
+
+/* ---------- Auth screens (login + change password) ----------
+   Both are the same centered card on an empty page, so they share the
+   .login-wrap / .login-card shell rather than duplicating it. */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  background: var(--card);
+  padding: 34px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  width: 400px;
+  max-width: 92vw;
+}
+.login-card .mark {
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 26px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.login-card h1 { margin: 6px 0 4px; font-size: 18px; text-align: center; }
+.login-card .sub {
+  color: var(--text2);
+  font-size: 12.5px;
+  text-align: center;
+  margin-block-end: 22px;
+}
+
+.lang-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-block-end: 18px;
+}
+
+/* Secondary action under the primary button — the sign-out escape hatch on the
+   change-password screen. */
+.auth-footer {
+  display: flex;
+  justify-content: center;
+  margin-block-start: 16px;
+}
+
+/* One-shot banner after an involuntary logout (session expired / superseded). */
+.login-notice {
+  background: var(--warn-bg);
+  color: var(--warn-dark);
+  border-radius: var(--radius-control);
+  padding: 9px 12px;
+  font-size: 12.5px;
+  text-align: center;
+  margin-block-end: 16px;
+}
+
+/* ---------- Stage 3 placeholder body (removed once real pages land) ---------- */
+.stage-placeholder {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}

@@ -1,0 +1,66 @@
+/* ==========================================================================
+   base.css — resets, global typography, RTL base rules, scrollbar styling.
+
+   Ported from OHS-DB. Nothing page- or component-specific belongs here.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-base);
+  font-size: 14px;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Arabic / RTL gets a font stack that includes Tahoma, matching the prototypes */
+[dir="rtl"] {
+  font-family: 'Segoe UI', 'Tahoma', system-ui, sans-serif;
+}
+
+/* ---------- Scrollbar styling (matches the prototypes' subtle look) ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+  border: 2px solid var(--bg);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}

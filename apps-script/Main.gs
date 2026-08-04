@@ -48,6 +48,9 @@ var AUTHENTICATED_ACTIONS = {
   },
   'update_config': function (session, payload) {
     return handleUpdateConfig(session, payload);
+  },
+  'reset_user_password': function (session, payload) {
+    return handleResetUserPassword(session, payload);
   }
 };
 
