@@ -4,13 +4,16 @@
    If a rule here would be useful to a second page, it belongs in
    components.css instead.
 
-   Built so far: the login screen, the employee module's pages, the dashboard.
+   Built so far: the login screens, the employee module's pages, the dashboard.
+
+   The officer app's own pieces live in components.css (the verdict card, the
+   result list, the lockout) and layout.css (the phone frame) — only its
+   sign-in card is here, because only that is unique to one page.
 
    Still to come:
      - Equipment list / detail / form / rejection pages
      - Settings page tabs (Users, Lists, Thresholds, Data)
      - Export page
-     - Officer pages: home + search, verdict card, sync, stale lockout
 
    The first-time-setup and cannot-reach-server screens are deliberately NOT
    here — they carry their own styles inside js/main.js so they still render on
@@ -528,4 +531,89 @@
   border-radius: var(--radius-card);
   color: var(--muted);
   font-size: 14px;
+}
+
+/* ---------- Officer sign-in card (Section 7.2) ----------
+   Full-bleed navy rather than the admin's centered white card. The difference
+   is the point: one URL serves two apps, and an officer opening the platform
+   on a phone should know within a second which one they are in. */
+.officer-login {
+  padding: 34px 22px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--navy) 0%, var(--navy-soft) 100%);
+  color: var(--navy-text-strong);
+}
+.officer-login .mark {
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 34px;
+  text-align: center;
+  letter-spacing: 2px;
+}
+.officer-login h1 { font-size: 20px; text-align: center; margin: 6px 0 4px; }
+.officer-login .sub {
+  color: var(--navy-text);
+  font-size: 13px;
+  text-align: center;
+  margin-block-end: 30px;
+}
+
+/* Overrides .field from components.css: on navy, a white input would glare. */
+.officer-login .field { margin-block-end: 14px; }
+.officer-login .field label {
+  font-size: 12.5px;
+  color: var(--navy-text);
+  font-weight: 600;
+}
+.officer-login .field input {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-mobile);
+  border: 1px solid var(--navy-border);
+  background: var(--navy-soft);
+  color: var(--navy-text-strong);
+  font-size: 15px;
+}
+.officer-login .field input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.officer-login-notice {
+  background: var(--warn-bg);
+  color: var(--warn-dark);
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  font-size: 12.5px;
+  text-align: center;
+  margin-block-end: 16px;
+}
+.officer-login-err {
+  color: var(--blocked-bg);
+  font-size: 13px;
+  text-align: center;
+  min-height: 18px;
+  margin-block: 8px;
+}
+
+.officer-login-lang {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-block-start: 22px;
+}
+.officer-login-lang button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--navy-soft);
+  color: var(--navy-text);
+  font-size: 13px;
+}
+.officer-login-lang button.active {
+  background: var(--primary);
+  color: var(--navy-text-strong);
 }

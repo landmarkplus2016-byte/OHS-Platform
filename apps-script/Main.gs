@@ -143,6 +143,19 @@ var AUTHENTICATED_ACTIONS = {
   },
   'update_field_options': function (session, payload) {
     return handleUpdateFieldOptions(session, payload);
+  },
+
+  // --- Officer app (Section 3.8) -------------------------------------------
+  // Officer role only. These are the stripped, read-only counterparts of the
+  // admin reads; the gate is inside each handler (requireOfficer_).
+  'officer_sync': function (session, payload) {
+    return handleOfficerSync(session, payload);
+  },
+  'officer_get_employee': function (session, payload) {
+    return handleOfficerGetEmployee(session, payload);
+  },
+  'officer_get_equipment': function (session, payload) {
+    return handleOfficerGetEquipment(session, payload);
   }
 };
 

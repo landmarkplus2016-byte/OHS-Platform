@@ -12,8 +12,8 @@
        JSON — only the header lies.
    ========================================================================== */
 
-import { SCRIPT_URL, TOKEN, UI, clearSession } from './state.js';
-import { go } from './router.js';
+import { SCRIPT_URL, TOKEN, UI, ROUTE, clearSession } from './state.js';
+import { go, loginRouteFor } from './router.js';
 
 /**
  * The single error type every caller sees. `code` is one of the fixed codes in
@@ -92,10 +92,16 @@ async function call(action, payload) {
   // (Section 3.2, step 2). There is no session to clear there, and redirecting
   // would wipe the form the user is standing in — so the login page handles
   // that code itself, as bad credentials.
+  //
+  // Which sign-in screen depends on which app the user was in: an officer whose
+  // token expires at a tower gets the mobile card back (Section 7.1). Their
+  // cached snapshot is untouched — only an explicit sign-out clears it
+  // (Section 7.7), so the verdict card keeps working offline afterwards.
   if (code === 'unauthenticated' && action !== 'login') {
+    const loginRoute = loginRouteFor(ROUTE);
     clearSession();
     UI.notice = 'session_expired'; // read and cleared by the login page
-    go('login');
+    go(loginRoute);
   }
 
   throw new ApiError(

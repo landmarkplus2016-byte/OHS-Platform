@@ -313,11 +313,8 @@ export const en = {
   import_err_empty_workbook: 'That workbook has no sheets.',
   import_err_no_rows: 'The sheet has a header row but no data under it.',
 
-  /* ---------- Placeholders (each is replaced by its real page) ---------- */
-  placeholder_officer_home: 'Officer home placeholder',
-  placeholder_officer_sync: 'Officer sync placeholder',
-  placeholder_officer_locked: 'Officer lockout placeholder',
-  placeholder_officer_verdict_employee: 'Employee verdict placeholder',
-  placeholder_officer_verdict_equipment: 'Equipment verdict placeholder',
+  /* ---------- Not found ----------
+     The last placeholder standing. Every other screen now has a real page; this
+     one is not a page anyone builds. */
   placeholder_not_found: 'Page not found.',
 };

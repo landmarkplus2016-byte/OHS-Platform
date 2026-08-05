@@ -8,33 +8,56 @@
    else out of it (Section 7.1: same URL, different shell).
 
    That is also why there is no `group` and no `sidebar` here. The officer shell
-   has no sidebar; it gets a phone frame in Stage 8.
+   has no sidebar; it has the phone frame in js/shell/officerShell.js.
 
-   Stage 4 registers placeholder pages so the guards can be exercised. Stage 8
-   swaps them for the real pages in ./pages/.
+   There is also no `officer` block. That block is how a *domain* module — the
+   employees, the equipment — contributes entities to this app. This module is
+   the app; it consumes those blocks rather than publishing one.
+
+   ---- The routes ----
+
+     check                  the mobile sign-in card. The admin login is
+                            '#/login' and looks nothing like it.
+     check/home             search + Recent
+     check/sync             the manual sync page
+     check/locked           the fail-closed lockout (Section 7.4)
+     check/employee/:id     verdict card, drawn by the employees module
+     check/equipment/:id    verdict card, drawn by the equipment module
+
+   'check' and 'check/sync' are the two routes exempt from the staleness guard
+   in router.js: one runs before there is a session, and the other is the only
+   way out of a lockout.
    ========================================================================== */
 
-import { t } from '../../i18n/i18n.js';
+import './i18n.js';
 
-/**
- * Temporary Stage 4 page body. Full-page rather than .page-placeholder, because
- * officer routes render without the admin shell around them.
- */
-function placeholder(key) {
-  return `<div class="stage-placeholder">${t(key)}</div>`;
-}
+import { renderOfficerLoginPage, bindOfficerLoginPageEvents } from './pages/officerLoginPage.js';
+import { renderOfficerHomePage, bindOfficerHomePageEvents } from './pages/officerHomePage.js';
+import { renderOfficerSyncPage, bindOfficerSyncPageEvents } from './pages/officerSyncPage.js';
+import { renderOfficerLockedPage, bindOfficerLockedPageEvents } from './pages/officerLockedPage.js';
+import {
+  renderOfficerVerdictEmployeePage, bindOfficerVerdictEmployeePageEvents,
+} from './pages/officerVerdictEmployeePage.js';
+import {
+  renderOfficerVerdictEquipmentPage, bindOfficerVerdictEquipmentPageEvents,
+} from './pages/officerVerdictEquipmentPage.js';
 
 export const manifest = {
   name: 'officer',
   displayNameKey: 'module_officer',
 
   routes: [
-    { path: 'check/home',          page: () => placeholder('placeholder_officer_home') },
-    { path: 'check/sync',          page: () => placeholder('placeholder_officer_sync') },
-    { path: 'check/locked',        page: () => placeholder('placeholder_officer_locked') },
-    // ':id' is captured into ROUTE_PARAMS and handed to the page function.
-    // The placeholders ignore it; the Stage 8 verdict cards read params.id.
-    { path: 'check/employee/:id',  page: () => placeholder('placeholder_officer_verdict_employee') },
-    { path: 'check/equipment/:id', page: () => placeholder('placeholder_officer_verdict_equipment') },
+    { path: 'check',        page: renderOfficerLoginPage,  bind: bindOfficerLoginPageEvents },
+    { path: 'check/home',   page: renderOfficerHomePage,   bind: bindOfficerHomePageEvents },
+    { path: 'check/sync',   page: renderOfficerSyncPage,   bind: bindOfficerSyncPageEvents },
+    { path: 'check/locked', page: renderOfficerLockedPage, bind: bindOfficerLockedPageEvents },
+
+    // ':id' is captured into ROUTE_PARAMS and handed to both page and bind.
+    { path: 'check/employee/:id',
+      page: renderOfficerVerdictEmployeePage,
+      bind: bindOfficerVerdictEmployeePageEvents },
+    { path: 'check/equipment/:id',
+      page: renderOfficerVerdictEquipmentPage,
+      bind: bindOfficerVerdictEquipmentPageEvents },
   ],
 };

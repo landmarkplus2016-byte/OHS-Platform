@@ -1,8 +1,8 @@
 /* ==========================================================================
    layout.css — structural shells only. No component styling, no page styling.
 
-   Built so far: the admin desktop shell (sidebar + topbar + content).
-   Still to come: .phone-shell, the officer mobile frame (Stage 8).
+   Two shells: the admin desktop one (sidebar + topbar + content) and the
+   officer mobile one (.phone + navy header + sync strip).
 
    Ported from design/admin_prototype.html. All spacing uses logical properties
    (margin-inline-start, padding-inline-end, inset-inline-start, …) — never
@@ -221,3 +221,132 @@
     padding: 18px;
   }
 }
+
+/* ==========================================================================
+   Officer mobile shell (Sections 7.1, 8.6)
+
+   Ported from design/officer_prototype.html. Same navy header and sync strip;
+   colours come from tokens.css rather than the prototype's inline hex.
+
+   The frame is a centred column rather than a true "phone frame" chrome: the
+   officer app and the admin app share one URL, so this has to be usable at
+   desktop width without pretending to be a device mock-up.
+   ========================================================================== */
+
+.phone {
+  max-width: 420px;
+  margin-inline: auto;
+  min-height: 100vh;
+  background: var(--bg);
+  position: relative;
+  border-inline: 1px solid var(--border);
+}
+
+/* Below the frame width there is nothing to frame. */
+@media (max-width: 440px) {
+  .phone { border-inline: none; }
+}
+
+/* ---------- Officer header ----------
+   Sticky, because the officer scrolls a long certificate list and must always
+   be one tap from signing out. */
+.officer-hbar {
+  background: var(--navy);
+  color: var(--navy-text-strong);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 5;
+}
+.officer-hbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.officer-hbar .mark {
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: .5px;
+}
+.officer-hbar .name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.officer-hbar .sub {
+  color: var(--navy-text);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.officer-hbar .hbar-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.officer-hbar .hbar-btn {
+  color: var(--navy-text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 40px;
+  min-height: 40px;   /* a touch target, not a mouse target */
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--navy-soft);
+}
+.officer-hbar .hbar-btn:disabled { opacity: .6; }
+
+/* ---------- Sync strip ---------- */
+.sync-strip {
+  background: var(--card);
+  padding: 10px 16px;
+  border-block-end: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+.sync-strip .as-of { color: var(--text2); }
+.sync-strip .as-of b { color: var(--text); font-weight: 600; }
+.sync-strip button {
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 13px;
+  background: none;
+  border: none;
+  padding: 6px 4px;
+  flex-shrink: 0;
+}
+
+/* Amber warning in the last stretch of the freshness window — a nudge, not the
+   lockout. The lockout is a whole screen (Section 7.4). */
+.stale-banner {
+  background: var(--warn-bg);
+  color: var(--warn-dark);
+  padding: 9px 16px;
+  font-size: 12.5px;
+  text-align: center;
+  font-weight: 600;
+  border-block-end: 1px solid var(--warn);
+}
+
+/* ---------- Officer page body ---------- */
+.officer-body { padding: 16px; }
+.officer-body > h2 { margin: 4px 0 6px; font-size: 18px; font-weight: 800; }
+.officer-intro {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text2);
+}
+
+/* Breathing room under the last panel on a scrolling verdict card. */
+.officer-tail { height: 20px; }

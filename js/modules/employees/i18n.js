@@ -169,6 +169,18 @@ const en = {
   emp_resigned_none: 'Nobody is archived.',
   emp_resigned_count: '{count} archived',
 
+  /* ---------- Verdict reasons (Sections 6.2, 6.4) ----------
+     The other half of the derived block: the server sends {type, text_key,
+     text_params} and the wording lives here. `{cert}` arrives as a raw cert key
+     — officerCard.js translates it through CERT_LABEL_KEYS before it reaches
+     t(), so an officer never reads "mcu expired 5 days ago". */
+  reason_employment_status: 'Employment status is {status}, not Active',
+  reason_archived: 'This employee is archived',
+  reason_legal_permission: 'Legal permission is {status}, not Approved',
+  reason_expired: '{cert} expired {days} days ago',
+  reason_expiring: '{cert} expires in {days} days',
+  reason_wah_suspended: '{cert} is suspended — the medical check-up has expired',
+
   /* ---------- Dashboard (Section 5.5) ----------
      The KPI row mixes units on purpose, so three of the four cards carry a note
      saying what they count. */
@@ -349,6 +361,14 @@ const ar = {
   emp_resigned_intro: 'الموظفون المؤرشفون. للعرض فقط — ألغِ الأرشفة للتعديل.',
   emp_resigned_none: 'لا يوجد موظفون مؤرشفون.',
   emp_resigned_count: '{count} مؤرشف',
+
+  /* ---------- Verdict reasons (Sections 6.2, 6.4) ---------- */
+  reason_employment_status: 'حالة التوظيف {status} وليست نشطًا',
+  reason_archived: 'هذا الموظف مؤرشف',
+  reason_legal_permission: 'التصريح القانوني {status} وليس معتمدًا',
+  reason_expired: 'انتهت {cert} منذ {days} يومًا',
+  reason_expiring: 'تنتهي {cert} خلال {days} يومًا',
+  reason_wah_suspended: '{cert} موقوفة — انتهى الفحص الطبي',
 
   /* ---------- Dashboard (Section 5.5) ---------- */
   emp_dash_kpi_total: 'إجمالي الموظفين النشطين',

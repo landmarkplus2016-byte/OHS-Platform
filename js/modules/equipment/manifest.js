@@ -27,6 +27,9 @@ import { renderEquipmentRejectPage, bindEquipmentRejectPageEvents } from './page
 import {
   renderEquipmentKpis, renderEquipmentCharts, bindEquipmentDashboard,
 } from './dashboard.js';
+import {
+  searchEquipment, findEquipmentResult, renderEquipmentVerdictCard,
+} from './officerCard.js';
 
 export const manifest = {
   name: MODULE_NAMES.EQUIPMENT,
@@ -62,5 +65,17 @@ export const manifest = {
     kpis: renderEquipmentKpis,
     charts: renderEquipmentCharts,
     bind: bindEquipmentDashboard,
+  },
+
+  /**
+   * What this module contributes to the officer app (Sections 5.6, 7.5). Same
+   * four-part contract the employee manifest implements; the officer shell
+   * merges both without knowing what either one holds.
+   */
+  officer: {
+    entityKind: 'equipment',
+    searchEntities: searchEquipment,
+    findEntity: findEquipmentResult,
+    renderVerdictCard: renderEquipmentVerdictCard,
   },
 };

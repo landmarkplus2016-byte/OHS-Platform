@@ -31,6 +31,9 @@ import { renderResignedPage, bindResignedPageEvents } from './pages/resignedPage
 import {
   renderEmployeeKpis, renderEmployeeCharts, bindEmployeeDashboard,
 } from './dashboard.js';
+import {
+  searchEmployees, findEmployeeResult, renderEmployeeVerdictCard,
+} from './officerCard.js';
 
 export const manifest = {
   name: MODULE_NAMES.EMPLOYEES,
@@ -74,5 +77,23 @@ export const manifest = {
     kpis: renderEmployeeKpis,
     charts: renderEmployeeCharts,
     bind: bindEmployeeDashboard,
+  },
+
+  /**
+   * What this module contributes to the officer app (Sections 5.6, 7.5).
+   *
+   * `entityKind` is the middle segment of the officer route, so an employee card
+   * lives at '#/check/employee/LM-EMP-0001'. The officer shell reads this block
+   * and nothing else about employees — it never imports from this folder.
+   *
+   * `findEntity` is what keeps the Recent list honest: it stores {kind, id} only
+   * and re-resolves through here on every draw, so a record whose verdict
+   * changed after a Refresh shows the new one rather than a remembered dot.
+   */
+  officer: {
+    entityKind: 'employee',
+    searchEntities: searchEmployees,
+    findEntity: findEmployeeResult,
+    renderVerdictCard: renderEmployeeVerdictCard,
   },
 };

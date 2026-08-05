@@ -21,6 +21,7 @@ import { ROUTE, ROUTE_PARAMS, setRoute } from './state.js';
 import { render } from './render.js';
 import { ROLES, MODULE_NAMES } from './constants/globals.js';
 import { canAccessRoute } from './utils/permissions.js';
+import { isCacheStaleSync } from './modules/officer/staleCheck.js';
 
 /**
  * Manifest names that correspond to a row in the `Permissions` tab. A module
@@ -295,8 +296,29 @@ function onHashChange() {
 /* ---------- Guards -------------------------------------------------------- */
 
 /** True for any officer-app route (Section 7). */
-function isCheckRoute(route) {
+export function isCheckRoute(route) {
   return route === 'check' || route.indexOf('check/') === 0;
+}
+
+/**
+ * Officer routes that stay reachable while the cache is stale (Section 7.4).
+ *
+ * 'check' runs before there is a session at all, 'check/sync' is the only way
+ * out of a lockout, and 'check/locked' is the lockout — a guard that redirected
+ * it to itself would loop forever.
+ */
+const STALE_EXEMPT_ROUTES = new Set(['check', 'check/sync', 'check/locked']);
+
+/**
+ * Which sign-in screen a lost session belongs on. An officer whose token
+ * expires at a tower gets the mobile card back, not the admin one — same URL,
+ * two apps (Section 7.1).
+ *
+ * @param {string} route the route they were on when the session went
+ * @returns {string}
+ */
+export function loginRouteFor(route) {
+  return isCheckRoute(route || '') ? 'check' : 'login';
 }
 
 /**
@@ -322,10 +344,13 @@ export function homeRoute(user) {
  * @returns {string|null} route to redirect to, or null to stay put
  */
 export function guardRoute(user, route) {
-  // 1. No session → login, whatever the hash says. Refreshing the page lands
-  //    here by design: the admin token is memory-only (Section 4.5).
+  // 1. No session → a sign-in screen, whatever the hash says. Which one depends
+  //    on where they were: a phone pointed at 'check/*' gets the mobile card, so
+  //    an officer is never dropped into the admin login. Refreshing an admin
+  //    page lands here by design — that token is memory-only (Section 4.5).
   if (!user) {
-    return route === 'login' ? null : 'login';
+    const loginRoute = loginRouteFor(route);
+    return route === loginRoute ? null : loginRoute;
   }
 
   // 2. Forced password change blocks every other route (Section 4.1.c). UI-only
@@ -335,8 +360,8 @@ export function guardRoute(user, route) {
     return 'change-password';
   }
 
-  // 3. Signed in but pointed at nothing, or back at the login screen.
-  if (!route || route === 'login') {
+  // 3. Signed in but pointed at nothing, or back at either sign-in screen.
+  if (!route || route === 'login' || route === 'check') {
     return homeRoute(user);
   }
 
@@ -349,7 +374,27 @@ export function guardRoute(user, route) {
     if (!isOfficer && isCheckRoute(route)) return 'dashboard';
   }
 
-  // 6. Module permission. UX only — the Apps Script re-checks every action
+  // 6. Fail-closed staleness lockout (Section 7.4, rule 18). An officer whose
+  //    cached data is older than max_stale_hours — or who has no cache at all —
+  //    reaches nothing but the lockout screen and the sync page. No override.
+  //
+  //    isCacheStaleSync() reads a value computed asynchronously at boot and
+  //    after every sync, because this guard runs inside a synchronous render.
+  //    Until that first computation lands the answer is "unknown", which counts
+  //    as stale: unknown freshness is not proof of freshness, and this is the
+  //    one guard where guessing wrong shows an officer a verdict they should
+  //    not have seen. See modules/officer/staleCheck.js.
+  if (user.role === ROLES.OFFICER && !STALE_EXEMPT_ROUTES.has(route)) {
+    if (isCacheStaleSync()) return 'check/locked';
+  }
+
+  // 7. The lockout screen is not somewhere to strand an officer once their data
+  //    is fresh again — a successful sync lets them straight back out.
+  if (route === 'check/locked' && !isCacheStaleSync()) {
+    return 'check/home';
+  }
+
+  // 8. Module permission. UX only — the Apps Script re-checks every action
   //    (rule 5). An unregistered route falls through to the not-found page
   //    rather than being treated as a permission failure.
   if (!canAccessRoute(findRoute(route))) {

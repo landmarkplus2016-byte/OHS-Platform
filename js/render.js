@@ -10,8 +10,8 @@
    under the app by api.js.
 
    Three shells:
-     - none        login and change-password, which draw a centered card
-     - officer     the phone frame (Stage 8); Stage 4 draws the bare page
+     - none        the admin login and change-password, which draw a centered card
+     - officer     the phone frame, including the officer's own sign-in card
      - admin       sidebar + topbar + content
    ========================================================================== */
 
@@ -23,7 +23,8 @@ import { renderTopbar } from './shell/topbar.js';
 import { renderDashboardPage, bindDashboardPageEvents } from './shell/dashboardPage.js';
 import { renderSettingsPage, bindSettingsPageEvents } from './shell/settingsPage.js';
 import { renderExportPage, bindExportPageEvents } from './shell/exportPage.js';
-import { go, guardRoute, findRoute, getModules } from './router.js';
+import { renderOfficerShell, bindOfficerShellEvents } from './shell/officerShell.js';
+import { go, guardRoute, findRoute, getModules, isCheckRoute } from './router.js';
 import { ROLES } from './constants/globals.js';
 import { t } from './i18n/i18n.js';
 
@@ -151,9 +152,20 @@ export function render() {
   const focusSnapshot = captureFocus();
 
   // ---- Shell-less screens -------------------------------------------------
+  // Two sign-in screens for one app (Section 7.1). The router's first guard has
+  // already decided which route a session-less visitor belongs on, so 'check'
+  // here means the mobile card — drawn inside the phone frame, since a login
+  // that sat on a desktop-width page would be the wrong app on a phone.
   if (!CURRENT_USER) {
-    app.innerHTML = renderLoginPage(CONFIG);
-    bindLoginPageEvents();
+    if (isCheckRoute(ROUTE)) {
+      const loginEntry = findRoute('check');
+      app.innerHTML = renderOfficerShell(renderPageBody(loginEntry), 'check');
+      bindOfficerShellEvents();
+      bindPage(loginEntry);
+    } else {
+      app.innerHTML = renderLoginPage(CONFIG);
+      bindLoginPageEvents();
+    }
     restoreFocus(focusSnapshot);
     return;
   }
@@ -169,10 +181,12 @@ export function render() {
 
   // ---- Officer shell ------------------------------------------------------
   // Guard 4 in router.js has already pinned officers inside 'check/*', so
-  // reaching here as an officer means an officer route. Stage 8 wraps this in
-  // the phone frame from js/shell/officerShell.js; for now the page draws bare.
+  // reaching here as an officer means an officer route. The shell binds before
+  // the page, matching the admin branch below: the frame is wired first, then
+  // whatever is standing inside it.
   if (CURRENT_USER.role === ROLES.OFFICER) {
-    app.innerHTML = renderPageBody(entry);
+    app.innerHTML = renderOfficerShell(renderPageBody(entry), ROUTE);
+    bindOfficerShellEvents();
     bindPage(entry);
     restoreFocus(focusSnapshot);
     return;

@@ -300,11 +300,6 @@ export const ar = {
   import_err_empty_workbook: 'لا يحتوي هذا الملف على أي أوراق.',
   import_err_no_rows: 'الورقة تحتوي على صف عناوين فقط بدون بيانات.',
 
-  /* ---------- Placeholders (each is replaced by its real page) ---------- */
-  placeholder_officer_home: 'الصفحة الرئيسية للمفتش (مؤقت)',
-  placeholder_officer_sync: 'مزامنة بيانات المفتش (مؤقت)',
-  placeholder_officer_locked: 'قفل بسبب قدم البيانات (مؤقت)',
-  placeholder_officer_verdict_employee: 'نتيجة فحص الموظف (مؤقت)',
-  placeholder_officer_verdict_equipment: 'نتيجة فحص المعدة (مؤقت)',
+  /* ---------- Not found ---------- */
   placeholder_not_found: 'الصفحة غير موجودة.',
 };

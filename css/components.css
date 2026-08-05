@@ -6,11 +6,12 @@
 
    Built so far: buttons, cards, form fields, inline messages, theme swatches,
    badges, tables, filter bar, detail grid, cert rows, pager, banners, toasts,
-   modal.
+   modal, and the officer verdict card.
+
+   The officer shell's own frame (.phone, the navy header, the sync strip) is
+   structure, so it lives in layout.css. What is here is what goes inside it.
 
    Still to come:
-     - .verdict-hero   the officer verdict card (Stage 8)
-     - .sync-strip     officer "data as of" strip (Stage 8)
      - .kpi-*, .chart-* dashboard tiles (Stage 7)
    ========================================================================== */
 
@@ -498,3 +499,287 @@
   letter-spacing: .3px;
 }
 .perm-head > span:not(:first-child) { text-align: center; }
+
+/* ==========================================================================
+   Officer app components (Sections 7.5, 8.6)
+
+   Ported from design/officer_prototype.html, with every literal hex replaced by
+   its token. Touch targets are sized for a gloved hand at a tower, not a mouse.
+   ========================================================================== */
+
+/* ---------- Search box ---------- */
+.search-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: 14px;
+}
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  font-size: 15px;
+  outline: none;
+  color: var(--text);
+}
+.search-box .ic { color: var(--muted); font-size: 17px; flex-shrink: 0; }
+.search-box .search-clear {
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+.search-box .search-clear.is-hidden { visibility: hidden; }
+
+/* ---------- Result list ---------- */
+.section-h {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin: 6px 4px 8px;
+}
+
+.result-list { display: flex; flex-direction: column; gap: 8px; }
+
+.result-item {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: start;
+  cursor: pointer;
+}
+.result-item:active { background: var(--surface-sunken); }
+
+.result-item .avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+}
+.result-info { flex: 1; min-width: 0; }
+.result-name {
+  display: block;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result-meta {
+  display: block;
+  font-size: 12px;
+  color: var(--text2);
+  margin-block-start: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The verdict at a glance. A dot rather than a word, because the officer is
+   scanning a list, and the card they tap into spells it out. */
+.v-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.v-cleared { background: var(--cleared); }
+.v-warning { background: var(--warn); }
+.v-blocked { background: var(--blocked); }
+
+/* ---------- Empty states ---------- */
+.officer-empty {
+  text-align: center;
+  padding: 56px 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.officer-empty .big { font-size: 44px; margin-block-end: 12px; opacity: .3; }
+
+/* ---------- Verdict hero (Section 7.5) ----------
+   The one screen in the platform that is read from three metres away. Colour is
+   the message; the icon and the label repeat it, so it does not depend on
+   colour vision or on direct sunlight. */
+.verdict-hero {
+  padding: 26px 22px 24px;
+  color: var(--navy-text-strong);
+  position: relative;
+}
+.verdict-hero.cleared { background: linear-gradient(135deg, var(--cleared) 0%, var(--cleared-dark) 100%); }
+.verdict-hero.warning { background: linear-gradient(135deg, var(--warn) 0%, var(--warn-dark) 100%); }
+.verdict-hero.blocked { background: linear-gradient(135deg, var(--blocked) 0%, var(--blocked-dark) 100%); }
+
+/* Placed by logical properties, so Back leads and Refresh trails in both
+   directions without an RTL override (Section 8.2). */
+.verdict-nav {
+  position: absolute;
+  inset-block-start: 14px;
+  color: var(--navy-text-strong);
+  font-size: 18px;
+  line-height: 1;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: rgba(255, 255, 255, .18);
+}
+.verdict-nav:disabled { opacity: .5; }
+.verdict-nav.back    { inset-inline-start: 14px; }
+.verdict-nav.refresh { inset-inline-end: 14px; }
+
+.verdict-icon { font-size: 62px; text-align: center; margin: 10px 0 4px; line-height: 1; }
+.verdict-label { font-size: 25px; font-weight: 800; text-align: center; letter-spacing: .5px; }
+.verdict-sub { font-size: 14px; text-align: center; opacity: .92; margin-block-start: 4px; }
+
+/* ---------- Identity card ----------
+   Pulled up over the hero so the two read as one unit. */
+.officer-id-card {
+  background: var(--card);
+  margin: -14px 14px 14px;
+  border-radius: var(--radius-card);
+  padding: 16px;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  z-index: 1;
+}
+.officer-id-card .id-name { font-weight: 800; font-size: 19px; }
+.officer-id-card .id-sub {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+  color: var(--text2);
+  margin-block-start: 4px;
+}
+.officer-id-card .id-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-block-start: 12px;
+}
+
+.id-tag {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--missing-bg);
+  color: var(--missing-tx);
+}
+.id-tag.ok  { background: var(--cleared-bg); color: var(--cleared-dark); }
+.id-tag.bad { background: var(--blocked-bg); color: var(--blocked-dark); }
+.id-tag.team-field  { background: var(--team-field-bg);  color: var(--team-field-tx); }
+.id-tag.team-safety { background: var(--team-safety-bg); color: var(--team-safety-tx); }
+
+/* ---------- Issues found ---------- */
+.officer-section { padding: 0 14px 4px; }
+.officer-section h3 { margin: 6px 0 10px; font-size: 14px; font-weight: 700; }
+.officer-section h3.is-blocked { color: var(--blocked-dark); }
+.officer-section h3.is-warning { color: var(--warn-dark); }
+
+.reason-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-mobile);
+  padding: 12px 14px;
+  margin-block-end: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+/* The severity stripe sits on the leading edge, so it flips with the text. */
+.reason-item.blocker { border-inline-start: 4px solid var(--blocked); }
+.reason-item.warning { border-inline-start: 4px solid var(--warn); }
+.reason-ic { font-size: 17px; flex-shrink: 0; }
+.reason-item.blocker .reason-ic { color: var(--blocked); }
+.reason-item.warning .reason-ic { color: var(--warn); }
+.reason-txt { flex: 1; }
+
+/* ---------- Panels (certificates, inspection, waves) ---------- */
+.officer-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 14px;
+}
+.officer-panel h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; }
+
+.cert-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-block-end: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.cert-line:last-child { border-block-end: none; }
+.cert-line-main { min-width: 0; }
+.cert-line-name { color: var(--text); }
+.cert-line-date { color: var(--text2); font-size: 12.5px; margin-block-start: 2px; }
+.cert-line-value { color: var(--text2); font-size: 12.5px; text-align: end; }
+.cert-line .cert-days { color: var(--muted); margin-inline-start: 4px; }
+
+/* ---------- Lockout screen (Section 7.4) ----------
+   Deliberately the whole viewport with one button on it. There is nothing else
+   to do from here, and the screen must not suggest otherwise. */
+.officer-lock {
+  padding: 56px 24px;
+  text-align: center;
+  background: var(--card);
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.officer-lock .lock-icon { font-size: 58px; margin-block-end: 14px; }
+.officer-lock h2 { font-size: 20px; margin: 0 0 8px; }
+.officer-lock p {
+  color: var(--text2);
+  font-size: 13.5px;
+  line-height: 1.6;
+  max-width: 300px;
+  margin-block-end: 24px;
+}
+.officer-lock .btn { max-width: 300px; }
+
+/* ---------- Entity not in the snapshot ---------- */
+.officer-missing {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text2);
+}
+.officer-missing .officer-missing-icon {
+  font-size: 46px;
+  color: var(--muted);
+  opacity: .4;
+  margin: 20px 0 10px;
+}
+.officer-missing h2 { font-size: 17px; margin: 0 0 8px; color: var(--text); }
+.officer-missing p { font-size: 13.5px; line-height: 1.6; max-width: 300px; margin-inline: auto; }
+
+/* ---------- Sync page ---------- */
+.sync-fact { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.sync-fact .lab { color: var(--text2); }
+.sync-fact .val { font-weight: 600; text-align: end; }

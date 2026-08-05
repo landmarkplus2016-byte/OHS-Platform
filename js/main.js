@@ -20,6 +20,8 @@ import { t, setLanguage, hasDeviceLanguagePreference } from './i18n/i18n.js';
 import { manifest as employeesManifest } from './modules/employees/manifest.js';
 import { manifest as equipmentManifest } from './modules/equipment/manifest.js';
 import { manifest as officerManifest } from './modules/officer/manifest.js';
+import { restoreOfficerSession } from './modules/officer/dataActions.js';
+import { refreshStaleState } from './modules/officer/staleCheck.js';
 
 /**
  * Every module the platform knows about, in the order the sidebar shows their
@@ -270,6 +272,19 @@ async function start(app) {
   // Modules first: initRouter() parses the opening hash against the route
   // table, so the table has to exist before it runs.
   registerModules(MODULES);
+
+  // The officer session exception (Section 7.2). An officer's token is kept in
+  // sessionStorage so the phone in their pocket does not ask them to sign in at
+  // every tower; admins stay memory-only (Section 4.5) and are not restored.
+  //
+  // The staleness answer is settled here, before the first draw, because the
+  // router's guard is synchronous and IndexedDB is not. Until it lands the
+  // state reads as "unknown", which locks the app — correct, but it would mean
+  // a returning officer watched the lockout screen flash past on every boot.
+  if (restoreOfficerSession()) {
+    await refreshStaleState();
+  }
+
   initRouter();
   render();
 }
