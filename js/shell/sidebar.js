@@ -114,7 +114,7 @@ export function renderSidebar(modules) {
   return `
     <aside class="sidebar">
       <div class="side-logo">
-        <div class="mark">OHS</div>
+        <img class="logo-img" src="LMP%20Logo%20White.png" alt="${escapeHtml(t('company_name'))}">
         <div class="name">${escapeHtml(t('app_name'))}</div>
         <div class="sub">${escapeHtml(t('app_sub'))}</div>
       </div>
