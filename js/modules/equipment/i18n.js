@@ -60,11 +60,11 @@ const en = {
 
   /* ---------- Section headers ---------- */
   eqp_section_identity: 'Identification',
-  eqp_section_inspection: 'Third-party inspection',
-  eqp_section_waves: 'Internal inspection waves',
-  eqp_section_issues: 'Issues found',
+  eqp_section_inspection: 'Third-Party Inspection',
+  eqp_section_waves: 'Internal Inspection Waves',
+  eqp_section_issues: 'Issues Found',
   eqp_section_notes: 'Comments',
-  eqp_section_history: 'Inspection history',
+  eqp_section_history: 'Inspection History',
   eqp_section_assignment: 'Assignment',
   eqp_section_rejection: 'Rejection',
 
@@ -109,12 +109,12 @@ const en = {
   /* ---------- Reject / unreject ---------- */
   eqp_reject: 'Reject',
   eqp_unreject: 'Return to service',
-  eqp_reject_title: 'Reject this equipment',
+  eqp_reject_title: 'Reject This Equipment',
   eqp_reject_intro: 'It stops appearing in the active list and is blocked at every site check. Nothing is deleted — you can return it to service at any time.',
   eqp_reject_reason_ph: 'Damaged beyond repair, failed inspection…',
   eqp_reject_confirm: 'Reject equipment',
   eqp_rejected_ok: 'Equipment rejected.',
-  eqp_unreject_title: 'Return this equipment to service?',
+  eqp_unreject_title: 'Return This Equipment to Service?',
   eqp_unreject_message: 'It returns to the active list and is checked for compliance again.',
   eqp_unrejected_ok: 'Equipment returned to service.',
   eqp_serial_taken: 'Another active item now holds one of these serial numbers. Resolve the duplicate first.',
@@ -125,7 +125,7 @@ const en = {
   eqp_rejected_count: '{count} rejected',
 
   /* ---------- Form ---------- */
-  eqp_new_title: 'New equipment',
+  eqp_new_title: 'New Equipment',
   eqp_saved_ok: 'Equipment saved.',
   eqp_created_ok: 'Equipment created.',
   eqp_err_serial_required: 'Enter the serial number.',
@@ -147,17 +147,17 @@ const en = {
   reason_owner_archived: 'Assigned to {name}, who is archived — needs reassignment',
 
   /* ---------- Dashboard (Section 5.5) ---------- */
-  eqp_dash_kpi_total: 'Total active equipment',
+  eqp_dash_kpi_total: 'Total Active Equipment',
   eqp_dash_kpi_total_note: 'rejected items excluded',
-  eqp_dash_kpi_expired: 'Inspections expired',
+  eqp_dash_kpi_expired: 'Inspections Expired',
   eqp_dash_kpi_missing_note: '{count} with no inspection date',
-  eqp_dash_kpi_urgent: 'Expiring in ≤{days} days',
-  eqp_dash_kpi_rejected: 'Rejected this month',
+  eqp_dash_kpi_urgent: 'Expiring in ≤{days} Days',
+  eqp_dash_kpi_rejected: 'Rejected This Month',
   eqp_dash_kpi_rejected_note: 'this calendar month',
 
-  eqp_dash_chart_by_item: 'Inspections expiring in next {days} days by item type',
+  eqp_dash_chart_by_item: 'Inspections Expiring in Next {days} Days by Item Type',
   eqp_dash_no_expiries: 'No inspection ends in this window.',
-  eqp_dash_chart_verdict: 'Equipment compliance',
+  eqp_dash_chart_verdict: 'Equipment Compliance',
   eqp_dash_donut_center: 'items',
   eqp_dash_donut_empty: 'No active equipment to assess.',
 };

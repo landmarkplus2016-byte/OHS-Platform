@@ -77,12 +77,12 @@ const en = {
   emp_field_rdt: 'RDT',
 
   /* ---------- Section headers ---------- */
-  emp_section_personal: 'Personal details',
+  emp_section_personal: 'Personal Details',
   emp_section_certs: 'Certificates',
   emp_section_quals: 'Qualifications',
-  emp_section_drug: 'Drug testing',
-  emp_section_history: 'Renewal history',
-  emp_section_equipment: 'Assigned equipment',
+  emp_section_drug: 'Drug Testing',
+  emp_section_history: 'Renewal History',
+  emp_section_equipment: 'Assigned Equipment',
   emp_section_record: 'Record',
 
   /* ---------- List page ---------- */
@@ -112,18 +112,18 @@ const en = {
   /* ---------- Archive / unarchive ---------- */
   emp_archive: 'Archive',
   emp_unarchive: 'Unarchive',
-  emp_archive_title: 'Archive this employee?',
+  emp_archive_title: 'Archive This Employee?',
   emp_archive_message: 'They stop appearing in the team lists and are blocked at every site check. Nothing is deleted — you can unarchive them at any time.',
   emp_archive_reason: 'Reason (optional)',
   emp_archive_reason_ph: 'Resigned, terminated…',
   emp_archived_ok: 'Employee archived.',
-  emp_unarchive_title: 'Unarchive this employee?',
+  emp_unarchive_title: 'Unarchive This Employee?',
   emp_unarchive_message: 'They return to the team lists and are checked for compliance again.',
   emp_unarchived_ok: 'Employee unarchived.',
   emp_national_id_taken: 'Another active employee now holds that national ID. Resolve the duplicate first.',
 
   /* ---------- Form ---------- */
-  emp_new_title: 'New employee',
+  emp_new_title: 'New Employee',
   emp_saved_ok: 'Employee saved.',
   emp_created_ok: 'Employee created.',
   emp_err_name_required: 'Enter the employee’s full name.',
@@ -161,7 +161,7 @@ const en = {
   emp_rdt_date_required: 'Pick the date the test was carried out.',
   emp_rdt_recorded: 'Recorded for {count} employees.',
   emp_rdt_none_eligible: 'No employees are eligible for testing right now.',
-  emp_rdt_confirm_title: 'Record this wave?',
+  emp_rdt_confirm_title: 'Record This Wave?',
   emp_rdt_confirm_message: '{count} employees will have {wave} set to {date}. Existing dates for that wave are overwritten.',
 
   /* ---------- Resigned page ---------- */
@@ -184,30 +184,30 @@ const en = {
   /* ---------- Dashboard (Section 5.5) ----------
      The KPI row mixes units on purpose, so three of the four cards carry a note
      saying what they count. */
-  emp_dash_kpi_total: 'Total active employees',
+  emp_dash_kpi_total: 'Total Active Employees',
   emp_dash_split_field: '{count} field',
   emp_dash_split_safety: '{count} safety',
-  emp_dash_kpi_expired: 'Certificates expired',
+  emp_dash_kpi_expired: 'Certificates Expired',
   emp_dash_kpi_expired_note: 'certificates, not people',
-  emp_dash_kpi_urgent: 'Expiring in ≤{days} days',
+  emp_dash_kpi_urgent: 'Expiring in ≤{days} Days',
   emp_dash_kpi_people_note: 'employees with at least one',
-  emp_dash_kpi_compliant: 'Fully compliant',
+  emp_dash_kpi_compliant: 'Fully Compliant',
   emp_dash_kpi_compliant_note: 'every certificate valid',
 
-  emp_dash_chart_by_cert: 'Expiries in next {days} days by certificate',
+  emp_dash_chart_by_cert: 'Expiries in Next {days} Days by Certificate',
   emp_dash_no_expiries: 'Nothing expires in this window.',
-  emp_dash_chart_by_sub: 'Headcount by subcontractor',
+  emp_dash_chart_by_sub: 'Headcount by Subcontractor',
   emp_dash_no_subcontractors: 'No subcontractor is recorded on any employee.',
 
-  emp_dash_chart_rdt: 'RDT coverage',
+  emp_dash_chart_rdt: 'RDT Coverage',
   emp_dash_rdt_pct: '{pct}%',
   emp_dash_rdt_caption: '{tested} of {pool} tested · target {target}%',
   emp_dash_rdt_tests: '{count} tests recorded',
   emp_dash_rdt_since: 'since {date}',
-  emp_dash_rdt_off: 'RDT tracking is off',
+  emp_dash_rdt_off: 'RDT Tracking Is Off',
   emp_dash_rdt_off_hint: 'Set rdt_year_start and rdt_target_pct for the employees module to track coverage here.',
 
-  emp_dash_recent: 'Recently updated',
+  emp_dash_recent: 'Recently Updated',
   emp_dash_recent_none: 'No employee has been updated yet.',
 };
 

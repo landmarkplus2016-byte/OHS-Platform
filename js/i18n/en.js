@@ -23,21 +23,21 @@ export const en = {
   session_expired: 'Your session has ended. Please log in again.',
 
   /* ---------- First-time setup / server connection ---------- */
-  first_time_setup: 'First-time setup',
+  first_time_setup: 'First-Time Setup',
   script_url_prompt: 'This device is not connected yet. Paste the Apps Script Web App URL to continue. Ask Khaled if you do not have it.',
   script_url_label: 'Apps Script Web App URL',
   script_url_required: 'Enter the Apps Script Web App URL.',
   script_url_invalid: 'The URL must start with https://',
   save: 'Save',
   save_and_continue: 'Save and continue',
-  cannot_reach_server: 'Cannot reach the server',
+  cannot_reach_server: 'Cannot Reach the Server',
   cannot_reach_server_body: 'The app could not contact the Apps Script Web App. Check your connection, or check that the server URL saved on this device is correct.',
   retry: 'Retry',
   change_server_url: 'Change server URL',
   loading: 'Loading…',
 
   /* ---------- Change password ---------- */
-  change_password_title: 'Change your password',
+  change_password_title: 'Change Your Password',
   change_password_intro: 'Before you continue, set a password only you know.',
   current_password: 'Current password',
   current_password_required: 'Enter your current password.',
@@ -155,7 +155,7 @@ export const en = {
   /* Users tab */
   settings_add_user: '+ Add user',
   settings_create_user: 'Create user',
-  settings_edit_user: 'Edit user',
+  settings_edit_user: 'Edit User',
   settings_display_name: 'Display name',
   settings_role: 'Role',
   settings_active: 'Active',
@@ -177,12 +177,12 @@ export const en = {
   settings_perm_officer: 'Field lookup only',
   settings_perm_none: 'Nothing granted',
   settings_reset_password: 'Reset password',
-  settings_reset_password_for: 'Reset the password for {name}',
+  settings_reset_password_for: 'Reset the Password for {name}',
   settings_reset_password_intro: 'This signs them out everywhere and forces another password change on their next login. You do not need their current password.',
   settings_password_reset_ok: 'Password reset.',
   settings_deactivate: 'Deactivate',
   settings_reactivate: 'Reactivate',
-  settings_deactivate_title: 'Deactivate this account?',
+  settings_deactivate_title: 'Deactivate This Account?',
   settings_deactivate_message: '{name} is signed out everywhere and cannot log in again until reactivated. Nothing is deleted — their permissions are kept for when they come back.',
   settings_user_created: 'Account created.',
   settings_user_saved: 'Account saved.',
@@ -206,14 +206,14 @@ export const en = {
   settings_err_blank_option: 'Every option needs a value. Fill it in or remove the row.',
 
   /* The FieldOptions lists, keyed by list_key (Section 3.7) */
-  list_field_titles: 'Field team titles',
-  list_safety_titles: 'Safety team titles',
+  list_field_titles: 'Field Team Titles',
+  list_safety_titles: 'Safety Team Titles',
   list_contractors: 'Contractors',
   list_subcontractors: 'Subcontractors',
-  list_employment_status: 'Employment status',
-  list_legal_permission: 'Legal permission',
-  list_equipment_items: 'Equipment items',
-  list_equipment_brands: 'Equipment brands',
+  list_employment_status: 'Employment Status',
+  list_legal_permission: 'Legal Permission',
+  list_equipment_items: 'Equipment Items',
+  list_equipment_brands: 'Equipment Brands',
 
   /* Thresholds tab */
   settings_thresholds_intro: 'Platform-wide settings. Compliance thresholds change what every badge and verdict says, so the lists refresh as soon as you save.',
@@ -240,7 +240,7 @@ export const en = {
   settings_import_row_error: 'The row from spreadsheet line {row} was rejected ({fields}). Nothing was written — fix that row and import again.',
 
   /* Import review modal */
-  import_review_title: 'Review {module} import',
+  import_review_title: 'Review {module} Import',
   import_commit: 'Import selected rows',
   import_summary: '{total} rows · {importing} to import · {overwriting} to overwrite · {skipped} skipped',
   import_col_row: 'Line',
@@ -261,7 +261,7 @@ export const en = {
   import_bulk_overwrite: 'Overwrite all existing',
   import_bulk_skip_dupes: 'Skip all existing',
   import_bulk_import_new: 'Import all new',
-  import_warnings_title: '{count} things to check',
+  import_warnings_title: '{count} Things to Check',
   import_warnings_more: '…and {count} more, in the browser console.',
   import_reason_duplicate: '{key} already belongs to {name}',
   import_reason_duplicate_in_file: '{key} appears more than once in this file',
@@ -293,11 +293,11 @@ export const en = {
   export_limit_spreadsheet: 'Too many for one file — narrow the filters to {cap} or fewer.',
   export_caps_note: 'PDF is capped at {pdf} records; Excel and CSV at {spreadsheet}.',
 
-  settings_drive_folder: 'Drive folder',
+  settings_drive_folder: 'Drive Folder',
   settings_drive_folder_label: 'Shared folder URL',
   settings_drive_folder_hint: 'Where exports are filed. The platform never uploads anything itself — this is the link it opens for you.',
 
-  settings_health: 'Sheet health',
+  settings_health: 'Sheet Health',
   settings_health_tab: 'Records',
   settings_health_rows: 'Active',
   settings_health_updated: 'Last change',

@@ -26,7 +26,7 @@ const en = {
   /* ---------- Home and search ---------- */
   off_search_placeholder: 'Name, National ID, or serial number…',
   off_search_hint: 'Search a crew member or a piece of equipment',
-  off_recent: 'Recent lookups',
+  off_recent: 'Recent Lookups',
   off_results: 'Results',
   off_no_results: 'Nothing matches that',
   off_clear_search: 'Clear',
@@ -42,16 +42,16 @@ const en = {
   off_stale_warn: 'Your data is {days} days old — sync soon',
 
   /* ---------- Sync page ---------- */
-  off_sync_title: 'Sync data',
+  off_sync_title: 'Sync Data',
   off_sync_intro: 'Pull the latest employees and equipment onto this phone. Do this before heading to a site with no signal.',
   off_last_synced: 'Last synced',
   off_never_synced: 'Never',
   off_sync_now: 'Sync now',
 
   /* ---------- Lockout (Section 7.4) ---------- */
-  off_locked_title: 'Sync required',
+  off_locked_title: 'Sync Required',
   off_locked_body: 'Your cached data is more than {hours} hours old. Sync before checking anyone. There is no way past this screen — if you have no signal, leave the site or call a colleague.',
-  off_locked_never_title: 'Sync to get started',
+  off_locked_never_title: 'Sync to Get Started',
   off_locked_never_body: 'This phone has no data yet. Sync once while you have signal, and site checks will work offline from then on.',
   off_locked_offline: 'Still no connection. Move to where you have signal and try again.',
 
@@ -59,11 +59,11 @@ const en = {
   off_verdict_sub_cleared: 'Cleared to work',
   off_verdict_sub_warning: 'Cleared, but needs attention',
   off_verdict_sub_blocked: 'Do not allow work',
-  off_issues: 'Issues found',
+  off_issues: 'Issues Found',
   off_refreshed: 'Updated from the server',
   off_refresh_failed: 'Could not refresh — showing your cached data',
   off_refresh_gone: 'This record is no longer active. Sync to update your data.',
-  off_not_found_title: 'Not in your data',
+  off_not_found_title: 'Not in Your Data',
   off_not_found_body: 'This record is not in the snapshot on this phone. It may have been added since your last sync.',
   off_na: 'N/A',
   off_days_left: '{days}d left',
