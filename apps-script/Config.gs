@@ -136,6 +136,41 @@ function handleGetConfig(payload) {
 }
 
 /**
+ * `list_config` — the whole Config tab, super admin only (Section 3.3).
+ *
+ * `get_config` returns five keys to an unauthenticated caller so the login
+ * screen can draw. Everything else — the compliance thresholds, the ID
+ * prefixes, the Drive folder — is only ever read through here, because the
+ * settings page is the only screen that shows them and only a super admin
+ * reaches it.
+ *
+ * The auto-increment counters are returned but not settable (see
+ * ALLOWED_CONFIG_KEYS): the settings page displays them as read-only facts
+ * about the Sheet.
+ *
+ * @param {{user: Object}} session  Context from validateSession().
+ * @param {Object} payload  None.
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleListConfig(session, payload) {
+  if (!session.user.is_super_admin) {
+    return errResponse('forbidden', 'super_admin_required');
+  }
+
+  var unknown = collectUnknownKeys_(payload, []);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  return okResponse({
+    config: getConfigMap(),
+    editable_keys: ALLOWED_CONFIG_KEYS,
+    numeric_keys: NUMERIC_CONFIG_KEYS,
+    defaults: CONFIG_DEFAULTS
+  });
+}
+
+/**
  * `update_config` — super admin only.
  *
  * Validates every key against ALLOWED_CONFIG_KEYS and every value against its

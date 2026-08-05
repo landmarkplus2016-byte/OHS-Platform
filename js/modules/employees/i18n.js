@@ -50,6 +50,7 @@ const en = {
   emp_col_contractor: 'Contractor',
   emp_col_subcontractor: 'Subcontractor',
   emp_col_state: 'State',
+  emp_col_verdict: 'Site check',
   emp_col_quals: 'Qualifications',
   emp_col_updated: 'Updated',
   emp_col_certificate: 'Certificate',
@@ -167,6 +168,35 @@ const en = {
   emp_resigned_intro: 'Archived employees. Read-only — unarchive one to edit it again.',
   emp_resigned_none: 'Nobody is archived.',
   emp_resigned_count: '{count} archived',
+
+  /* ---------- Dashboard (Section 5.5) ----------
+     The KPI row mixes units on purpose, so three of the four cards carry a note
+     saying what they count. */
+  emp_dash_kpi_total: 'Total active employees',
+  emp_dash_split_field: '{count} field',
+  emp_dash_split_safety: '{count} safety',
+  emp_dash_kpi_expired: 'Certificates expired',
+  emp_dash_kpi_expired_note: 'certificates, not people',
+  emp_dash_kpi_urgent: 'Expiring in ≤{days} days',
+  emp_dash_kpi_people_note: 'employees with at least one',
+  emp_dash_kpi_compliant: 'Fully compliant',
+  emp_dash_kpi_compliant_note: 'every certificate valid',
+
+  emp_dash_chart_by_cert: 'Expiries in next {days} days by certificate',
+  emp_dash_no_expiries: 'Nothing expires in this window.',
+  emp_dash_chart_by_sub: 'Headcount by subcontractor',
+  emp_dash_no_subcontractors: 'No subcontractor is recorded on any employee.',
+
+  emp_dash_chart_rdt: 'RDT coverage',
+  emp_dash_rdt_pct: '{pct}%',
+  emp_dash_rdt_caption: '{tested} of {pool} tested · target {target}%',
+  emp_dash_rdt_tests: '{count} tests recorded',
+  emp_dash_rdt_since: 'since {date}',
+  emp_dash_rdt_off: 'RDT tracking is off',
+  emp_dash_rdt_off_hint: 'Set rdt_year_start and rdt_target_pct for the employees module to track coverage here.',
+
+  emp_dash_recent: 'Recently updated',
+  emp_dash_recent_none: 'No employee has been updated yet.',
 };
 
 const ar = {
@@ -201,6 +231,7 @@ const ar = {
   emp_col_contractor: 'المقاول',
   emp_col_subcontractor: 'مقاول الباطن',
   emp_col_state: 'الحالة',
+  emp_col_verdict: 'الفحص الميداني',
   emp_col_quals: 'المؤهلات',
   emp_col_updated: 'آخر تحديث',
   emp_col_certificate: 'الشهادة',
@@ -318,6 +349,33 @@ const ar = {
   emp_resigned_intro: 'الموظفون المؤرشفون. للعرض فقط — ألغِ الأرشفة للتعديل.',
   emp_resigned_none: 'لا يوجد موظفون مؤرشفون.',
   emp_resigned_count: '{count} مؤرشف',
+
+  /* ---------- Dashboard (Section 5.5) ---------- */
+  emp_dash_kpi_total: 'إجمالي الموظفين النشطين',
+  emp_dash_split_field: '{count} ميداني',
+  emp_dash_split_safety: '{count} سلامة',
+  emp_dash_kpi_expired: 'شهادات منتهية',
+  emp_dash_kpi_expired_note: 'شهادات، وليس أشخاصًا',
+  emp_dash_kpi_urgent: 'تنتهي خلال {days} يومًا أو أقل',
+  emp_dash_kpi_people_note: 'موظفون لديهم شهادة واحدة على الأقل',
+  emp_dash_kpi_compliant: 'ملتزمون بالكامل',
+  emp_dash_kpi_compliant_note: 'كل الشهادات سارية',
+
+  emp_dash_chart_by_cert: 'الشهادات المنتهية خلال {days} يومًا حسب النوع',
+  emp_dash_no_expiries: 'لا شيء ينتهي خلال هذه المدة.',
+  emp_dash_chart_by_sub: 'العدد حسب مقاول الباطن',
+  emp_dash_no_subcontractors: 'لم يُسجَّل مقاول باطن لأي موظف.',
+
+  emp_dash_chart_rdt: 'تغطية اختبار المخدرات',
+  emp_dash_rdt_pct: '{pct}%',
+  emp_dash_rdt_caption: 'تم اختبار {tested} من {pool} · المستهدف {target}%',
+  emp_dash_rdt_tests: '{count} اختبار مسجل',
+  emp_dash_rdt_since: 'منذ {date}',
+  emp_dash_rdt_off: 'تتبع اختبار المخدرات غير مُفعّل',
+  emp_dash_rdt_off_hint: 'اضبط rdt_year_start و rdt_target_pct لوحدة الموظفين لتتبع التغطية هنا.',
+
+  emp_dash_recent: 'آخر التحديثات',
+  emp_dash_recent_none: 'لم يُحدَّث أي موظف بعد.',
 };
 
 registerModuleDict('employees', { en, ar });

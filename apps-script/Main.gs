@@ -46,8 +46,28 @@ var AUTHENTICATED_ACTIONS = {
   'logout': function (session, payload) {
     return handleLogout(session);
   },
+  'list_config': function (session, payload) {
+    return handleListConfig(session, payload);
+  },
   'update_config': function (session, payload) {
     return handleUpdateConfig(session, payload);
+  },
+
+  // --- Users and permissions (Section 3.4) ---------------------------------
+  'list_users': function (session, payload) {
+    return handleListUsers(session, payload);
+  },
+  'create_user': function (session, payload) {
+    return handleCreateUser(session, payload);
+  },
+  'update_user': function (session, payload) {
+    return handleUpdateUser(session, payload);
+  },
+  'deactivate_user': function (session, payload) {
+    return handleDeactivateUser(session, payload);
+  },
+  'list_permissions': function (session, payload) {
+    return handleListPermissions(session, payload);
   },
   'reset_user_password': function (session, payload) {
     return handleResetUserPassword(session, payload);
@@ -84,6 +104,9 @@ var AUTHENTICATED_ACTIONS = {
   'record_rdt_wave': function (session, payload) {
     return handleRecordRdtWave(session, payload);
   },
+  'list_employee_stats': function (session, payload) {
+    return handleListEmployeeStats(session, payload);
+  },
 
   // --- Equipment (Section 3.6) ---------------------------------------------
   'list_equipment': function (session, payload) {
@@ -109,6 +132,9 @@ var AUTHENTICATED_ACTIONS = {
   },
   'bulk_import_equipment': function (session, payload) {
     return handleBulkImportEquipment(session, payload);
+  },
+  'list_equipment_stats': function (session, payload) {
+    return handleListEquipmentStats(session, payload);
   },
 
   // --- Field options (Section 3.7) -----------------------------------------

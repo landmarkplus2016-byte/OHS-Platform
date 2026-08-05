@@ -1,0 +1,227 @@
+/* ==========================================================================
+   equipment/dashboard.js — what the equipment module contributes to the
+   dashboard (Section 5.5).
+
+   Same three exports as the employee module's dashboard file, and for the same
+   reasons: `load` fetches, `kpis` and `charts` render synchronously from
+   whatever state the fetch has reached.
+
+   The two modules share no code (rule 12.3) — only the shapes in
+   js/components/charts.js, which is shared ground, and the shell that decides
+   whether to call either of them at all.
+
+   Every figure is the server's. `list_equipment_stats` derives each item once
+   and returns totals (Section 6.6); nothing here decides what "expired" means.
+   ========================================================================== */
+
+import { UI } from '../../state.js';
+import { render } from '../../render.js';
+import { t } from '../../i18n/i18n.js';
+import { escapeHtml } from '../../utils/format.js';
+import { barChart, donutChart } from '../../components/charts.js';
+import { listEquipmentStats } from './dataActions.js';
+import { VERDICTS } from './constants.js';
+
+/** Bars are ranked, so a long tail past this adds height without adding signal. */
+const MAX_BARS = 8;
+
+/** verdict → the token its donut segment and legend dot are coloured with. */
+const VERDICT_COLOR_TOKENS = {
+  blocked: '--blocked',
+  warning: '--warn',
+  cleared: '--cleared',
+};
+
+/** Parked on UI so it survives a redraw and is wiped by clearSession(). */
+function dashState() {
+  if (!UI.equipmentDashboard) {
+    UI.equipmentDashboard = {
+      status: 'idle',   // idle → loading → ready | error
+      seq: 0,
+      data: null,
+      error: null,
+    };
+  }
+  return UI.equipmentDashboard;
+}
+
+/* ---------- Data ---------------------------------------------------------- */
+
+/**
+ * Fetch the stats if we do not already have them. Cheap and idempotent once the
+ * data is in hand, because the dashboard page's bind calls it on every draw.
+ *
+ * @param {{force?: boolean}} [opts]
+ * @returns {Promise<void>}
+ */
+export async function loadEquipmentDashboard(opts) {
+  const s = dashState();
+
+  if (s.status === 'loading') return;
+  if (!(opts && opts.force) && s.status !== 'idle') return;
+
+  const mySeq = ++s.seq;
+  s.status = 'loading';
+  s.error = null;
+  render();
+
+  try {
+    const data = await listEquipmentStats();
+    if (mySeq !== s.seq) return;
+
+    s.data = data;
+    s.status = 'ready';
+  } catch (err) {
+    if (mySeq !== s.seq) return;
+
+    s.status = 'error';
+    s.error = err;
+
+    // No toast, for the reason the employee dashboard gives: a user with both
+    // grants would get two toasts for one failed page load.
+    console.error('[equipment] dashboard stats failed:', err);
+  }
+
+  render();
+}
+
+/* ---------- Shared bits --------------------------------------------------- */
+
+function kpiValue(s, read) {
+  return s.status === 'ready' ? String(read(s.data)) : '—';
+}
+
+function chartState(s) {
+  if (s.status === 'error') {
+    return `<div class="chart-empty">
+      ${escapeHtml(t('err_' + ((s.error && s.error.code) || 'server_error')))}
+      <button type="button" class="btn btn-ghost btn-sm"
+              data-action="dash-retry-equipment">${escapeHtml(t('retry'))}</button>
+    </div>`;
+  }
+  return `<div class="chart-empty">${escapeHtml(t('loading_data'))}</div>`;
+}
+
+/* ---------- KPI row ------------------------------------------------------- */
+
+/**
+ * The four KPI cards (Section 5.5). All four count items — unlike the employee
+ * row, the units here do not mix.
+ *
+ * @returns {string} HTML
+ */
+export function renderEquipmentKpis() {
+  const s = dashState();
+  const ready = s.status === 'ready';
+  const totals = (s.data && s.data.totals) || {};
+  const urgentDays = (s.data && s.data.thresholds && s.data.thresholds.urgent_days) || 30;
+
+  return `
+    <div class="kpi-row" data-dash-section="equipment">
+      <div class="kpi blue">
+        <div class="n">${escapeHtml(kpiValue(s, (d) => d.totals.active))}</div>
+        <div class="l">${escapeHtml(t('eqp_dash_kpi_total'))}</div>
+        <div class="kpi-note">${escapeHtml(t('eqp_dash_kpi_total_note'))}</div>
+      </div>
+
+      <div class="kpi red">
+        <div class="n">${escapeHtml(kpiValue(s, (d) => d.totals.inspections_expired))}</div>
+        <div class="l">${escapeHtml(t('eqp_dash_kpi_expired'))}</div>
+        ${ready ? `
+          <div class="kpi-note">${escapeHtml(t('eqp_dash_kpi_missing_note', {
+            count: totals.inspections_missing,
+          }))}</div>` : ''}
+      </div>
+
+      <div class="kpi amber">
+        <div class="n">${escapeHtml(kpiValue(s, (d) => d.totals.inspections_urgent))}</div>
+        <div class="l">${escapeHtml(t('eqp_dash_kpi_urgent', { days: urgentDays }))}</div>
+      </div>
+
+      <div class="kpi green">
+        <div class="n">${escapeHtml(kpiValue(s, (d) => d.totals.rejected_this_month))}</div>
+        <div class="l">${escapeHtml(t('eqp_dash_kpi_rejected'))}</div>
+        <div class="kpi-note">${escapeHtml(t('eqp_dash_kpi_rejected_note'))}</div>
+      </div>
+    </div>`;
+}
+
+/* ---------- Charts -------------------------------------------------------- */
+
+/** "Inspections expiring in next 30 days by item type". */
+function renderByItemCard(s, urgentDays) {
+  const body = s.status === 'ready'
+    ? barChart(
+      (s.data.by_item || []).map((row) => ({
+        label: row.item,
+        value: row.count,
+        colorToken: '--warn',
+      })),
+      { emptyKey: 'eqp_dash_no_expiries', limit: MAX_BARS }
+    )
+    : chartState(s);
+
+  return `
+    <div class="card">
+      <h3>${escapeHtml(t('eqp_dash_chart_by_item', { days: urgentDays }))}</h3>
+      ${body}
+    </div>`;
+}
+
+/**
+ * The compliance donut: active items split by verdict.
+ *
+ * Worst first, so blocked leads the legend — the same order the list page's
+ * verdict filter uses (constants.js VERDICTS).
+ */
+function renderVerdictCard(s) {
+  const body = s.status === 'ready'
+    ? donutChart(
+      VERDICTS.map((verdict) => ({
+        label: t('verdict_' + verdict),
+        value: (s.data.by_verdict && s.data.by_verdict[verdict]) || 0,
+        colorToken: VERDICT_COLOR_TOKENS[verdict],
+      })),
+      { centerLabelKey: 'eqp_dash_donut_center', emptyKey: 'eqp_dash_donut_empty' }
+    )
+    : chartState(s);
+
+  return `
+    <div class="card">
+      <h3>${escapeHtml(t('eqp_dash_chart_verdict'))}</h3>
+      ${body}
+    </div>`;
+}
+
+/**
+ * The equipment chart block: the two charts of Section 5.5.
+ *
+ * @returns {string} HTML
+ */
+export function renderEquipmentCharts() {
+  const s = dashState();
+  const urgentDays = (s.data && s.data.thresholds && s.data.thresholds.urgent_days) || 30;
+
+  return `
+    <div class="chart-row chart-row-2">
+      ${renderByItemCard(s, urgentDays)}
+      ${renderVerdictCard(s)}
+    </div>`;
+}
+
+/* ---------- Events -------------------------------------------------------- */
+
+/**
+ * Wire the retry button. Scoped to `root`, which the dashboard page supplies.
+ *
+ * @param {Element} root
+ */
+export function bindEquipmentDashboard(root) {
+  if (!root) return;
+
+  loadEquipmentDashboard();
+
+  root.querySelectorAll('[data-action="dash-retry-equipment"]').forEach((btn) => {
+    btn.addEventListener('click', () => loadEquipmentDashboard({ force: true }));
+  });
+}

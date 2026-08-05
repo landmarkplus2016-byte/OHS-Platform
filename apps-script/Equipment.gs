@@ -260,6 +260,99 @@ function handleListInspectionHistory(session, payload) {
   });
 }
 
+/**
+ * `list_equipment_stats` — the aggregate counts behind the dashboard's
+ * equipment KPI row and chart row (CLAUDE.md Section 5.5).
+ *
+ * The employee twin of this action explains the reasoning: one pass over the
+ * tab, only totals on the wire, and the counting rules stated once
+ * (list_employee_stats, Employees.gs).
+ *
+ * Definitions:
+ *   totals.active                 non-rejected items
+ *   totals.inspections_expired    active items whose third-party date has passed
+ *   totals.inspections_urgent     active items expiring within urgent_days
+ *   totals.rejected_this_month    items rejected in the current calendar month
+ *
+ * `rejected_this_month` is the one figure counted over rejected rows — it is a
+ * measure of what left the inventory, so excluding rejected items would make it
+ * permanently zero.
+ *
+ * @param {Object} session  Context from validateSession().
+ * @param {Object} payload  None.
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleListEquipmentStats(session, payload) {
+  var denied = requireModuleView(session, 'equipment');
+  if (denied) return denied;
+
+  var unknown = collectUnknownKeys_(payload, []);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  var ctx = equipmentContext_();
+  var rows = readAllRows(SHEET_NAMES.EQUIPMENT);
+  var monthPrefix = ctx.today.slice(0, 7); // 'YYYY-MM'
+
+  var totals = {
+    active: 0,
+    inspections_expired: 0,
+    inspections_urgent: 0,
+    inspections_missing: 0,
+    rejected_this_month: 0
+  };
+
+  var byVerdict = { cleared: 0, warning: 0, blocked: 0 };
+  var byItem = {};   // item type → active items expiring within urgent_days
+
+  // The newest updated_at across the whole tab, rejected rows included — the
+  // settings Data tab reports it as this module's health, and a rejection is
+  // just as much a sign of life as an edit.
+  var lastUpdatedAt = '';
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (normalizeString(row.equipment_id) === '') continue;
+
+    var updatedAt = normalizeIsoDateTime(row.updated_at);
+    if (updatedAt > lastUpdatedAt) lastUpdatedAt = updatedAt;
+
+    if (normalizeBoolean(row.rejected)) {
+      if (normalizeIsoDate(row.rejection_date).slice(0, 7) === monthPrefix) {
+        totals.rejected_this_month++;
+      }
+      continue;
+    }
+
+    var derived = deriveEquipment_(row, ctx);
+    totals.active++;
+
+    if (byVerdict[derived.verdict] !== undefined) byVerdict[derived.verdict]++;
+
+    if (derived.third_party_state === CERT_STATES.EXPIRED) {
+      totals.inspections_expired++;
+    } else if (derived.third_party_state === CERT_STATES.URGENT) {
+      totals.inspections_urgent++;
+
+      var item = normalizeString(row.item);
+      if (item !== '') byItem[item] = (byItem[item] || 0) + 1;
+    } else if (derived.third_party_state === CERT_STATES.MISSING) {
+      totals.inspections_missing++;
+    }
+  }
+
+  return okResponse({
+    generated_at: nowIso(),
+    today: ctx.today,
+    thresholds: ctx.thresholds,
+    totals: totals,
+    last_updated_at: lastUpdatedAt,
+    by_verdict: byVerdict,
+    by_item: countMapToList_(byItem, 'item')
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Action handlers — writes
 // ---------------------------------------------------------------------------

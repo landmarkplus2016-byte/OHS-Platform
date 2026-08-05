@@ -28,6 +28,9 @@ import { renderEmployeeFormPage, bindEmployeeFormEvents } from './pages/formPage
 import { renderRenewalsPage, bindRenewalsPageEvents } from './pages/renewalsPage.js';
 import { renderRdtPage, bindRdtPageEvents } from './pages/rdtPage.js';
 import { renderResignedPage, bindResignedPageEvents } from './pages/resignedPage.js';
+import {
+  renderEmployeeKpis, renderEmployeeCharts, bindEmployeeDashboard,
+} from './dashboard.js';
 
 export const manifest = {
   name: MODULE_NAMES.EMPLOYEES,
@@ -57,4 +60,19 @@ export const manifest = {
     { labelKey: 'nav_rdt',         route: 'rdt',      icon: '⚕' },
     { labelKey: 'nav_resigned',    route: 'resigned', icon: '⊘' },
   ],
+
+  /**
+   * What this module adds to the dashboard (Section 5.2), drawn only when the
+   * user can view `employees`.
+   *
+   * `kpis` and `charts` are the two slots Section 5.2 defines. `bind` is the
+   * same page/bind split every route above uses: the two render functions are
+   * synchronous, so something has to start the fetch once their markup is in
+   * the DOM, and that is what the shell calls `bind` for.
+   */
+  dashboard: {
+    kpis: renderEmployeeKpis,
+    charts: renderEmployeeCharts,
+    bind: bindEmployeeDashboard,
+  },
 };

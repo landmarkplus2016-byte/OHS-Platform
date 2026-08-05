@@ -20,6 +20,9 @@ import { renderLoginPage, bindLoginPageEvents } from './shell/loginPage.js';
 import { renderChangePasswordPage, bindChangePasswordEvents } from './shell/changePasswordPage.js';
 import { renderSidebar, bindSidebarEvents } from './shell/sidebar.js';
 import { renderTopbar } from './shell/topbar.js';
+import { renderDashboardPage, bindDashboardPageEvents } from './shell/dashboardPage.js';
+import { renderSettingsPage, bindSettingsPageEvents } from './shell/settingsPage.js';
+import { renderExportPage, bindExportPageEvents } from './shell/exportPage.js';
 import { go, guardRoute, findRoute, getModules } from './router.js';
 import { ROLES } from './constants/globals.js';
 import { t } from './i18n/i18n.js';
@@ -28,13 +31,16 @@ import { t } from './i18n/i18n.js';
  * Shell-owned routes have no page function in the route table (router.js
  * SHELL_ROUTES) — they are drawn from here instead.
  *
- * Dashboard, Settings and Export are placeholders until Stages 6 and 9 build
- * js/shell/dashboardPage.js, settingsPage.js and exportPage.js.
+ * Same {page, bind} shape a module route carries, so a shell page can start a
+ * fetch once its markup is in the DOM exactly as a module page does.
+ *
+ * Every shell route now has a real page; renderPlaceholder is kept for
+ * not-found, which is not a page anyone builds.
  */
 const SHELL_PAGES = new Map([
-  ['dashboard', () => renderPlaceholder('placeholder_dashboard')],
-  ['settings',  () => renderPlaceholder('placeholder_settings')],
-  ['export',    () => renderPlaceholder('placeholder_export')],
+  ['dashboard', { page: renderDashboardPage, bind: bindDashboardPageEvents }],
+  ['settings',  { page: renderSettingsPage,  bind: bindSettingsPageEvents }],
+  ['export',    { page: renderExportPage,    bind: bindExportPageEvents }],
 ]);
 
 /** Temporary page body for routes whose real page has not been built yet. */
@@ -54,15 +60,20 @@ function renderPageBody(entry) {
   if (entry.page) return entry.page(ROUTE_PARAMS);
 
   const shellPage = SHELL_PAGES.get(entry.path);
-  return shellPage ? shellPage() : renderPlaceholder('placeholder_not_found');
+  return shellPage ? shellPage.page() : renderPlaceholder('placeholder_not_found');
 }
 
 /** Attach the current page's listeners, once its HTML is in the DOM. */
 function bindPage(entry) {
-  if (!entry || !entry.bind) return;
+  if (!entry) return;
+
+  // A module route carries its own bind; a shell route's lives in SHELL_PAGES,
+  // because the route table has no page or bind for the routes the shell owns.
+  const bind = entry.bind || (SHELL_PAGES.get(entry.path) || {}).bind;
+  if (!bind) return;
 
   try {
-    entry.bind(ROUTE_PARAMS);
+    bind(ROUTE_PARAMS);
   } catch (err) {
     // A page that throws while binding must not take the shell down with it —
     // the sidebar is already drawn, so the user can still navigate away.

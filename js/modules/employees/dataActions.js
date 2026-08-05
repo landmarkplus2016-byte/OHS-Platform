@@ -100,6 +100,21 @@ export function listRdtEligible(team) {
 }
 
 /**
+ * `list_employee_stats` — the aggregate counts the dashboard's employee section
+ * draws (Section 5.5).
+ *
+ * One call rather than a page walk: the server counts over the whole tab and
+ * sends back totals, so the dashboard never pulls the roster to render four
+ * numbers.
+ *
+ * @returns {Promise<{totals: Object, by_cert: Array, by_subcontractor: Array,
+ *                    rdt: Object, recent: Array, thresholds: Object}>}
+ */
+export function listEmployeeStats() {
+  return api.call('list_employee_stats', {});
+}
+
+/**
  * `list_field_options` — every dropdown list, or one of them.
  *
  * @param {string} [listKey]

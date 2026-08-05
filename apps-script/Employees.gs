@@ -80,6 +80,24 @@ var EMPLOYEE_PAGE_SIZE_MAX = 200;
 var EMPLOYEE_IMPORT_MAX_ROWS = 5000;
 var RENEWAL_HISTORY_CAP = 500;
 
+/** How many "Recently updated" rows list_employee_stats returns (Section 5.5). */
+var EMPLOYEE_RECENT_LIMIT = 6;
+
+/**
+ * ModuleSettings keys that switch the dashboard's RDT coverage card on.
+ *
+ * Both are optional and both must be present for the card to show a number —
+ * Section 5.5 says it renders an "RDT tracking is off" state otherwise. Keeping
+ * them in ModuleSettings rather than Config means the RDT year can be set per
+ * module without touching a platform-wide setting, and adding them needs no
+ * schema change (the tab is already a free key/value store, Section 2).
+ *
+ *   employees.rdt_year_start   'MM-DD', the day the RDT year rolls over
+ *   employees.rdt_target_pct   the yearly coverage goal, e.g. '120'
+ */
+var EMPLOYEE_RDT_YEAR_START_KEY = 'rdt_year_start';
+var EMPLOYEE_RDT_TARGET_KEY = 'rdt_target_pct';
+
 /** @private Built once per execution by employeeWritableFields_(). */
 var EMPLOYEE_WRITABLE_CACHE_ = null;
 
@@ -347,6 +365,116 @@ function handleListRdtEligible(session, payload) {
   });
 
   return okResponse({ employees: eligible, total_matching: eligible.length });
+}
+
+/**
+ * `list_employee_stats` — the aggregate counts behind the dashboard's employee
+ * KPI row and chart row (CLAUDE.md Section 5.5).
+ *
+ * The dashboard could page through list_employees and count client-side, but
+ * that is the whole roster over the wire to render four numbers, and it would
+ * put a second copy of the counting rules in the frontend. This makes one pass
+ * over the tab and returns only the totals.
+ *
+ * Every figure counts *active* employees — archived rows are excluded here for
+ * the same reason they are excluded from the team lists.
+ *
+ * Definitions, because the KPI row mixes units on purpose (Section 5.5):
+ *   totals.active / field / safety   employees
+ *   totals.certs_expired             certificates, summed across employees
+ *   totals.employees_urgent          employees with at least one cert `urgent`
+ *   totals.compliant                 employees whose worst_state is `valid`
+ *
+ * @param {Object} session  Context from validateSession().
+ * @param {Object} payload  None.
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleListEmployeeStats(session, payload) {
+  var denied = requireModuleView(session, 'employees');
+  if (denied) return denied;
+
+  var unknown = collectUnknownKeys_(payload, []);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  var ctx = employeeContext_();
+  var rows = readAllRows(SHEET_NAMES.EMPLOYEES);
+
+  var totals = {
+    active: 0,
+    field: 0,
+    safety: 0,
+    certs_expired: 0,
+    employees_urgent: 0,
+    compliant: 0
+  };
+
+  var byCert = {};            // cert_key → employees whose cert is `urgent`
+  var bySubcontractor = {};   // subcontractor → headcount
+  var recent = [];
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (normalizeString(row.employee_id) === '') continue;
+    if (normalizeBoolean(row.archived)) continue;
+
+    var derived = deriveEmployee_(row, ctx);
+
+    totals.active++;
+    if (normalizeString(row.team).toLowerCase() === 'safety') totals.safety++;
+    else totals.field++;
+
+    totals.certs_expired += derived.expired_count;
+    if (derived.worst_state === CERT_STATES.VALID) totals.compliant++;
+
+    // `urgent` is the state for "expires within urgent_days", which is the
+    // window the KPI and the chart above it both name (Section 5.5). A cert the
+    // MCU rule has pushed to `suspended` is counted as suspended, not urgent —
+    // it is already a blocker, and it shows up in the KPI beside this one.
+    var sawUrgent = false;
+    for (var certKey in derived.per_cert) {
+      if (!Object.prototype.hasOwnProperty.call(derived.per_cert, certKey)) continue;
+      if (derived.per_cert[certKey] !== CERT_STATES.URGENT) continue;
+
+      sawUrgent = true;
+      byCert[certKey] = (byCert[certKey] || 0) + 1;
+    }
+    if (sawUrgent) totals.employees_urgent++;
+
+    var sub = normalizeString(row.subcontractor);
+    if (sub !== '') bySubcontractor[sub] = (bySubcontractor[sub] || 0) + 1;
+
+    recent.push({
+      employee_id: normalizeString(row.employee_id),
+      name: normalizeString(row.name),
+      team: normalizeString(row.team).toLowerCase(),
+      subcontractor: sub,
+      worst_state: derived.worst_state,
+      updated_at: normalizeIsoDateTime(row.updated_at)
+    });
+  }
+
+  recent.sort(function (a, b) {
+    if (a.updated_at === b.updated_at) return 0;
+    return a.updated_at > b.updated_at ? -1 : 1;
+  });
+
+  return okResponse({
+    generated_at: nowIso(),
+    today: ctx.today,
+    thresholds: ctx.thresholds,
+    totals: totals,
+
+    // The newest updated_at on the tab, which the settings Data tab reports as
+    // this module's health. `recent` is already sorted newest first.
+    last_updated_at: recent.length ? recent[0].updated_at : '',
+
+    by_cert: countMapToList_(byCert, 'cert_key'),
+    by_subcontractor: countMapToList_(bySubcontractor, 'subcontractor'),
+    rdt: rdtCoverage_(rows, ctx),
+    recent: recent.slice(0, EMPLOYEE_RECENT_LIMIT)
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1265,12 +1393,8 @@ function nextHistoryNumber_() {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/** @private Own-property check that treats an explicit undefined as absent. */
-function has_(obj, key) {
-  return !!obj
-    && Object.prototype.hasOwnProperty.call(obj, key)
-    && obj[key] !== undefined;
-}
+/* has_() moved to Utils.gs — Equipment.gs and Users.gs need it too, and a
+   helper three files depend on is not a private one. */
 
 /** @private True for the literal strings the Sheet stores booleans as. */
 function isBooleanString_(value) {
@@ -1309,6 +1433,96 @@ function compareEmployeesByName_(a, b) {
   var bn = normalizeString(b.row.name).toLowerCase();
   if (an === bn) return 0;
   return an < bn ? -1 : 1;
+}
+
+/**
+ * @private
+ * The dashboard's RDT coverage block (Section 5.5).
+ *
+ * Coverage is *unique eligible employees tested this RDT year* ÷ *the eligible
+ * pool*, which is the definition Section 5.5 gives. `tests_recorded` is
+ * returned alongside it because a year with two waves records roughly twice as
+ * many tests as it does tested people, and the 120% target only makes sense
+ * against that second number — the card shows coverage, and the raw test count
+ * is there for the admin who wants to know why the two disagree.
+ *
+ * Eligibility is the same rule `list_rdt_eligible` applies: active, not
+ * archived, MCU not expired. Stated once there and mirrored here rather than
+ * shared, because the two answers are shaped differently — that one returns
+ * people, this one returns counts.
+ *
+ * @param {Array<Object>} rows  Every Employees row, already read.
+ * @param {{today: string, thresholds: Object, moduleSettings: Object}} ctx
+ * @return {Object} {tracking: false} or the full coverage block.
+ */
+function rdtCoverage_(rows, ctx) {
+  var yearStart = normalizeString(
+    readModuleSetting_(ctx.moduleSettings, 'employees', EMPLOYEE_RDT_YEAR_START_KEY)
+  );
+  var targetRaw = Number(
+    readModuleSetting_(ctx.moduleSettings, 'employees', EMPLOYEE_RDT_TARGET_KEY)
+  );
+
+  if (!/^\d{2}-\d{2}$/.test(yearStart) || !isFinite(targetRaw) || targetRaw <= 0) {
+    return { tracking: false };
+  }
+
+  var windowStart = rdtYearStart_(ctx.today, yearStart);
+  if (windowStart === '') return { tracking: false };
+
+  var pool = 0;
+  var tested = 0;
+  var testsRecorded = 0;
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (normalizeString(row.employee_id) === '') continue;
+    if (normalizeBoolean(row.archived)) continue;
+    if (normalizeString(row.employment_status).toLowerCase() !== 'active') continue;
+    if (deriveCertState(row.cert_mcu_expiry, ctx.today, ctx.thresholds) === CERT_STATES.EXPIRED) continue;
+
+    pool++;
+
+    var inWindow = 0;
+    for (var k = 0; k < EMPLOYEE_RDT_KEYS.length; k++) {
+      var date = normalizeIsoDate(row[EMPLOYEE_RDT_KEYS[k]]);
+      if (date !== '' && date >= windowStart && date <= ctx.today) inWindow++;
+    }
+
+    testsRecorded += inWindow;
+    if (inWindow > 0) tested++;
+  }
+
+  return {
+    tracking: true,
+    year_start: windowStart,
+    target_pct: targetRaw,
+    pool: pool,
+    tested_employees: tested,
+    tests_recorded: testsRecorded,
+    coverage_pct: pool === 0 ? 0 : Math.round((tested / pool) * 1000) / 10
+  };
+}
+
+/**
+ * @private
+ * The first day of the RDT year that `today` falls inside.
+ *
+ * The setting is a bare 'MM-DD', so the year is whichever one puts the start on
+ * or before today: with a start of 04-01, the 2026-03-15 dashboard reports on
+ * the year that began 2025-04-01.
+ *
+ * @param {string} today   ISO 'YYYY-MM-DD'
+ * @param {string} mmdd    'MM-DD'
+ * @return {string} ISO date, or '' when today is unreadable.
+ */
+function rdtYearStart_(today, mmdd) {
+  var iso = normalizeIsoDate(today);
+  if (iso === '') return '';
+
+  var year = Number(iso.slice(0, 4));
+  var candidate = year + '-' + mmdd;
+  return candidate <= iso ? candidate : (year - 1) + '-' + mmdd;
 }
 
 /** @private The latest of an employee's recorded drug-test dates, or ''. */

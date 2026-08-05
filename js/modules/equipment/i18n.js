@@ -145,6 +145,21 @@ const en = {
   reason_third_party_missing: 'No third-party inspection recorded',
   reason_wave_failed: 'Wave {wave} failed on {date}',
   reason_owner_archived: 'Assigned to {name}, who is archived — needs reassignment',
+
+  /* ---------- Dashboard (Section 5.5) ---------- */
+  eqp_dash_kpi_total: 'Total active equipment',
+  eqp_dash_kpi_total_note: 'rejected items excluded',
+  eqp_dash_kpi_expired: 'Inspections expired',
+  eqp_dash_kpi_missing_note: '{count} with no inspection date',
+  eqp_dash_kpi_urgent: 'Expiring in ≤{days} days',
+  eqp_dash_kpi_rejected: 'Rejected this month',
+  eqp_dash_kpi_rejected_note: 'this calendar month',
+
+  eqp_dash_chart_by_item: 'Inspections expiring in next {days} days by item type',
+  eqp_dash_no_expiries: 'No inspection ends in this window.',
+  eqp_dash_chart_verdict: 'Equipment compliance',
+  eqp_dash_donut_center: 'items',
+  eqp_dash_donut_empty: 'No active equipment to assess.',
 };
 
 const ar = {
@@ -264,6 +279,21 @@ const ar = {
   reason_third_party_missing: 'لا يوجد فحص جهة خارجية مسجل',
   reason_wave_failed: 'رسبت الموجة {wave} بتاريخ {date}',
   reason_owner_archived: 'مخصصة لـ {name} وهو مؤرشف — تحتاج إعادة تخصيص',
+
+  /* ---------- Dashboard (Section 5.5) ---------- */
+  eqp_dash_kpi_total: 'إجمالي المعدات النشطة',
+  eqp_dash_kpi_total_note: 'باستثناء المرفوضة',
+  eqp_dash_kpi_expired: 'فحوصات منتهية',
+  eqp_dash_kpi_missing_note: '{count} بدون تاريخ فحص',
+  eqp_dash_kpi_urgent: 'تنتهي خلال {days} يومًا أو أقل',
+  eqp_dash_kpi_rejected: 'مرفوضة هذا الشهر',
+  eqp_dash_kpi_rejected_note: 'خلال الشهر الميلادي الحالي',
+
+  eqp_dash_chart_by_item: 'الفحوصات المنتهية خلال {days} يومًا حسب نوع الصنف',
+  eqp_dash_no_expiries: 'لا ينتهي أي فحص خلال هذه المدة.',
+  eqp_dash_chart_verdict: 'التزام المعدات',
+  eqp_dash_donut_center: 'صنف',
+  eqp_dash_donut_empty: 'لا توجد معدات نشطة للتقييم.',
 };
 
 registerModuleDict('equipment', { en, ar });

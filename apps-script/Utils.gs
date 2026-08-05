@@ -240,6 +240,22 @@ function hasKeys_(obj) {
 }
 
 /**
+ * Own-property check that treats an explicit `undefined` as absent.
+ *
+ * The difference matters for partial updates: `{display_name: undefined}` is a
+ * client that meant to send nothing, not a client asking to blank a column.
+ *
+ * @param {Object} obj
+ * @param {string} key
+ * @return {boolean}
+ */
+function has_(obj, key) {
+  return !!obj
+    && Object.prototype.hasOwnProperty.call(obj, key)
+    && obj[key] !== undefined;
+}
+
+/**
  * Flags every own key of `obj` that is not in `allowedKeys`, as a field_errors
  * map of {key: 'unknown'}.
  *
@@ -274,6 +290,42 @@ function padNumber_(value, width) {
   var str = String(Math.floor(Math.abs(Number(value) || 0)));
   while (str.length < width) str = '0' + str;
   return str;
+}
+
+// ---------------------------------------------------------------------------
+// Aggregation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Turns a {name: count} tally into the sorted array the dashboard charts read:
+ * [{<labelKey>: name, count: n}], biggest first, ties broken alphabetically so
+ * the bar order does not shuffle between two identical requests.
+ *
+ * Zero counts are dropped — a chart row of length zero is noise, not
+ * information.
+ *
+ * @param {Object<string, number>} tally
+ * @param {string} labelKey  Name of the label property, e.g. 'cert_key'.
+ * @return {Array<Object>}
+ */
+function countMapToList_(tally, labelKey) {
+  var out = [];
+
+  for (var name in tally) {
+    if (!Object.prototype.hasOwnProperty.call(tally, name)) continue;
+    if (!tally[name]) continue;
+
+    var entry = { count: tally[name] };
+    entry[labelKey] = name;
+    out.push(entry);
+  }
+
+  out.sort(function (a, b) {
+    if (a.count !== b.count) return b.count - a.count;
+    return a[labelKey] < b[labelKey] ? -1 : (a[labelKey] > b[labelKey] ? 1 : 0);
+  });
+
+  return out;
 }
 
 // ---------------------------------------------------------------------------

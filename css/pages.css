@@ -4,10 +4,9 @@
    If a rule here would be useful to a second page, it belongs in
    components.css instead.
 
-   Built so far: the login screen, the employee module's pages.
+   Built so far: the login screen, the employee module's pages, the dashboard.
 
    Still to come:
-     - Dashboard: KPI row, chart cards, "Recently Updated" list
      - Equipment list / detail / form / rejection pages
      - Settings page tabs (Users, Lists, Thresholds, Data)
      - Export page
@@ -78,6 +77,385 @@
   margin-block-end: 16px;
 }
 
+/* ---------- Dashboard (Section 5.5) ----------
+   One block per module, stacked: KPI row, then charts. The grids below are the
+   only page-specific layout; the cards inside them are plain .card. */
+.dash-section { margin-block-end: 26px; }
+.dash-section:last-child { margin-block-end: 0; }
+
+/* KPI row — four cards, equal width. */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-block-end: 16px;
+}
+
+.kpi {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+}
+.kpi .n { font-size: 32px; font-weight: 800; line-height: 1.1; }
+.kpi .l { color: var(--text2); font-size: 12.5px; margin-block-start: 2px; }
+
+/* The employee KPI row mixes units on purpose (Section 5.5), so most cards
+   carry a note saying what they actually count. */
+.kpi-note {
+  color: var(--muted);
+  font-size: 11px;
+  margin-block-start: 6px;
+}
+
+.kpi-split {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-block-start: 8px;
+  font-size: 11.5px;
+  color: var(--text2);
+}
+
+.kpi.blue  .n { color: var(--primary); }
+.kpi.red   .n { color: var(--danger); }
+.kpi.amber .n { color: var(--warning); }
+.kpi.green .n { color: var(--success); }
+
+/* Chart rows. The column count is in the class because it is a property of the
+   row's contents, not of the module — a future module asking for three charts
+   reuses .chart-row-3 rather than adding a rule. */
+.chart-row {
+  display: grid;
+  gap: 16px;
+  margin-block-end: 16px;
+}
+.chart-row:last-child { margin-block-end: 0; }
+.chart-row-1 { grid-template-columns: 1fr; }
+.chart-row-2 { grid-template-columns: 1fr 1fr; }
+.chart-row-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* What a chart card shows instead of a chart: loading, an error, or nothing
+   to plot. */
+.chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.chart-empty-hint { font-size: 11.5px; line-height: 1.5; max-inline-size: 34ch; }
+
+/* ---------- Bar charts ----------
+   Divs, not SVG, so they flip in Arabic — see the header of
+   js/components/charts.js. */
+.bar-row { margin-block-end: 10px; }
+.bar-row:last-child { margin-block-end: 0; }
+
+.bar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12.5px;
+  margin-block-end: 4px;
+}
+.bar-label {
+  color: var(--text2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-value { font-weight: 700; color: var(--text); }
+
+.bar-track {
+  block-size: 8px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill {
+  block-size: 100%;
+  border-radius: 999px;
+  transition: inline-size 0.2s ease;
+}
+
+/* ---------- Donut ---------- */
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  min-block-size: 120px;
+}
+.donut { inline-size: 120px; block-size: 120px; flex: none; }
+.donut-total { font-size: 19px; font-weight: 800; fill: var(--text); }
+.donut-caption { font-size: 10px; fill: var(--text2); }
+
+.donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12.5px;
+  min-inline-size: 0;
+}
+.legend-row { display: flex; align-items: center; gap: 8px; }
+.legend-dot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+.legend-label { color: var(--text2); }
+.legend-value { color: var(--text); }
+
+/* ---------- RDT coverage card ---------- */
+.rdt-coverage {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-block-size: 120px;
+}
+.rdt-headline {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.1;
+}
+.target-bar { margin-block-start: 10px; }
+.target-caption {
+  font-size: 12px;
+  color: var(--text2);
+  margin-block-start: 6px;
+}
+.rdt-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-block-start: 8px;
+}
+
+/* ---------- Recently updated ---------- */
+.recent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 9px;
+  border-block-end: 1px solid var(--border);
+  cursor: pointer;
+}
+.recent-row:last-child { border-block-end: none; }
+.recent-row:hover { background: var(--surface-sunken); }
+.recent-row:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.recent-main { flex: 1; min-inline-size: 0; font-size: 12.5px; }
+.recent-when { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+
+/* ---------- Settings (Sections 3.3, 3.4, 3.7) ----------
+   Four tabs sharing one page. The tab strip and the switch are components; what
+   is here is the layout each tab body needs. */
+.tab-intro {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text2);
+  max-inline-size: 80ch;
+}
+
+/* Two cards side by side. The Data tab's own row — deliberately not .chart-row,
+   which belongs to the dashboard and would couple the two pages' layouts. */
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-block-end: 16px;
+  align-items: start;
+}
+.settings-row:last-child { margin-block-end: 0; }
+
+/* Lists tab — one panel per FieldOptions list. */
+.list-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.list-head h3 { margin: 0; }
+.list-rows { margin-block: 12px; }
+.list-row {
+  display: grid;
+  grid-template-columns: 1fr 76px auto auto;
+  align-items: center;
+  gap: 8px;
+  padding-block: 5px;
+}
+.list-row input[type="text"],
+.list-row input[type="number"] {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  min-inline-size: 0;
+}
+.list-row input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.list-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--border);
+}
+
+/* Thresholds tab. */
+.threshold-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-block-end: 16px;
+}
+
+/* Data tab — the health readout. The import panel is just a file field; the
+   review that follows it happens in a modal. */
+.health-table {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  margin-block-end: 14px;
+}
+.health-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 130px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  border-block-end: 1px solid var(--border);
+}
+.health-row:last-child { border-block-end: none; }
+.health-head {
+  background: var(--surface-sunken);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.health-count { font-weight: 700; }
+
+.health-counters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-block-end: 12px;
+}
+
+/* ---------- Export page ----------
+   The three format cards, ported from OHS-DB. A card is a button, so being
+   over the cap disables it the way any other unavailable control is disabled. */
+.export-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.ex-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  text-align: start;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.ex-card:hover:not(:disabled) {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+.ex-card:disabled { cursor: not-allowed; opacity: .65; }
+
+.ex-icon {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--primary);
+  flex: none;
+}
+.ex-body { min-inline-size: 0; }
+.ex-name { font-weight: 700; font-size: 14px; color: var(--text); }
+.ex-desc {
+  font-size: 12px;
+  color: var(--text2);
+  margin-block-start: 3px;
+  line-height: 1.5;
+}
+.ex-warn { font-size: 11.5px; color: var(--danger); margin-block-start: 6px; }
+.ex-note { font-size: 11.5px; color: var(--primary); margin-block-start: 6px; }
+
+.export-note {
+  margin-block-start: 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.filter-bar .count-error { color: var(--danger); }
+
+/* ---------- Import review modal ----------
+   A wide modal holding a scrollable table: one row per spreadsheet line, each
+   with its own action. The table scrolls inside the modal rather than growing
+   it, so the summary and the buttons stay reachable on a thousand-row file. */
+.import-warnings ul {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+  line-height: 1.6;
+}
+
+.import-bulk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-block: 14px 10px;
+}
+.import-summary { font-size: 12.5px; font-weight: 600; color: var(--text2); }
+.import-bulk-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.import-table-wrap {
+  max-block-size: 48vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+.import-table-wrap .tbl { border: none; border-radius: 0; }
+.import-table-wrap thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+}
+.import-table-wrap select { min-inline-size: 110px; }
+
 /* ---------- Employee form ----------
    The certificate editor is the only part of the form with a shape of its own:
    one bordered panel per certificate, each holding an expiry date and a Drive
@@ -105,10 +483,27 @@
   .detail-grid { grid-template-columns: repeat(2, 1fr); }
   .cert-list,
   .cert-edit-grid { grid-template-columns: 1fr; }
+
+  /* Four KPIs and three charts stop fitting first. Two columns keeps the cards
+     comparable side by side; one column would make the row a stack of numbers
+     with no relationship. */
+  .kpi-row,
+  .chart-row-3 { grid-template-columns: repeat(2, 1fr); }
+
+  .list-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
   .detail-grid { grid-template-columns: 1fr; }
+
+  .kpi-row,
+  .chart-row-2,
+  .chart-row-3 { grid-template-columns: 1fr; }
+
+  .settings-row,
+  .threshold-grid,
+  .export-cards,
+  .health-counters { grid-template-columns: 1fr; }
 }
 
 /* ---------- Placeholder bodies (removed once real pages land) ----------

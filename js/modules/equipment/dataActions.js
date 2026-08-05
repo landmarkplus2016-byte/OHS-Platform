@@ -99,6 +99,21 @@ export function listInspectionHistory(equipmentId) {
 }
 
 /**
+ * `list_equipment_stats` — the aggregate counts the dashboard's equipment
+ * section draws (Section 5.5).
+ *
+ * One call rather than a page walk: the server counts over the whole tab and
+ * sends back totals, so the dashboard never pulls the inventory to render four
+ * numbers.
+ *
+ * @returns {Promise<{totals: Object, by_verdict: Object, by_item: Array,
+ *                    thresholds: Object}>}
+ */
+export function listEquipmentStats() {
+  return api.call('list_equipment_stats', {});
+}
+
+/**
  * `list_field_options` — every dropdown list, or one of them.
  *
  * @param {string} [listKey]

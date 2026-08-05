@@ -24,6 +24,9 @@ import { renderRejectedEquipmentPage, bindRejectedEquipmentPageEvents } from './
 import { renderEquipmentDetailPage, bindEquipmentDetailPageEvents } from './pages/detailPage.js';
 import { renderEquipmentFormPage, bindEquipmentFormEvents } from './pages/formPage.js';
 import { renderEquipmentRejectPage, bindEquipmentRejectPageEvents } from './pages/rejectFormPage.js';
+import {
+  renderEquipmentKpis, renderEquipmentCharts, bindEquipmentDashboard,
+} from './dashboard.js';
 
 export const manifest = {
   name: MODULE_NAMES.EQUIPMENT,
@@ -49,4 +52,15 @@ export const manifest = {
     { labelKey: 'nav_equipment_active',   route: 'equipment',          icon: '▣' },
     { labelKey: 'nav_equipment_rejected', route: 'equipment/rejected', icon: '✕' },
   ],
+
+  /**
+   * What this module adds to the dashboard (Section 5.2), drawn only when the
+   * user can view `equipment`. Same three-part shape as the employee manifest —
+   * two render slots and the bind that starts their fetch.
+   */
+  dashboard: {
+    kpis: renderEquipmentKpis,
+    charts: renderEquipmentCharts,
+    bind: bindEquipmentDashboard,
+  },
 };
