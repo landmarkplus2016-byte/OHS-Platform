@@ -49,7 +49,8 @@ const SHELL_ROUTES = [
  * neither "officers belong in check/*" nor "admins do not" applies to it.
  *
  * Without this exemption an officer with must_change_password would ping-pong:
- * guard 2 sends them to change-password, guard 4 sends them back to check/home.
+ * guard 2 sends them to change-password, guard 4 sends them back to check/home,
+ * and guard 6 — for a phone that has not synced yet — to check/locked.
  */
 const SHELL_NEUTRAL_ROUTES = new Set(['change-password']);
 
@@ -384,7 +385,16 @@ export function guardRoute(user, route) {
   //    as stale: unknown freshness is not proof of freshness, and this is the
   //    one guard where guessing wrong shows an officer a verdict they should
   //    not have seen. See modules/officer/staleCheck.js.
-  if (user.role === ROLES.OFFICER && !STALE_EXEMPT_ROUTES.has(route)) {
+  //
+  //    Shell-neutral routes are exempt for the same reason guard 4 exempts them.
+  //    A brand-new officer arrives with must_change_password AND an empty cache:
+  //    guard 2 would send them to change-password, this guard would send them
+  //    back to check/locked, and render() would recurse between the two until
+  //    the stack blew. Locking out change-password buys nothing anyway — it
+  //    shows no data, and it is the only route that can clear guard 2.
+  if (user.role === ROLES.OFFICER
+      && !SHELL_NEUTRAL_ROUTES.has(route)
+      && !STALE_EXEMPT_ROUTES.has(route)) {
     if (isCacheStaleSync()) return 'check/locked';
   }
 

@@ -138,6 +138,24 @@ function restoreFocus(snapshot) {
   }
 }
 
+/**
+ * How many guard redirects one draw may chain before we stop following them.
+ *
+ * A redirect re-enters render() through go(), so two guards that disagree about
+ * where a user belongs recurse until the stack overflows — a frozen tab, and a
+ * RangeError surfacing wherever the navigation was started. On a login screen
+ * that reads as "something went wrong on the server", which is the wrong thing
+ * to tell someone whose credentials were fine.
+ *
+ * Three is more than any legitimate chain needs (the longest real one is
+ * login → home → lockout). Past that we stop, log, and draw whatever route we
+ * are standing on rather than take the app down.
+ */
+const MAX_GUARD_REDIRECTS = 3;
+
+/** Redirects followed so far in the current draw. Reset on every settled draw. */
+let redirectDepth = 0;
+
 export function render() {
   const app = document.getElementById('app');
   if (!app) return;
@@ -145,8 +163,19 @@ export function render() {
   // ---- Guards ------------------------------------------------------------
   const redirect = guardRoute(CURRENT_USER, ROUTE);
   if (redirect) {
-    go(redirect); // re-enters render() with the corrected route
-    return;
+    if (redirectDepth >= MAX_GUARD_REDIRECTS) {
+      console.error(
+        '[render] Guard redirect loop at route "' + ROUTE + '" → "' + redirect +
+        '". Drawing the current route instead.'
+      );
+      redirectDepth = 0;
+    } else {
+      redirectDepth++;
+      go(redirect); // re-enters render() with the corrected route
+      return;
+    }
+  } else {
+    redirectDepth = 0;
   }
 
   const focusSnapshot = captureFocus();
