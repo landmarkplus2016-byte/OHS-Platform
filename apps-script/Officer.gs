@@ -293,6 +293,11 @@ function officerLeaderMap_(teamLeaderId) {
  * added to the schema reaches the officer app with its date and without its
  * link, automatically.
  *
+ * The `_na` and `_suspended` flag columns are not emitted either. They are
+ * inputs to the answer, not the answer: whatever they say has already been
+ * folded into `derived.per_cert`, and an officer's job is to read the verdict,
+ * not to audit how it was reached.
+ *
  * Both teams get all ten cert columns. The safety-only three are blank for a
  * field employee, and the officer card renders per-cert state from the derived
  * block — a blank date here is the same "no record" the admin sees.

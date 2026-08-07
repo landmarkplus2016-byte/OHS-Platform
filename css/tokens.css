@@ -27,6 +27,10 @@
   --urgent-bg:    #ffe4e6;  --urgent-tx:    #9f1239;
   --missing-bg:   #f3f4f6;  --missing-tx:   #6b7280;
   --suspended-bg: #ede9fe;  --suspended-tx: #5b21b6;
+  /* `na` reads as a deliberate decision, not absent data — a cool slate rather
+     than the neutral grey `missing` uses, so the two never look alike in a
+     certificate list. */
+  --na-bg:        #e6ecf4;  --na-tx:        #4a5a72;
   /* --plan-bg / --plan-tx kept available for non-compliance uses (e.g. RDT phase badges).
      No cert state currently maps to them. */
   --plan-bg:      #fef9c3;  --plan-tx:      #854d0e;

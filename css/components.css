@@ -268,8 +268,9 @@
 .badge-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-block-end: 16px; }
 
 /* ---------- Certificate state pills (Section 6.1) ----------
-   Six states, worst to best. No `plan` tier — anything past soon_days is
-   `valid`, so --plan-bg deliberately goes unused here. */
+   Seven states, worst to best, with `na` outside the ladder entirely. No `plan`
+   tier — anything past soon_days is `valid`, so --plan-bg deliberately goes
+   unused here. */
 .cert-state {
   display: inline-block;
   padding: 3px 9px;
@@ -284,6 +285,7 @@
 .cs-soon      { background: var(--warn-bg);      color: var(--warn-dark); }
 .cs-missing   { background: var(--missing-bg);   color: var(--missing-tx); }
 .cs-valid     { background: var(--cleared-bg);   color: var(--cleared-dark); }
+.cs-na        { background: var(--na-bg);        color: var(--na-tx); }
 
 /* ---------- Tables ---------- */
 .tbl {
@@ -399,6 +401,14 @@
 .cert-info .date { font-size: 12px; color: var(--text2); margin-block-start: 2px; }
 .cert-days { color: var(--muted); }
 .cert-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+/* The two flagged states tint the whole row, not just the badge — in a list of
+   ten certificates the badge alone is too small to find. Same colours the form
+   panel uses, so a certificate looks the same wherever it is shown. */
+.cert-row-na        { background: var(--na-bg);        border-color: var(--na-bg); }
+.cert-row-na .name  { color: var(--na-tx); }
+.cert-row-suspended { background: var(--suspended-bg); border-color: var(--suspended-bg); }
+.cert-row-suspended .name { color: var(--suspended-tx); }
 
 /* ---------- Checkbox rows ---------- */
 .check-row { display: flex; gap: 20px; flex-wrap: wrap; }

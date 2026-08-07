@@ -15,14 +15,15 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-/** The six certificate states (Section 6.1). There is no `plan` tier. */
+/** The seven certificate states (Section 6.1). There is no `plan` tier. */
 var CERT_STATES = {
   SUSPENDED: 'suspended',
   EXPIRED: 'expired',
   URGENT: 'urgent',
   SOON: 'soon',
   MISSING: 'missing',
-  VALID: 'valid'
+  VALID: 'valid',
+  NA: 'na'
 };
 
 /** The three verdicts (Sections 6.2, 6.3). */
@@ -36,6 +37,10 @@ var VERDICTS = {
  * Worst-wins ranking: suspended > expired > urgent > soon > missing > valid.
  * `missing` outranks `valid` because absent data is a worse answer than a good
  * one, but it never becomes a blocker or a warning on its own (Section 6.2).
+ *
+ * `na` ranks below `valid` and is additionally skipped by the aggregate loop —
+ * a certificate the admin marked "not applicable" is not required work, so it
+ * can never be the worst thing about an employee (Section 6.1).
  */
 var STATE_RANKS = {
   suspended: 6,
@@ -43,7 +48,8 @@ var STATE_RANKS = {
   urgent: 4,
   soon: 3,
   missing: 1,
-  valid: 0
+  valid: 0,
+  na: -1
 };
 
 /** Certs that go `suspended` when MCU is expired. */
@@ -114,8 +120,12 @@ function getWarningCerts(moduleSettings) {
 /**
  * Classifies one expiry date into a state (Section 6.1).
  *
- * Returns five of the six states — `suspended` is a cross-certificate outcome
- * applied by deriveEmployeeDerived after every cert has its own state.
+ * Returns four of the seven states. The other three are decisions about the
+ * certificate rather than about its date, and deriveEmployeeDerived applies them
+ * on top: `na` and `suspended` come from the row's own flag columns, and
+ * `suspended` is additionally a cross-certificate outcome of an expired MCU.
+ * Keeping this function about the date alone is what lets equipment reuse it for
+ * `third_party_inspection_end_date`, which has no flags.
  *
  * A cert expiring today is `urgent`, not `expired`: the rule is
  * `expiry_date < today`.
@@ -175,30 +185,58 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
     : APPLICABLE_CERTS_FIELD;
 
   // --- 1. Per-cert states --------------------------------------------------
+  // Two admin flags on the row outrank the expiry date (Section 6.1):
+  //
+  //   cert_<key>_na          this certificate does not apply to this employee
+  //   cert_<key>_suspended   it applies, but it is void right now
+  //
+  // N/A wins when both are ticked — a certificate that is not required cannot
+  // be suspended, so there is nothing for the second flag to say. The form
+  // enforces the same precedence by disabling the suspended box, but the answer
+  // is decided here; the client is never the gate (rule 5).
   var perCert = {};
   var expiryDates = {};
+  var manualSuspended = {};
+
   for (var i = 0; i < applicable.length; i++) {
     var key = applicable[i];
     var raw = row['cert_' + key + '_expiry'];
     expiryDates[key] = normalizeIsoDate(raw);
-    perCert[key] = deriveCertState(raw, refDate, limits);
+
+    if (normalizeBoolean(row['cert_' + key + '_na'])) {
+      perCert[key] = CERT_STATES.NA;
+    } else if (normalizeBoolean(row['cert_' + key + '_suspended'])) {
+      perCert[key] = CERT_STATES.SUSPENDED;
+      manualSuspended[key] = true;
+    } else {
+      perCert[key] = deriveCertState(raw, refDate, limits);
+    }
   }
 
   // --- 2. WAH suspension ---------------------------------------------------
   // MCU is the medical prerequisite for working at heights: when it lapses,
   // both WAH certs are void regardless of their own dates. A WAH cert with no
-  // date stays `missing` — there is nothing to suspend. Applied before the
-  // worst_state and blocker passes so it cascades (Section 6.1).
+  // date stays `missing` — there is nothing to suspend — and one flagged N/A
+  // stays `na` for the same reason. Applied before the worst_state and blocker
+  // passes so it cascades (Section 6.1).
+  //
+  // The trigger is strictly `mcu === expired`, so an MCU the admin flagged N/A
+  // or manually suspended does not cascade. A manually suspended MCU is already
+  // a blocker in its own right; whether it should also void WAH is a policy
+  // question, not a mechanical one, and it is not one this file gets to answer.
   if (perCert.mcu === CERT_STATES.EXPIRED) {
     for (var w = 0; w < WAH_KEYS.length; w++) {
       var wahKey = WAH_KEYS[w];
-      if (perCert[wahKey] !== undefined && perCert[wahKey] !== CERT_STATES.MISSING) {
-        perCert[wahKey] = CERT_STATES.SUSPENDED;
-      }
+      if (perCert[wahKey] === undefined) continue;
+      if (perCert[wahKey] === CERT_STATES.MISSING || perCert[wahKey] === CERT_STATES.NA) continue;
+      perCert[wahKey] = CERT_STATES.SUSPENDED;
     }
   }
 
   // --- 3. Aggregates -------------------------------------------------------
+  // N/A takes no part: it is recorded in per_cert so the UI can show the badge,
+  // but it is not required work, so it neither competes for worst_state nor
+  // counts toward anything (Section 6.1).
   var worstState = CERT_STATES.VALID;
   var expiredCount = 0;
   var expiringSoonCount = 0;
@@ -206,6 +244,7 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
   for (var certKey in perCert) {
     if (!Object.prototype.hasOwnProperty.call(perCert, certKey)) continue;
     var state = perCert[certKey];
+    if (state === CERT_STATES.NA) continue;
 
     if (stateRank(state) > stateRank(worstState)) worstState = state;
     if (state === CERT_STATES.EXPIRED) expiredCount++;
@@ -237,6 +276,10 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
 
   // Expired blocker certs first, then suspensions — this is the order the
   // Section 6.4 example shows (MCU expired, then both WAH suspended).
+  //
+  // A cert flagged N/A never reaches either loop: its state is `na`, which
+  // matches neither test. That is the whole of the "excluded from the verdict"
+  // rule — there is no separate skip to keep in sync.
   for (var b = 0; b < blockerCerts.length; b++) {
     var bKey = blockerCerts[b];
     if (perCert[bKey] !== CERT_STATES.EXPIRED) continue;
@@ -249,7 +292,7 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
   for (var s = 0; s < blockerCerts.length; s++) {
     var sKey = blockerCerts[s];
     if (perCert[sKey] !== CERT_STATES.SUSPENDED) continue;
-    blockers.push(reason_('wah_suspended', 'reason_wah_suspended', { cert: sKey }));
+    blockers.push(suspendedReason_(sKey, manualSuspended));
   }
 
   // --- 5. Warnings (only meaningful when nothing blocks) -------------------
@@ -267,7 +310,12 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
     for (var v = 0; v < warningCerts.length; v++) {
       var vKey = warningCerts[v];
       var vState = perCert[vKey];
-      if (vState === CERT_STATES.EXPIRED) {
+      if (vState === CERT_STATES.SUSPENDED) {
+        // A suspended cert is void, which is at least as bad as an expired one
+        // — but the tier is the cert's, not the state's. On a warning cert that
+        // means a warning, the same way an expired one does.
+        warnings.push(suspendedReason_(vKey, manualSuspended));
+      } else if (vState === CERT_STATES.EXPIRED) {
         warnings.push(reason_('cert_expired', 'reason_expired', {
           cert: vKey,
           days: Math.abs(daysBetweenIso_(refDate, expiryDates[vKey]) || 0)
@@ -412,6 +460,28 @@ function findLatestCompletedWave_(row) {
 /** @private Builds one blocker/warning entry in the Section 6.4 shape. */
 function reason_(type, textKey, textParams) {
   return { type: type, text_key: textKey, text_params: textParams || {} };
+}
+
+/**
+ * @private
+ * The reason entry for a suspended certificate, worded for *why* it is
+ * suspended.
+ *
+ * Both routes to `suspended` produce the same state and the same violet badge,
+ * but they are different facts and the officer standing at the gate needs the
+ * right one: "the medical has expired" tells the team leader to renew the MCU,
+ * while "the certificate is suspended" tells them to ask the office. Guessing
+ * the first when the truth is the second sends someone to renew a medical that
+ * was never the problem.
+ *
+ * @param {string} certKey
+ * @param {Object<string, boolean>} manualSuspended  Keys flagged on the row.
+ * @return {Object}
+ */
+function suspendedReason_(certKey, manualSuspended) {
+  return manualSuspended[certKey]
+    ? reason_('cert_suspended', 'reason_cert_suspended', { cert: certKey })
+    : reason_('wah_suspended', 'reason_wah_suspended', { cert: certKey });
 }
 
 /** @private blocked > warning > cleared. */
@@ -574,6 +644,78 @@ function testDerivation() {
   // --- 6. Archived ---------------------------------------------------------
   var d6 = deriveEmployeeDerived(testEmployee_({ archived: 'TRUE' }), today, thresholds, settings);
   check_(results, '6. archived → blocked', d6.verdict === VERDICTS.BLOCKED, d6.verdict);
+
+  // --- 6a. N/A excludes a cert from state, counts, and the verdict ----------
+  var d6a = deriveEmployeeDerived(testEmployee_({
+    cert_ff_expiry: testDateOffset_(-40),
+    cert_ff_na: 'TRUE'
+  }), today, thresholds, settings);
+
+  check_(results, '6a. N/A cert = na', d6a.per_cert.ff === CERT_STATES.NA, d6a.per_cert.ff);
+  check_(results, '6a. N/A ignores its own expired date',
+    d6a.worst_state === CERT_STATES.VALID, d6a.worst_state);
+  check_(results, '6a. N/A not counted', d6a.expired_count === 0, d6a.expired_count);
+  check_(results, '6a. N/A raises no warning', d6a.verdict === VERDICTS.CLEARED, d6a.verdict);
+
+  // --- 6b. N/A MCU does not cascade to WAH ---------------------------------
+  var d6b = deriveEmployeeDerived(testEmployee_({
+    cert_mcu_expiry: testDateOffset_(-5),
+    cert_mcu_na: 'TRUE'
+  }), today, thresholds, settings);
+
+  check_(results, '6b. N/A MCU leaves WAH alone',
+    d6b.per_cert.wah_practical === CERT_STATES.VALID, d6b.per_cert.wah_practical);
+  check_(results, '6b. N/A MCU → cleared', d6b.verdict === VERDICTS.CLEARED, d6b.verdict);
+
+  // --- 6c. Manual suspension on a blocker cert -----------------------------
+  var d6c = deriveEmployeeDerived(testEmployee_({
+    cert_wah_practical_suspended: 'TRUE'
+  }), today, thresholds, settings);
+
+  check_(results, '6c. flagged cert = suspended',
+    d6c.per_cert.wah_practical === CERT_STATES.SUSPENDED, d6c.per_cert.wah_practical);
+  check_(results, '6c. blocker cert suspended → blocked',
+    d6c.verdict === VERDICTS.BLOCKED, d6c.verdict);
+  check_(results, '6c. reason is cert_suspended, not wah_suspended',
+    d6c.blockers.length === 1 && d6c.blockers[0].text_key === 'reason_cert_suspended',
+    d6c.blockers);
+
+  // --- 6d. Manual suspension on a warning cert -----------------------------
+  var d6d = deriveEmployeeDerived(testEmployee_({
+    cert_fa_suspended: 'TRUE'
+  }), today, thresholds, settings);
+
+  check_(results, '6d. warning cert suspended → warning',
+    d6d.verdict === VERDICTS.WARNING, d6d.verdict);
+  check_(results, '6d. worst_state = suspended',
+    d6d.worst_state === CERT_STATES.SUSPENDED, d6d.worst_state);
+
+  // --- 6e. N/A beats suspended when both are ticked ------------------------
+  var d6e = deriveEmployeeDerived(testEmployee_({
+    cert_ppe_na: 'TRUE',
+    cert_ppe_suspended: 'TRUE',
+    team: 'safety',
+    cert_ppe_expiry: testDateOffset_(365),
+    cert_lifting_expiry: testDateOffset_(365),
+    cert_scaffolding_expiry: testDateOffset_(365)
+  }), today, thresholds, settings);
+
+  check_(results, '6e. N/A wins over suspended',
+    d6e.per_cert.ppe === CERT_STATES.NA, d6e.per_cert.ppe);
+  check_(results, '6e. → cleared', d6e.verdict === VERDICTS.CLEARED, d6e.verdict);
+
+  // --- 6f. Expired MCU still cascades over a manually suspended WAH --------
+  var d6f = deriveEmployeeDerived(testEmployee_({
+    cert_mcu_expiry: testDateOffset_(-5),
+    cert_wah_practical_suspended: 'TRUE'
+  }), today, thresholds, settings);
+
+  check_(results, '6f. manual flag keeps its own reason',
+    d6f.blockers.length === 3 && d6f.blockers[1].text_key === 'reason_cert_suspended',
+    d6f.blockers);
+  check_(results, '6f. cascaded WAH keeps the MCU reason',
+    d6f.blockers.length === 3 && d6f.blockers[2].text_key === 'reason_wah_suspended',
+    d6f.blockers);
 
   // --- 7. Equipment: third-party expired -----------------------------------
   var e7 = deriveEquipmentDerived(testEquipment_({

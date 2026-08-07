@@ -101,16 +101,25 @@ function daysLabel(iso) {
 function renderCertRow(employee, certKey, perCert) {
   const expiry = employee['cert_' + certKey + '_expiry'];
   const link = employee['cert_' + certKey + '_link'];
+  const state = perCert[certKey];
+
+  // An N/A certificate shows no date at all, even when one is on file. The
+  // admin said it does not apply; a live "expires in 12 days" underneath that
+  // is the record arguing with itself. The date is not deleted — it comes back
+  // the moment the flag is unticked in the form.
+  const dateLine = state === 'na'
+    ? EMPTY_MARK
+    : `${escapeHtml(fmtDate(expiry))} ${daysLabel(expiry)}`;
 
   return `
-    <div class="cert-row">
+    <div class="cert-row${state === 'na' ? ' cert-row-na' : ''}${state === 'suspended' ? ' cert-row-suspended' : ''}">
       <div class="cert-info">
         <div class="name">${escapeHtml(t(CERT_LABEL_KEYS[certKey]))}</div>
-        <div class="date">${escapeHtml(fmtDate(expiry))} ${daysLabel(expiry)}</div>
+        <div class="date">${dateLine}</div>
       </div>
       <div class="cert-actions">
-        ${certStateBadge(perCert[certKey])}
-        ${link ? `
+        ${certStateBadge(state)}
+        ${link && state !== 'na' ? `
           <button type="button" class="btn btn-ghost btn-sm"
                   data-action="open-cert" data-url="${escapeHtml(link)}">${escapeHtml(t('emp_open_cert'))}</button>` : ''}
       </div>

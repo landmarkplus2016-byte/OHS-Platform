@@ -46,9 +46,12 @@ const WALK_MAX_PAGES = 25;
 /* ---------- Per-module export definitions --------------------------------- */
 
 /**
- * The six certificate states, worst first — the compliance filter's options.
- * Repeated from the employees module's constants rather than imported, for the
- * reason in the header.
+ * The certificate states the compliance filter offers, worst first. Repeated
+ * from the employees module's constants rather than imported, for the reason in
+ * the header.
+ *
+ * `na` is the seventh state and is deliberately absent: this drives the
+ * `worst_state` filter, and `na` never becomes a worst state.
  */
 const CERT_STATES = ['suspended', 'expired', 'urgent', 'soon', 'missing', 'valid'];
 

@@ -78,6 +78,8 @@ function writableFields(team) {
   certKeysFor(team).forEach((key) => {
     fields.push('cert_' + key + '_expiry');
     fields.push('cert_' + key + '_link');
+    fields.push('cert_' + key + '_na');
+    fields.push('cert_' + key + '_suspended');
   });
 
   if (team === TEAMS.SAFETY) QUAL_KEYS.forEach((key) => fields.push('qual_' + key));
@@ -91,11 +93,20 @@ function writableFields(team) {
 
 /* ---------- Data ---------------------------------------------------------- */
 
+/**
+ * Which columns hold a boolean rather than a string — the qualification flags
+ * and the two per-certificate flags. Everything else on this form is text.
+ */
+function isBooleanField(field) {
+  return field.indexOf('qual_') === 0
+    || /^cert_.+_(na|suspended)$/.test(field);
+}
+
 /** Seed `values` for a brand-new employee. */
 function blankValues(team, options) {
   const values = {};
   writableFields(team).forEach((field) => {
-    values[field] = field.indexOf('qual_') === 0 ? false : '';
+    values[field] = isBooleanField(field) ? false : '';
   });
 
   Object.keys(NEW_DEFAULTS).forEach((field) => {
@@ -112,7 +123,7 @@ function valuesFrom(employee, team) {
   const values = {};
   writableFields(team).forEach((field) => {
     const raw = employee[field];
-    values[field] = field.indexOf('qual_') === 0 ? raw === true : (raw || '');
+    values[field] = isBooleanField(field) ? raw === true : (raw || '');
   });
   return values;
 }
@@ -194,9 +205,24 @@ function textInput(s, field, labelKey, options) {
              type="${opts.type || 'text'}"
              ${opts.placeholder ? `placeholder="${escapeHtml(opts.placeholder)}"` : ''}
              autocomplete="off"
+             ${opts.disabled ? 'disabled' : ''}
              value="${escapeHtml(s.values[field] || '')}">
       ${fieldError(s, field)}
     </div>`;
+}
+
+/** A checkbox bound to `values[field]`. */
+function checkInput(s, field, labelKey, options) {
+  const opts = options || {};
+  const id = 'emp-f-' + field;
+
+  return `
+    <label class="check ${escapeHtml(opts.className || '')}" for="${id}">
+      <input type="checkbox" id="${id}" data-field="${escapeHtml(field)}"
+             ${s.values[field] ? 'checked' : ''}
+             ${opts.disabled ? 'disabled' : ''}>
+      <span>${escapeHtml(t(labelKey))}</span>
+    </label>`;
 }
 
 /** A select filled from a FieldOptions list. */
@@ -224,18 +250,42 @@ function selectInput(s, field, labelKey) {
     </div>`;
 }
 
-/** One certificate: expiry date plus the Drive link. */
+/**
+ * One certificate: expiry date, the Drive link, and the two flags that override
+ * the date (Section 6.1).
+ *
+ * `na` says the certificate does not apply to this employee — the date and link
+ * go dead, because there is nothing to record. `suspended` says it applies but
+ * is void right now, so the date stays editable: the expiry is still a real
+ * fact about the certificate, it just is not the one that decides the state.
+ *
+ * N/A disables the suspended box because it wins outright in derivation. The
+ * server applies that precedence itself; this is the courtesy layer showing the
+ * user what it is going to do (rule 5).
+ */
 function certCard(s, certKey) {
   const expiryField = 'cert_' + certKey + '_expiry';
   const linkField = 'cert_' + certKey + '_link';
+  const naField = 'cert_' + certKey + '_na';
+  const suspendedField = 'cert_' + certKey + '_suspended';
+
+  const na = !!s.values[naField];
+  const suspended = !!s.values[suspendedField];
 
   return `
-    <div class="cert-edit">
+    <div class="cert-edit${na ? ' cert-edit-na' : ''}${!na && suspended ? ' cert-edit-suspended' : ''}"
+         data-cert-block="${escapeHtml(certKey)}">
       <div class="cert-edit-title">${escapeHtml(t(CERT_LABEL_KEYS[certKey]))}</div>
-      ${textInput(s, expiryField, 'emp_field_expiry_date', { type: 'date' })}
+      ${textInput(s, expiryField, 'emp_field_expiry_date', { type: 'date', disabled: na })}
       ${textInput(s, linkField, 'emp_field_cert_link', {
-        type: 'url', placeholder: t('emp_cert_link_ph'),
+        type: 'url', placeholder: t('emp_cert_link_ph'), disabled: na,
       })}
+      <div class="cert-edit-flags">
+        ${checkInput(s, naField, 'emp_cert_na_label', { className: 'cert-flag-na' })}
+        ${checkInput(s, suspendedField, 'emp_cert_suspended_label', {
+          className: 'cert-flag-suspended', disabled: na,
+        })}
+      </div>
     </div>`;
 }
 
@@ -431,6 +481,32 @@ export function bindEmployeeFormEvents(params) {
         if (err) err.textContent = '';
       }
     });
+  });
+
+  /* The two certificate flags restyle their own block in place. Same reason the
+     rest of the form never redraws: a redraw here would throw away the caret in
+     whichever date field the admin was part-way through typing. */
+  root.querySelectorAll('[data-cert-block]').forEach((block) => {
+    const naBox = block.querySelector('.cert-flag-na input');
+    const suspendedBox = block.querySelector('.cert-flag-suspended input');
+    if (!naBox || !suspendedBox) return;
+
+    const paint = () => {
+      const na = naBox.checked;
+
+      block.classList.toggle('cert-edit-na', na);
+      block.classList.toggle('cert-edit-suspended', !na && suspendedBox.checked);
+
+      // N/A means there is nothing to record and nothing to suspend. The
+      // suspended flag keeps whatever value it had — unticking N/A brings it
+      // back rather than silently clearing a decision somebody made.
+      block.querySelectorAll('input[type="date"], input[type="url"]')
+        .forEach((input) => { input.disabled = na; });
+      suspendedBox.disabled = na;
+    };
+
+    naBox.addEventListener('change', paint);
+    suspendedBox.addEventListener('change', paint);
   });
 
   const cancel = root.querySelector('[data-action="cancel"]');

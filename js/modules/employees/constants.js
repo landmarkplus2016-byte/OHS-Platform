@@ -85,8 +85,12 @@ export const QUAL_LABEL_KEYS = {
 };
 
 /**
- * The six certificate states, worst first — the order the list page's state
- * filter offers them in (Section 6.1).
+ * The certificate states the list page's state filter offers, worst first
+ * (Section 6.1).
+ *
+ * `na` is the seventh state and is deliberately not here: this list drives the
+ * `worst_state` filter, and `na` takes no part in the worst-state roll-up. An
+ * option that can never match a row is worse than no option at all.
  */
 export const CERT_STATES = ['suspended', 'expired', 'urgent', 'soon', 'missing', 'valid'];
 

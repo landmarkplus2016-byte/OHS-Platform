@@ -14,8 +14,12 @@ import { t } from '../i18n/i18n.js';
 import { escapeHtml } from '../utils/format.js';
 
 /**
- * The six certificate states (Section 6.1) → their CSS class. There is no
+ * The seven certificate states (Section 6.1) → their CSS class. There is no
  * `plan` tier; anything past soon_days is plain `valid`.
+ *
+ * `na` sits outside the worst-to-best ladder: it is the admin saying this
+ * certificate does not apply to this employee, so it is neither good news nor
+ * bad. Its colour says "not part of the question" rather than "fine".
  */
 const CERT_STATE_CLASSES = {
   suspended: 'cs-suspended',
@@ -24,6 +28,7 @@ const CERT_STATE_CLASSES = {
   soon: 'cs-soon',
   missing: 'cs-missing',
   valid: 'cs-valid',
+  na: 'cs-na',
 };
 
 /** The three verdicts (Sections 6.2, 6.3). */

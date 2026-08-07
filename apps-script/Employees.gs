@@ -101,6 +101,8 @@ function employeeWritableFields_() {
   for (var c = 0; c < EMPLOYEE_CERT_KEYS.length; c++) {
     fields.push('cert_' + EMPLOYEE_CERT_KEYS[c] + '_expiry');
     fields.push('cert_' + EMPLOYEE_CERT_KEYS[c] + '_link');
+    fields.push('cert_' + EMPLOYEE_CERT_KEYS[c] + '_na');
+    fields.push('cert_' + EMPLOYEE_CERT_KEYS[c] + '_suspended');
   }
   for (var q = 0; q < EMPLOYEE_QUAL_KEYS.length; q++) {
     fields.push('qual_' + EMPLOYEE_QUAL_KEYS[q]);
@@ -966,33 +968,51 @@ function validateEmployeeInput_(input, ctx) {
   applyDateField_(values, errors, input, 'hired_date');
 
   for (var c = 0; c < EMPLOYEE_CERT_KEYS.length; c++) {
-    applyDateField_(values, errors, input, 'cert_' + EMPLOYEE_CERT_KEYS[c] + '_expiry');
+    var certKey = EMPLOYEE_CERT_KEYS[c];
+    applyDateField_(values, errors, input, 'cert_' + certKey + '_expiry');
 
-    var linkField = 'cert_' + EMPLOYEE_CERT_KEYS[c] + '_link';
+    var linkField = 'cert_' + certKey + '_link';
     if (has_(input, linkField)) values[linkField] = normalizeString(input[linkField]);
+
+    // The two per-certificate flags (Section 6.1). Both are plain booleans here;
+    // the precedence between them — N/A wins — is a derivation rule, applied
+    // once in Compliance.gs rather than enforced by rewriting what was stored.
+    // Storing both as sent keeps the flags reversible: unticking N/A restores
+    // whatever suspension was underneath instead of silently losing it.
+    applyBooleanField_(values, errors, input, 'cert_' + certKey + '_na', isCreate);
+    applyBooleanField_(values, errors, input, 'cert_' + certKey + '_suspended', isCreate);
   }
 
   // --- qualification flags --------------------------------------------------
-  // Section 2 stores booleans as the literal 'TRUE'/'FALSE', never blank-for-
-  // false, so a create fills in every flag the payload left out.
   for (var q = 0; q < EMPLOYEE_QUAL_KEYS.length; q++) {
-    var qualField = 'qual_' + EMPLOYEE_QUAL_KEYS[q];
-    if (!has_(input, qualField)) {
-      if (isCreate) values[qualField] = 'FALSE';
-      continue;
-    }
-
-    var raw = input[qualField];
-    if (raw === '' || raw === null || raw === undefined) {
-      values[qualField] = 'FALSE';
-    } else if (raw === true || raw === false || isBooleanString_(raw)) {
-      values[qualField] = booleanToSheet(raw);
-    } else {
-      errors[qualField] = 'invalid_type';
-    }
+    applyBooleanField_(values, errors, input, 'qual_' + EMPLOYEE_QUAL_KEYS[q], isCreate);
   }
 
   return { values: values, errors: errors };
+}
+
+/**
+ * @private
+ * Validates one boolean column.
+ *
+ * Section 2 stores booleans as the literal 'TRUE'/'FALSE', never blank-for-
+ * false, so a create fills in every flag the payload left out. An update leaves
+ * an absent flag alone — omission means "unchanged", not "false".
+ */
+function applyBooleanField_(values, errors, input, field, isCreate) {
+  if (!has_(input, field)) {
+    if (isCreate) values[field] = 'FALSE';
+    return;
+  }
+
+  var raw = input[field];
+  if (raw === '' || raw === null || raw === undefined) {
+    values[field] = 'FALSE';
+  } else if (raw === true || raw === false || isBooleanString_(raw)) {
+    values[field] = booleanToSheet(raw);
+  } else {
+    errors[field] = 'invalid_type';
+  }
 }
 
 /** @private Resolves one dropdown value, auto-adding it when the import allows. */
@@ -1107,6 +1127,8 @@ function shapeEmployee_(row, derived) {
     var key = EMPLOYEE_CERT_KEYS[c];
     out['cert_' + key + '_expiry'] = normalizeIsoDate(row['cert_' + key + '_expiry']);
     out['cert_' + key + '_link'] = normalizeString(row['cert_' + key + '_link']);
+    out['cert_' + key + '_na'] = normalizeBoolean(row['cert_' + key + '_na']);
+    out['cert_' + key + '_suspended'] = normalizeBoolean(row['cert_' + key + '_suspended']);
   }
   for (var q = 0; q < EMPLOYEE_QUAL_KEYS.length; q++) {
     out['qual_' + EMPLOYEE_QUAL_KEYS[q]] = normalizeBoolean(row['qual_' + EMPLOYEE_QUAL_KEYS[q]]);
@@ -1427,4 +1449,73 @@ function rowErrorResponse_(rowErrors) {
     field_errors: { rows: 'invalid' },
     row_errors: rowErrors
   });
+}
+
+// ---------------------------------------------------------------------------
+// Schema migration
+// ---------------------------------------------------------------------------
+
+/**
+ * One-shot: adds the `cert_<key>_na` and `cert_<key>_suspended` columns to the
+ * Employees tab and backfills every existing row with 'FALSE'.
+ *
+ * Run once from the Apps Script editor after deploying this version. It is
+ * idempotent — a column that already exists is left alone, and a second run
+ * does nothing — so re-running after a failure is safe.
+ *
+ * Until it has run, the platform still works: a missing column reads as
+ * undefined, normalizeBoolean turns that into false, and every certificate
+ * derives from its date exactly as it did before. Nobody sees a broken page;
+ * they just cannot tick the boxes yet. That degradation is deliberate — the
+ * frontend deploys by pushing to main, and the Sheet cannot be migrated in the
+ * same instant.
+ *
+ * @return {{added: Array<string>, backfilled_rows: number}}
+ */
+function addEmployeeCertFlagColumns() {
+  var sheet = getSheet(SHEET_NAMES.EMPLOYEES);
+  var headers = getHeaders(SHEET_NAMES.EMPLOYEES).slice();
+
+  var wanted = [];
+  for (var c = 0; c < EMPLOYEE_CERT_KEYS.length; c++) {
+    wanted.push('cert_' + EMPLOYEE_CERT_KEYS[c] + '_na');
+    wanted.push('cert_' + EMPLOYEE_CERT_KEYS[c] + '_suspended');
+  }
+
+  var added = [];
+  for (var w = 0; w < wanted.length; w++) {
+    if (headers.indexOf(wanted[w]) !== -1) continue;
+    headers.push(wanted[w]);
+    added.push(wanted[w]);
+  }
+
+  if (added.length === 0) {
+    console.log('addEmployeeCertFlagColumns: nothing to do — all 20 columns present');
+    return { added: [], backfilled_rows: 0 };
+  }
+
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Backfill in one write. Section 2 stores booleans as literal 'TRUE'/'FALSE'
+  // and never blank-for-false, so leaving the new cells empty would put the tab
+  // out of spec even though it would derive the same.
+  var dataRows = sheet.getLastRow() - 1;
+  if (dataRows > 0) {
+    var firstNewCol = headers.length - added.length + 1;
+    var block = [];
+    for (var r = 0; r < dataRows; r++) {
+      var line = [];
+      for (var a = 0; a < added.length; a++) line.push('FALSE');
+      block.push(line);
+    }
+    sheet.getRange(2, firstNewCol, dataRows, added.length).setValues(block);
+  }
+
+  clearSheetCache();
+  console.log('addEmployeeCertFlagColumns: added ' + added.length +
+    ' columns, backfilled ' + dataRows + ' rows');
+  return { added: added, backfilled_rows: dataRows };
 }

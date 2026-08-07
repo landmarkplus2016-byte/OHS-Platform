@@ -96,6 +96,7 @@ export const ar = {
   state_soon: 'قريبة',
   state_missing: 'غير مسجلة',
   state_valid: 'سارية',
+  state_na: 'غير مطلوبة',
 
   /* ---------- Verdicts (Sections 6.2, 6.3) ---------- */
   verdict_cleared: 'مسموح',

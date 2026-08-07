@@ -131,6 +131,12 @@ const en = {
   emp_cert_link_ph: 'https://drive.google.com/…',
   emp_team_locked: 'Team is set when the employee is created and cannot change.',
 
+  /* The two per-certificate flags on the form (Section 6.1). Worded as what
+     they mean, not as the column name: an admin ticking a box should not have
+     to know the word "derivation". */
+  emp_cert_na_label: 'Not required (N/A)',
+  emp_cert_suspended_label: 'Course suspended',
+
   /* ---------- Renewals page ---------- */
   emp_renewals_intro: 'Every certificate coming up for renewal, soonest first.',
   emp_renewals_window: 'Window',
@@ -249,6 +255,7 @@ const en = {
   reason_expired: '{cert} expired {days} days ago',
   reason_expiring: '{cert} expires in {days} days',
   reason_wah_suspended: '{cert} is suspended — the medical check-up has expired',
+  reason_cert_suspended: '{cert} is suspended — the course has been withdrawn',
 
   /* ---------- Dashboard (Section 5.5) ----------
      The KPI row mixes units on purpose, so three of the four cards carry a note
@@ -393,6 +400,9 @@ const ar = {
   emp_cert_link_ph: 'https://drive.google.com/…',
   emp_team_locked: 'يُحدَّد الفريق عند الإنشاء ولا يمكن تغييره.',
 
+  emp_cert_na_label: 'غير مطلوبة',
+  emp_cert_suspended_label: 'الدورة موقوفة',
+
   /* ---------- Renewals page ---------- */
   emp_renewals_intro: 'كل الشهادات القادمة للتجديد، الأقرب أولًا.',
   emp_renewals_window: 'المدة',
@@ -507,6 +517,7 @@ const ar = {
   reason_expired: 'انتهت {cert} منذ {days} يومًا',
   reason_expiring: 'تنتهي {cert} خلال {days} يومًا',
   reason_wah_suspended: '{cert} موقوفة — انتهى الفحص الطبي',
+  reason_cert_suspended: '{cert} موقوفة — تم سحب الدورة',
 
   /* ---------- Dashboard (Section 5.5) ---------- */
   emp_dash_kpi_total: 'إجمالي الموظفين النشطين',

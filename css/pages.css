@@ -664,7 +664,35 @@
   background: var(--surface-sunken);
 }
 .cert-edit-title { font-weight: 600; font-size: 13px; margin-block-end: 8px; }
-.cert-edit .field:last-child { margin-block-end: 0; }
+/* The link field is always the last one in the panel; the flags block below it
+   brings its own leading space. Keyed off adjacency rather than :last-child,
+   which stopped matching when the flags block became the final element. */
+.cert-edit .field + .field { margin-block-end: 0; }
+
+/* The two per-certificate flags (Section 6.1), stacked under the date and the
+   link. A hairline separates them from the fields they override, so the panel
+   reads as "here is the record, and here is what overrides it". */
+.cert-edit-flags {
+  margin-block-start: 10px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cert-edit-flags .check { font-size: 12px; }
+
+/* A flagged panel takes the colour of the state it produces, so the form and
+   the detail page agree at a glance about what this certificate is. The fields
+   dim under N/A because they are disabled; the flag itself stays at full
+   strength — it is the one thing still saying something. */
+.cert-edit-na { background: var(--na-bg); border-color: var(--na-bg); }
+.cert-edit-na .field { opacity: 0.55; }
+.cert-edit-na .cert-flag-na { color: var(--na-tx); font-weight: 600; }
+.cert-edit-na .cert-flag-suspended { opacity: 0.4; cursor: not-allowed; }
+
+.cert-edit-suspended { background: var(--suspended-bg); border-color: var(--suspended-bg); }
+.cert-edit-suspended .cert-flag-suspended { color: var(--suspended-tx); font-weight: 600; }
 
 /* ---------- Narrow desktops ----------
    The sidebar is fixed at 230px, so below roughly 1100px the three-column

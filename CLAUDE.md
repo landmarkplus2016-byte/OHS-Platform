@@ -276,24 +276,44 @@ Full column list. Mirrors OHS-DB with adjustments for the new architecture.
 | `archived_by` | user_id | |
 | `cert_wah_practical_expiry` | date | |
 | `cert_wah_practical_link` | text | External Drive URL |
+| `cert_wah_practical_na` | boolean | Not required for this employee |
+| `cert_wah_practical_suspended` | boolean | Required, but void right now |
 | `cert_wah_theoretical_expiry` | date | |
 | `cert_wah_theoretical_link` | text | |
+| `cert_wah_theoretical_na` | boolean | |
+| `cert_wah_theoretical_suspended` | boolean | |
 | `cert_ra_expiry` | date | |
 | `cert_ra_link` | text | |
+| `cert_ra_na` | boolean | |
+| `cert_ra_suspended` | boolean | |
 | `cert_fa_expiry` | date | |
 | `cert_fa_link` | text | |
+| `cert_fa_na` | boolean | |
+| `cert_fa_suspended` | boolean | |
 | `cert_ff_expiry` | date | |
 | `cert_ff_link` | text | |
+| `cert_ff_na` | boolean | |
+| `cert_ff_suspended` | boolean | |
 | `cert_ec_expiry` | date | |
 | `cert_ec_link` | text | |
+| `cert_ec_na` | boolean | |
+| `cert_ec_suspended` | boolean | |
 | `cert_mcu_expiry` | date | |
 | `cert_mcu_link` | text | |
+| `cert_mcu_na` | boolean | |
+| `cert_mcu_suspended` | boolean | |
 | `cert_ppe_expiry` | date | Safety team only, blank for field |
 | `cert_ppe_link` | text | |
+| `cert_ppe_na` | boolean | |
+| `cert_ppe_suspended` | boolean | |
 | `cert_lifting_expiry` | date | Safety team only |
 | `cert_lifting_link` | text | |
+| `cert_lifting_na` | boolean | |
+| `cert_lifting_suspended` | boolean | |
 | `cert_scaffolding_expiry` | date | Safety team only |
 | `cert_scaffolding_link` | text | |
+| `cert_scaffolding_na` | boolean | |
+| `cert_scaffolding_suspended` | boolean | |
 | `qual_nebosh` | boolean | Safety team only |
 | `qual_iso_45001` | boolean | Safety team only |
 | `qual_osha` | boolean | Safety team only |
@@ -302,7 +322,11 @@ Full column list. Mirrors OHS-DB with adjustments for the new architecture.
 | `updated_at` | ISO datetime | |
 | `updated_by` | user_id | |
 
-**Key change from OHS-DB:** Certificates are flat columns instead of a nested object. Sheets doesn't do nested structures. Every cert has `cert_<key>_expiry` and `cert_<key>_link` as two flat columns.
+**Key change from OHS-DB:** Certificates are flat columns instead of a nested object. Sheets doesn't do nested structures. Every cert has four flat columns — `cert_<key>_expiry`, `cert_<key>_link`, `cert_<key>_na`, `cert_<key>_suspended` — where OHS-DB had one nested object with four properties.
+
+**The two flag columns** are admin decisions that override the expiry date at derivation time (Section 6.1). `_na` means the certificate does not apply to this employee at all; `_suspended` means it applies but is void right now. Both are stored independently and neither ever rewrites the other or the date — the precedence between them is applied in `Compliance.gs`, so unticking a flag restores exactly what was underneath it.
+
+**Adding these columns to an existing Sheet:** run `addEmployeeCertFlagColumns()` once from the Apps Script editor. It appends any of the 20 columns that are missing and backfills every existing row with `FALSE`. It is idempotent. Until it has run the platform still works — an absent column reads as `false` and every certificate derives from its date exactly as before.
 
 **No RDT columns on this tab.** Drug testing is an event log, not a date field — one employee can be tested many times in a year, and each test carries a status, a result, and notes. It lives on `RdtLog`. The flat `rdt_1` / `rdt_2` / `rdt` columns that shipped in the first cut of this schema are retired; nothing reads or writes them.
 
@@ -1137,9 +1161,11 @@ An employee is in the RDT pool when **all** of these hold:
 - `employment_status === 'Active'`
 - Team is `field` (any title), **or** team is `safety` and `title === rdt_safety_title`
 - `hired_date` is set and at least `rdt_hire_grace_months` before today — new hires are covered by their hiring medical
-- `cert_mcu_expiry` is set and `>= today`
+- `cert_mcu_expiry` is set and `>= today`, and the MCU is flagged neither `na` nor `suspended`
 
 That last one is a hard exclusion, not a warning: an expired MCU means the employee is in the medical-renewal window, and the renewal itself includes a drug test. Selecting them for a standalone RDT is redundant work. They re-enter the pool automatically the moment a renewed MCU expiry is recorded. The boundary is `>= today`, matching how `deriveCertState` treats it.
+
+The two flag columns fail the check whatever the date holds. `na` means the employee has no medical on the platform's books; `suspended` means the one on file is void. Either way there is no live medical to reason from — and testing the date alone would let an N/A medical with a stale future date keep somebody in the pool.
 
 The pool is recomputed at the moment of every selection. It is never frozen at the start of the fiscal year — hires crossing the grace period mid-year join it, and archived or resigned employees drop out.
 
@@ -1640,22 +1666,31 @@ The rules that turn dates and flags into badges and colors. Every rule here is e
 
 ## 6.1 Certificate compliance states
 
-Every certificate is classified into one of six states based on today's date and two thresholds from `Config`, plus one cross-cert rule:
+Every certificate is classified into one of seven states based on today's date, two thresholds from `Config`, two admin flag columns on the row, and one cross-cert rule:
 
 | State | Condition | Color |
 |---|---|---|
+| `na` | `cert_<key>_na` is TRUE | Slate |
+| `suspended` | `cert_<key>_suspended` is TRUE, **or** the certificate is a WAH cert (`wah_practical` / `wah_theoretical`) and the employee's `mcu` is `expired`. Applied regardless of the cert's own expiry date. | Violet |
 | `missing` | expiry_date is empty | Gray |
-| `suspended` | The certificate is a WAH cert (`wah_practical` or `wah_theoretical`) AND the employee's `mcu` is `expired`. Applied regardless of the WAH cert's own expiry date. Not applied when the WAH cert itself is `missing`. | Violet |
 | `expired` | expiry_date < today | Red |
 | `urgent` | expiry_date within `urgent_days` (default 30) | Orange |
 | `soon` | expiry_date within `soon_days` (default 60) | Amber |
 | `valid` | expiry_date beyond `soon_days` | Green |
 
-**State ranking (worst wins):** `suspended > expired > urgent > soon > missing > valid`.
+**State ranking (worst wins):** `suspended > expired > urgent > soon > missing > valid`. `na` is outside the ladder entirely — it is skipped by the worst-state roll-up and by `expired_count` / `expiring_soon_count`, so it can never be the worst thing about an employee and never appears as a `worst_state` filter value.
+
+**Flag precedence.** The two flags outrank the date, and `na` outranks `suspended`. A certificate that is not required cannot be suspended, so a row with both flags ticked derives to `na`. The form disables the suspended box while N/A is ticked, but the decision is made server-side — the client is never the gate (rule 5).
+
+**The `na` rule.** N/A means the admin has decided this certificate does not apply to this employee. It is recorded in `per_cert` so the UI can show the badge, and it takes part in nothing else: no aggregate, no blocker, no warning. This is what distinguishes it from `missing`, which means "should be recorded, isn't". Both read as "N/A" in the officer app (Section 7.5) because from the field the distinction has no consequence; both keep their own colour on admin screens because to the admin it is the whole difference.
+
+**The manual `suspended` flag.** A cert the admin has suspended is void the same way an expired one is, and it carries the *tier of its certificate*, not of the state: on a blocker cert it blocks, on a warning cert it warns. Its reason is `reason_cert_suspended`, distinct from the MCU cascade's `reason_wah_suspended` — both produce the same state and the same badge, but they tell the team leader to do different things.
 
 **Two-tier notification ladder.** There is no 90-day tier. Anything more than `soon_days` (60) out is `valid` and shows green. This is a deliberate simplification: the earlier OHS-DB "plan" tier at 90 days added noise without action value.
 
-**The `suspended` rule.** The medical checkup (MCU) is a prerequisite for working at heights. When MCU is expired, both WAH certs are considered void until MCU is renewed — even if the WAH cert's own date is still in the future. The `suspended` state expresses this. It is a per-cert state (not just an aggregate flag) so it shows up correctly in the cert list wherever WAH is rendered.
+**The MCU cascade.** The medical checkup (MCU) is a prerequisite for working at heights. When MCU is expired, both WAH certs are considered void until MCU is renewed — even if the WAH cert's own date is still in the future. The `suspended` state expresses this. It is a per-cert state (not just an aggregate flag) so it shows up correctly in the cert list wherever WAH is rendered.
+
+The cascade triggers on `mcu === expired` and nothing else. An MCU flagged `na` or manually suspended does not cascade — a suspended MCU is already a blocker in its own right, and whether it should also void WAH is a policy question for Khaled, not a mechanical consequence. A WAH cert that is `missing` or `na` is never suspended by the cascade; there is nothing to suspend. A WAH cert the admin suspended manually keeps its own reason when the cascade also applies.
 
 This scheme is derived once per read in Apps Script and returned inside `derived.per_cert` and `derived.worst_state`.
 
@@ -1677,11 +1712,13 @@ Note: because expired MCU triggers the `suspended` state on both WAH certs (Sect
 ### Warnings (present if no blockers → `warning`; ignored if already blocked)
 
 - Any blocker certificate (`wah_practical`, `wah_theoretical`, `mcu`) is `urgent` (within 30 days)
-- `cert_fa`, `cert_ff`, `cert_ra`, or `cert_ec` is `expired` OR `urgent`
+- `cert_fa`, `cert_ff`, `cert_ra`, or `cert_ec` is `expired`, `urgent`, or `suspended`
 
 ### Otherwise → `cleared`
 
 `missing` (no expiry date) is never a blocker or a warning — it's just missing data. The admin sees "Missing" in the cert list; the officer sees "N/A" (Section 7.5). Neither produces a reasons-list entry.
+
+`na` is never a blocker or a warning either, and for a stronger reason: it is a decision, not an absence. It takes no part in the verdict at all. There is no explicit skip in the code for this — a cert flagged N/A derives to state `na`, which matches none of the tests above, and that is the whole of the rule.
 
 The list of blocker certs and warning certs lives in `ModuleSettings` (rows `employees.blocker_certs` and `employees.warning_certs`), so it can be adjusted later without a code change. Default values match the behavior above.
 
@@ -1714,7 +1751,7 @@ For both employees and equipment, every `list_*` and `get_*` action returns a `d
 **Employee `derived`:**
 ```json
 {
-  "worst_state": "suspended",         // one of: suspended, expired, urgent, soon, missing, valid
+  "worst_state": "suspended",         // one of: suspended, expired, urgent, soon, missing, valid — never `na`
   "expired_count": 1,                 // count of certs in 'expired' state
   "expiring_soon_count": 0,           // count in urgent + soon
   "per_cert": {
@@ -1751,7 +1788,7 @@ For both employees and equipment, every `list_*` and `get_*` action returns a `d
 
 The Apps Script has a single `Compliance.gs` file that exposes:
 
-- `deriveCertState(dateStr, today, thresholds)` → one of six states
+- `deriveCertState(dateStr, today, thresholds)` → one of `missing` / `expired` / `urgent` / `soon` / `valid`. Date only — it knows nothing about the flag columns, which is what lets equipment reuse it for `third_party_inspection_end_date`. `na` and `suspended` are applied on top by `deriveEmployeeDerived`.
 - `deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings)` → the employee derived block
 - `deriveEquipmentDerived(equipmentRow, today, thresholds, moduleSettings, employeesById)` → the equipment derived block
 
@@ -1834,7 +1871,9 @@ The officer's workflow is: log in → search → tap → read the verdict → do
 - Back button top-inline-start (returns to search).
 - **Refresh button** top-inline-end. Tapping it calls `officer_get_employee` (or `officer_get_equipment`) live from server. If successful, updates the display and updates the cache entry for this specific entity. If it fails, shows a toast ("Couldn't refresh — showing cached data") and stays on the cached view.
 
-**Officer cert display rule — `missing` shown as N/A.** In the officer's "All certificates" list, a per-cert state of `missing` is displayed with an "N/A" badge and a "—" date line, instead of "Missing". This is a display-only mapping in the officer verdict card renderer — the underlying derived state stays `missing`, only the label changes. All other states (`suspended`, `expired`, `urgent`, `soon`, `valid`) are displayed the same way for officer and admin. Rationale: from the field, "no date recorded" and "not applicable" are the same "no valid record" outcome; the distinction only matters to the admin who maintains the data.
+**Officer cert display rule — `missing` and `na` both shown as N/A.** In the officer's "All certificates" list, a per-cert state of `missing` is displayed with an "N/A" badge and a "—" date line, instead of "Missing". This is a display-only mapping in the officer verdict card renderer — the underlying derived state stays `missing`, only the label changes. A cert flagged `na` collapses into the same line, keeping its own badge colour. All other states (`suspended`, `expired`, `urgent`, `soon`, `valid`) are displayed the same way for officer and admin. Rationale: from the field, "no date recorded" and "not applicable" are the same "no valid record" outcome; the distinction only matters to the admin who maintains the data.
+
+A `suspended` cert always shows its own badge and date line even with no expiry on file — the reasons list above it already names it as an issue, and an "N/A" line under a blocked verdict reads as a contradiction.
 
 **Sync page (`#/check/sync`):**
 - Reachable from the sync strip and from the lockout screen.

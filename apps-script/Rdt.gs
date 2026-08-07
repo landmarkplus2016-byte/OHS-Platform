@@ -244,8 +244,18 @@ function rdtEligibleIgnoringMcu_(rows, iso, settings) {
  *
  * The boundary is `>= today`: an MCU expiring today is still valid, mirroring
  * how deriveCertState treats the same edge (Section 6.1).
+ *
+ * The two flag columns fail the test outright, whatever the date says. `na`
+ * means the admin has decided this employee has no medical on the platform's
+ * books, and `suspended` means the one on file is void — either way there is no
+ * live medical to reason from, which is exactly the situation the MCU exclusion
+ * exists for. Checking the date alone would let an N/A medical with a stale
+ * future date keep somebody in the pool.
  */
 function rdtHasValidMcu_(row, iso) {
+  if (normalizeBoolean(row.cert_mcu_na)) return false;
+  if (normalizeBoolean(row.cert_mcu_suspended)) return false;
+
   var expiry = normalizeIsoDate(row.cert_mcu_expiry);
   return expiry !== '' && expiry >= iso;
 }

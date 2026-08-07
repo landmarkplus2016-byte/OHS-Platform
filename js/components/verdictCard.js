@@ -115,25 +115,38 @@ export function renderIssues(derived, resolveParams) {
  * admin who maintains the data. The derived state itself is untouched — this is
  * a label swap, nothing more.
  *
+ * A cert the admin flagged N/A collapses into the same line, and this is the
+ * one place where the two really are identical rather than merely displayed
+ * alike: both mean "no valid record, and that is not a problem". They keep
+ * their own badge colours so the admin-facing screens can still tell them
+ * apart; only here do they read the same.
+ *
  * @param {Object} options
  * @param {string} options.label already translated
  * @param {string} options.iso expiry date, may be empty
- * @param {string} options.state one of the six derived states
+ * @param {string} options.state one of the seven derived states
  * @returns {string} HTML
  */
 export function renderStateLine(options) {
   const { label, iso, state } = options || {};
-  const isMissing = state === 'missing' || !iso;
+  const isNa = state === 'na';
 
-  const badge = isMissing
-    ? certStateBadge('missing', { labelOverride: t('off_na') })
+  // `suspended` keeps its own badge even with no date on record. A manually
+  // suspended cert need not have one, and the reasons list above already names
+  // it as an issue — an "N/A" line under a blocked verdict reads as a
+  // contradiction. Every other state falls back to the blank line when the date
+  // is missing, which is the case that produced the rule in the first place.
+  const isBlank = isNa || state === 'missing' || (!iso && state !== 'suspended');
+
+  const badge = isBlank
+    ? certStateBadge(isNa ? 'na' : 'missing', { labelOverride: t('off_na') })
     : certStateBadge(state);
 
   return `
     <div class="cert-line">
       <div class="cert-line-main">
         <div class="cert-line-name">${escapeHtml(label)}</div>
-        <div class="cert-line-date">${isMissing ? EMPTY_MARK : escapeHtml(fmtDate(iso)) + ' ' + daysHint(iso)}</div>
+        <div class="cert-line-date">${isBlank ? EMPTY_MARK : escapeHtml(fmtDate(iso)) + ' ' + daysHint(iso)}</div>
       </div>
       ${badge}
     </div>`;

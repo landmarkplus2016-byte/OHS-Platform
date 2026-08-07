@@ -95,13 +95,17 @@ export const en = {
 
   /* ---------- Certificate states (Section 6.1) ----------
      Shared: components/badge.js renders these for every module. There is no
-     `plan` tier — anything past soon_days is plain `valid`. */
+     `plan` tier — anything past soon_days is plain `valid`.
+
+     `state_na` is the admin wording: "the admin decided this does not apply".
+     The officer app shows both it and `missing` as off_na — see Section 7.5. */
   state_suspended: 'Suspended',
   state_expired: 'Expired',
   state_urgent: 'Urgent',
   state_soon: 'Soon',
   state_missing: 'Missing',
   state_valid: 'Valid',
+  state_na: 'Not applicable',
 
   /* ---------- Verdicts (Sections 6.2, 6.3) ---------- */
   verdict_cleared: 'Cleared',
