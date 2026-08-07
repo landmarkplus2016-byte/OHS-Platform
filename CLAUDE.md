@@ -1032,6 +1032,12 @@ Both fields optional. If both omitted, returns entire tab (capped at 500 rows, s
 3. Insert new rows, or update existing ones per `on_duplicate` policy
 4. Return `{added: N, updated: N, skipped: N, list_added: {subcontractor: [...], title: [...]}}`
 
+**The `archived` exception.** A row in `rows` may carry `archived: true`, and the employee is then created already archived. This is the only place in the API where a client sets that flag — everywhere else it is server-owned (Section 3.9) and moved solely by `archive_employee` / `unarchive_employee`. It exists because the legacy Landmark workbook has a *Resigned* tab: a roster of people who already left, which would otherwise import as active and have to be archived again by hand, one at a time.
+
+It applies to **creates only**. On an `overwrite` the flag is left exactly as it stands, so re-importing the same workbook can neither bury a rehired employee nor resurrect an archived one. `archived_at` and `archived_by` are still stamped server-side from the clock and the session — the import asserts *that* someone left, never when or by whose hand.
+
+On the frontend this is reached only through a sheet rule: `js/constants/importSpecs.js` maps a *Resigned* / *Terminated* / *Ex-Employees* tab name to `defaults: {archived: 'TRUE'}`, the same mechanism that gives the *Field Team* and *Safety Team* tabs their `team`. That tab carries no team column, so the spec's `derive` hook assigns one from the row's title: a title present in `safety_titles` reads as safety, anything else — including a blank — reads as field.
+
 ### `list_rdt_overview`
 
 Everything the RDT dashboard draws, in one call: settings, the current fiscal year, the phase, the eligible pool, this month's quota, this month's selection, yearly progress, and recent activity.
@@ -2145,7 +2151,7 @@ ohs-platform/
 - Never store cached snapshot in `localStorage`. Officer snapshots live in IndexedDB (`ohsp-officer`).
 - Never hard-delete a row from any tab. Employees archive, equipment gets rejected, users deactivate.
 - Never bypass the server-side permission check. Frontend permission gates are for UX; the server is the security gate.
-- Never trust `updated_at`, `updated_by`, or any audit field from the client payload. Always set from the session server-side.
+- Never trust `updated_at`, `updated_by`, or any audit field from the client payload. Always set from the session server-side. The one documented exception is `archived` on a `bulk_import_employees` **create** (Section 3.5) — and even there, `archived_at` and `archived_by` still come from the clock and the session.
 - Never let two modules share files inside `js/modules/`. Shared code lives in `js/utils/` or `js/components/`.
 - Never derive compliance state client-side. The server derives; the frontend displays.
 - Never hardcode a hex color outside `css/tokens.css`.

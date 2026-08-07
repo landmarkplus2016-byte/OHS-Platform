@@ -26,6 +26,7 @@
    ========================================================================== */
 
 import { MODULE_NAMES } from './globals.js';
+import { inList } from '../utils/excelImport.js';
 
 /* ---------- Employees (Section 3.5) --------------------------------------- */
 
@@ -152,6 +153,8 @@ const EQUIPMENT_COLUMNS = [
  *
  *   columns          the alias table above
  *   sheets           sheet-name rules; each match forces `defaults` onto its rows
+ *   derive           optional; fills in fields no column or default supplied,
+ *                    before the preview validates the row
  *   identityColumns  at least one must be non-empty or the row is not a record
  *   duplicateKey     the value the server keys duplicates on
  *   identify         a record's primary key, for "duplicate of LM-EMP-0007"
@@ -177,12 +180,46 @@ export const IMPORT_SPECS = {
     // The legacy Landmark workbook is one tab per team with no team column, so
     // the tab name is what sets it. A workbook that carries its own `team`
     // column works too — the column is read after the default is applied.
+    //
+    // The third tab holds the people who have left. It is the one tab whose
+    // rows arrive already archived, which is why `archived` is a default here
+    // and nowhere else: everywhere else in the API that flag is the server's
+    // (Section 3.9), and `bulk_import_employees` honours it on a create only —
+    // re-importing this workbook can never bury or resurrect anybody.
     sheets: [
       { aliases: ['field team', 'field', 'field team data', 'field employees'],
         defaults: { team: 'field' } },
       { aliases: ['safety team', 'safety', 'safety team data', 'safety employees'],
         defaults: { team: 'safety' } },
+      { aliases: [
+        'resigned', 'terminated', 'resigned terminated', 'resigned and terminated',
+        'ex employees', 'former employees', 'leavers', 'archive', 'archived',
+      ], defaults: { archived: 'TRUE' } },
     ],
+
+    /**
+     * Fills in what a tab could not say for itself, before the row is previewed.
+     *
+     * The resigned tab carries no team, and unlike the other two its name cannot
+     * supply one — the people on it left from both teams. The title is the only
+     * evidence in the row, so a title that appears in `safety_titles` reads as
+     * safety and everything else reads as field. A blank title is field: the
+     * safety roster is the small, explicitly-named one, so an unknown is far
+     * more likely to belong to the other.
+     *
+     * Runs before the dropdown checks in buildImportPreview, because the titles
+     * list a row is validated against depends on the team decided here.
+     *
+     * Returns a new record — `buildImportPreview` promises to mutate nothing.
+     */
+    derive: (record, fieldOptions) => {
+      if (record.team) return record;
+
+      const isSafety = Boolean(record.title)
+        && inList(fieldOptions && fieldOptions.safety_titles, record.title);
+
+      return { ...record, team: isSafety ? 'safety' : 'field' };
+    },
 
     identityColumns: ['national_id', 'name'],
     duplicateKey: (record) => record.national_id,

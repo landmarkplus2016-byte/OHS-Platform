@@ -427,8 +427,18 @@ export async function parseWorkbook(file, spec) {
 
 /* ---------- Preview -------------------------------------------------------- */
 
-/** Case- and space-insensitive membership test for a dropdown list. */
-function inList(list, value) {
+/**
+ * Case- and space-insensitive membership test for a dropdown list.
+ *
+ * Exported because a spec's `derive` hook reads the same lists this file
+ * validates against, and two spellings of "is this in the list" that drift
+ * apart would let a row pass the preview and fail on the server.
+ *
+ * Note the empty-value rule: a blank is *in* every list, because an empty cell
+ * is not an unknown value. A caller using this to choose between two lists
+ * rather than to validate one has to test for the blank itself.
+ */
+export function inList(list, value) {
   if (!value) return true;   // an empty cell is not an unknown value
 
   const needle = String(value).trim().toLowerCase();
@@ -464,7 +474,11 @@ export function buildImportPreview(parsedRows, spec, existing, fieldOptions) {
   const rows = [];
 
   parsedRows.forEach((item, index) => {
-    const record = item.record;
+    // A spec's `derive` hook fills in what the tab could not say for itself —
+    // the resigned tab's missing team, today. It runs first because the checks
+    // below read what it decides: the titles list a row is validated against
+    // depends on its team.
+    const record = spec.derive ? spec.derive(item.record, fieldOptions) : item.record;
     const reasons = [];
 
     const rawKey = spec.duplicateKey(record);

@@ -690,6 +690,11 @@ function handleUnarchiveEmployee(session, payload) {
  * memory during validation and only written once every row has passed — the
  * FieldOptions tab must not grow new entries for an import that gets rejected.
  *
+ * A row may carry `archived: true` and be created already archived. This is the
+ * single exception to Section 3.9's rule that the flag is server-owned, and it
+ * exists because a legacy workbook's resigned tab is a roster of people who
+ * already left. It applies to creates only — see the plan loop below.
+ *
  * @param {Object} session
  * @param {Object} payload  {rows, on_duplicate?, auto_add_unknown_options?}
  * @return {GoogleAppsScript.Content.TextOutput}
@@ -796,7 +801,20 @@ function handleBulkImportEmployees(session, payload) {
       } else if (isDuplicate) {
         plan.push({ action: 'update', target: currentRow, values: validation.values });
       } else {
-        plan.push({ action: 'create', values: validation.values });
+        // The one place a client may say `archived` (Section 3.9 keeps it
+        // server-owned everywhere else). A workbook's resigned tab is a roster
+        // of people who already left, and importing them as active would put
+        // every one of them on a team list to be archived again by hand.
+        //
+        // Creates only. An overwrite leaves the flag exactly as it stands, so
+        // re-importing the same workbook can neither bury a rehired employee
+        // nor resurrect an archived one — archiving stays a deliberate act
+        // through archive_employee / unarchive_employee.
+        plan.push({
+          action: 'create',
+          values: validation.values,
+          archived: normalizeBoolean(input.archived)
+        });
       }
     }
 
@@ -826,9 +844,15 @@ function handleBulkImportEmployees(session, payload) {
     for (var n = 0; n < creates.length; n++) {
       var newRow = creates[n].values;
       newRow.employee_id = newIds[n];
-      newRow.archived = 'FALSE';
-      newRow.archived_at = '';
-      newRow.archived_by = '';
+
+      // archived_at/by still come from the session and the clock, never the
+      // payload — the import says *that* someone left, not when or by whose
+      // hand. The stamp is the import itself, which is the truth available.
+      var startsArchived = creates[n].archived;
+      newRow.archived = startsArchived ? 'TRUE' : 'FALSE';
+      newRow.archived_at = startsArchived ? stampedAt : '';
+      newRow.archived_by = startsArchived ? actingUserId : '';
+
       newRow.created_at = stampedAt;
       newRow.created_by = actingUserId;
       newRow.updated_at = stampedAt;
