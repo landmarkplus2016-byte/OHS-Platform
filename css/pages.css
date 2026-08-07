@@ -682,17 +682,23 @@
 }
 .cert-edit-flags .check { font-size: 12px; }
 
-/* A flagged panel takes the colour of the state it produces, so the form and
-   the detail page agree at a glance about what this certificate is. The fields
-   dim under N/A because they are disabled; the flag itself stays at full
-   strength — it is the one thing still saying something. */
+/* A ticked flag tints its whole panel. The fields dim under N/A because they
+   are disabled; the flag itself stays at full strength — it is the one thing
+   still saying something.
+
+   Suspended uses the amber --plan tokens here rather than the violet the badge
+   carries. Section 8.3 keeps those tokens for exactly this: a non-compliance
+   use. On this page the tint marks a box the admin just ticked, not a state the
+   server derived — the violet belongs to the badge, which is where a derived
+   `suspended` is actually reported. Amber also keeps the two flags visibly
+   apart at a glance, which slate-on-violet did not. */
 .cert-edit-na { background: var(--na-bg); border-color: var(--na-bg); }
 .cert-edit-na .field { opacity: 0.55; }
 .cert-edit-na .cert-flag-na { color: var(--na-tx); font-weight: 600; }
 .cert-edit-na .cert-flag-suspended { opacity: 0.4; cursor: not-allowed; }
 
-.cert-edit-suspended { background: var(--suspended-bg); border-color: var(--suspended-bg); }
-.cert-edit-suspended .cert-flag-suspended { color: var(--suspended-tx); font-weight: 600; }
+.cert-edit-suspended { background: var(--plan-bg); border-color: var(--plan-bg); }
+.cert-edit-suspended .cert-flag-suspended { color: var(--plan-tx); font-weight: 600; }
 
 /* ---------- Narrow desktops ----------
    The sidebar is fixed at 230px, so below roughly 1100px the three-column

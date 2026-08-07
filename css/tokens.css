@@ -31,8 +31,10 @@
      than the neutral grey `missing` uses, so the two never look alike in a
      certificate list. */
   --na-bg:        #e6ecf4;  --na-tx:        #4a5a72;
-  /* --plan-bg / --plan-tx kept available for non-compliance uses (e.g. RDT phase badges).
-     No cert state currently maps to them. */
+  /* --plan-bg / --plan-tx kept available for non-compliance uses — RDT phase
+     badges, and the "Course suspended" tint on the employee form's certificate
+     panels. No cert *state* maps to them; a derived `suspended` is violet
+     wherever it is actually reported. */
   --plan-bg:      #fef9c3;  --plan-tx:      #854d0e;
 
   /* Team badges. Not compliance colors — they identify which roster someone is
