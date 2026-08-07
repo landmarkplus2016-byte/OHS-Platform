@@ -52,6 +52,7 @@ const en = {
   eqp_field_date_of_manufacture: 'Date of manufacture',
   eqp_field_third_party_end: 'Third-party inspection ends',
   eqp_field_team_leader: 'Assigned team leader',
+  eqp_field_subcontractor: 'Owner / subcontractor',
   eqp_field_comments: 'Comments',
   eqp_field_wave_date: 'Date',
   eqp_field_wave_result: 'Result',
@@ -74,8 +75,10 @@ const en = {
   eqp_filter_verdict: 'Verdict',
   eqp_filter_item: 'Item type',
   eqp_filter_brand: 'Brand',
+  eqp_filter_subcontractor: 'Owner',
   eqp_none_yet: 'No equipment recorded yet.',
   eqp_unassigned: 'Unassigned',
+  eqp_owner_unknown: 'Owner not recorded',
   eqp_owner_archived: 'Owner archived',
 
   /* ---------- Detail page ---------- */
@@ -190,6 +193,7 @@ const ar = {
   eqp_field_date_of_manufacture: 'تاريخ التصنيع',
   eqp_field_third_party_end: 'انتهاء فحص الجهة الخارجية',
   eqp_field_team_leader: 'قائد الفريق المسؤول',
+  eqp_field_subcontractor: 'المالك / مقاول الباطن',
   eqp_field_comments: 'ملاحظات',
   eqp_field_wave_date: 'التاريخ',
   eqp_field_wave_result: 'النتيجة',
@@ -212,8 +216,10 @@ const ar = {
   eqp_filter_verdict: 'النتيجة',
   eqp_filter_item: 'نوع الصنف',
   eqp_filter_brand: 'الماركة',
+  eqp_filter_subcontractor: 'المالك',
   eqp_none_yet: 'لا توجد معدات مسجلة بعد.',
   eqp_unassigned: 'غير مخصصة',
+  eqp_owner_unknown: 'المالك غير مسجل',
   eqp_owner_archived: 'المسؤول مؤرشف',
 
   /* ---------- Detail page ---------- */

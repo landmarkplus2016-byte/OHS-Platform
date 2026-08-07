@@ -52,6 +52,7 @@ function pageState() {
       verdict: '',
       item: '',
       brand: '',
+      subcontractor: '',
       page: 1,
 
       status: 'idle',   // idle → loading → ready | error
@@ -67,7 +68,7 @@ function pageState() {
 
 /** Identifies a query, so we can tell whether the data in hand still answers it. */
 function queryKey(s) {
-  return [s.search, s.verdict, s.item, s.brand, s.page].join(' ');
+  return [s.search, s.verdict, s.item, s.brand, s.subcontractor, s.page].join(' ');
 }
 
 /** Marks the current data stale and redraws; bind() then refetches. */
@@ -104,6 +105,7 @@ async function ensureData() {
   if (s.verdict) filters.worst_state = s.verdict;
   if (s.item) filters.item = s.item;
   if (s.brand) filters.brand = s.brand;
+  if (s.subcontractor) filters.subcontractor = s.subcontractor;
 
   try {
     const [data, options] = await Promise.all([
@@ -191,24 +193,43 @@ function renderFilters(s) {
         </select>
       </div>
 
+      <div class="field">
+        <label for="eqp-filter-subcontractor">${escapeHtml(t('eqp_filter_subcontractor'))}</label>
+        <select id="eqp-filter-subcontractor" data-filter="subcontractor">
+          ${listOptions(s.options, listKeyFor('subcontractor'), s.subcontractor)}
+        </select>
+      </div>
+
       <div class="count">${escapeHtml(t('showing_count', { shown, total }))}</div>
     </div>`;
 }
 
 /**
- * The team leader cell. An archived owner is a non-blocking warning
- * (Section 6.3), so it is called out here rather than hidden.
+ * The ownership cell: who the gear belongs to, and who is carrying it.
+ *
+ * Both live here because they answer one question between them and neither is
+ * worth a column of its own — in-house rows name a team leader and no company,
+ * subcontractor rows name a company and no leader, and the cell reads correctly
+ * either way. An archived holder is a non-blocking warning (Section 6.3), so it
+ * is called out rather than hidden.
  */
 function teamLeaderCell(item) {
+  const owner = item.subcontractor
+    ? `<div>${escapeHtml(item.subcontractor)}</div>`
+    : '';
+
   if (!item.team_leader_id) {
-    return `<span class="cell-sub">${escapeHtml(t('eqp_unassigned'))}</span>`;
+    return owner
+      ? `${owner}<div class="cell-sub">${escapeHtml(t('eqp_unassigned'))}</div>`
+      : `<span class="cell-sub">${escapeHtml(t('eqp_unassigned'))}</span>`;
   }
 
   return `
-    ${escapeHtml(item.team_leader_name || item.team_leader_id)}
+    ${owner}
+    <div${owner ? ' class="cell-sub"' : ''}>${escapeHtml(item.team_leader_name || item.team_leader_id)}</div>
     ${item.team_leader_archived
       ? `<div class="cell-danger">${escapeHtml(t('eqp_owner_archived'))}</div>`
-      : `<div class="cell-sub">${escapeHtml(item.team_leader_id)}</div>`}`;
+      : ''}`;
 }
 
 /** One equipment row. */
@@ -275,7 +296,7 @@ function renderTable(s, editable) {
 
   const rows = s.data.equipment;
   if (rows.length === 0) {
-    const hasFilters = s.search || s.verdict || s.item || s.brand;
+    const hasFilters = s.search || s.verdict || s.item || s.brand || s.subcontractor;
     return `<table class="tbl">${header}
       <tbody><tr><td colspan="${columnCount}" class="cell-empty">
         ${escapeHtml(t(hasFilters ? 'no_results' : 'eqp_none_yet'))}

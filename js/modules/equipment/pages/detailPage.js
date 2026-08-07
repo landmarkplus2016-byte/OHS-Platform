@@ -194,8 +194,18 @@ function renderHistory(history) {
 
 /** Who this item is assigned to, with a jump into their record. */
 function renderAssignment(item, leader) {
+  // The owning company stands on its own: subcontractor gear is owned by a
+  // company and held by nobody on the roster, so this row is the whole of the
+  // assignment for most of the inventory.
+  const owner = displayField('eqp_field_subcontractor',
+    item.subcontractor || t('eqp_owner_unknown'));
+
   if (!item.team_leader_id) {
-    return `<div class="card"><div class="cell-empty">${escapeHtml(t('eqp_unassigned'))}</div></div>`;
+    return `
+      <div class="card">
+        <div class="detail-grid">${owner}</div>
+        <div class="cell-empty">${escapeHtml(t('eqp_unassigned'))}</div>
+      </div>`;
   }
 
   // The id resolved to nobody — a dangling reference. Show the raw id rather
@@ -204,6 +214,7 @@ function renderAssignment(item, leader) {
     return `
       <div class="card">
         <div class="detail-grid">
+          ${owner}
           ${displayField('eqp_field_team_leader', item.team_leader_id)}
         </div>
       </div>`;
@@ -216,6 +227,7 @@ function renderAssignment(item, leader) {
         ${leader.archived ? `<span class="badge badge-inactive">${escapeHtml(t('eqp_owner_archived'))}</span>` : ''}
       </div>
       <div class="detail-grid">
+        ${owner}
         ${displayField('eqp_field_team_leader', leader.name)}
         ${displayField('eqp_leader_national_id', leader.national_id)}
         ${displayField('eqp_leader_title', leader.title)}

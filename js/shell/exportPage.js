@@ -181,6 +181,7 @@ const EXPORT_MODULES = [
     filters: [
       { key: 'item', labelKey: 'eqp_filter_item', kind: 'list', listKey: 'equipment_items' },
       { key: 'brand', labelKey: 'eqp_filter_brand', kind: 'list', listKey: 'equipment_brands' },
+      { key: 'subcontractor', labelKey: 'eqp_filter_subcontractor', kind: 'list', listKey: 'subcontractors' },
       { key: 'worst_state', labelKey: 'eqp_filter_verdict', kind: 'static',
         options: VERDICTS.map((verdict) => ({ value: verdict, labelKey: 'verdict_' + verdict })) },
       { key: 'include_rejected', labelKey: 'export_include_rejected', kind: 'checkbox' },
@@ -197,6 +198,7 @@ const EXPORT_MODULES = [
       const filters = {};
       if (selection.item) filters.item = selection.item;
       if (selection.brand) filters.brand = selection.brand;
+      if (selection.subcontractor) filters.subcontractor = selection.subcontractor;
       if (selection.worst_state) filters.worst_state = selection.worst_state;
 
       return {
@@ -230,6 +232,7 @@ const EXPORT_MODULES = [
           {
             heading: t('eqp_section_assignment'),
             rows: [
+              [t('eqp_field_subcontractor'), pdfText(q.subcontractor)],
               [t('eqp_col_team_leader'), pdfText(q.team_leader_name || q.team_leader_id)],
               [t('eqp_col_verdict'), pdfText(derived.verdict ? t('verdict_' + derived.verdict) : '')],
             ],

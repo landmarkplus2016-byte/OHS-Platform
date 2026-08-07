@@ -136,6 +136,16 @@ const EQUIPMENT_COLUMNS = [
     'team leader id', 'team leader', 'leader id', 'assigned to', 'employee id', 'holder',
   ] },
 
+  /*
+   * The owning company. Landmark's PPE workbook calls this column `Company` on
+   * its subcontractor tabs and does not carry it at all on the in-house ones,
+   * so both spellings and a plain absence all have to work.
+   */
+  { field: 'subcontractor', type: 'text', aliases: [
+    'subcontractor', 'sub contractor', 'subcon', 'sub con', 'company',
+    'owner', 'owning company', 'sub company', 'contractor',
+  ] },
+
   { field: 'wave_1_date', type: 'date', aliases: ['wave 1 date', 'wave 1', 'w 1 date', 'first wave date'] },
   { field: 'wave_1_result', type: 'enum', aliases: ['wave 1 result', 'w 1 result', 'first wave result'] },
   { field: 'wave_2_date', type: 'date', aliases: ['wave 2 date', 'wave 2', 'w 2 date', 'second wave date'] },
@@ -256,6 +266,7 @@ export const IMPORT_SPECS = {
     optionColumns: [
       { field: 'item', labelKey: 'eqp_field_item', addable: true, listKey: 'equipment_items' },
       { field: 'brand', labelKey: 'eqp_field_brand', addable: true, listKey: 'equipment_brands' },
+      { field: 'subcontractor', labelKey: 'eqp_field_subcontractor', addable: true, listKey: 'subcontractors' },
     ],
   },
 };

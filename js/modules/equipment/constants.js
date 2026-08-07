@@ -23,10 +23,18 @@ export const WAVE_RESULT_LABEL_KEYS = {
   fail: 'eqp_wave_fail',
 };
 
-/** Dropdown columns → the FieldOptions list that fills them. */
+/**
+ * Dropdown columns → the FieldOptions list that fills them.
+ *
+ * `subcontractor` borrows the employees' list rather than owning one. The
+ * company that supplies the people supplies the gear, and two lists would drift
+ * the first time somebody renamed one of them. This mirrors
+ * EQUIPMENT_OPTION_FIELDS in Equipment.gs, which is the gate.
+ */
 export const LIST_FIELD_KEYS = {
   item: 'equipment_items',
   brand: 'equipment_brands',
+  subcontractor: 'subcontractors',
 };
 
 /**
@@ -69,7 +77,7 @@ export function waveResultField(wave) {
 /**
  * The FieldOptions list key for a dropdown column.
  *
- * @param {string} field 'item' | 'brand'
+ * @param {string} field 'item' | 'brand' | 'subcontractor'
  * @returns {string|null}
  */
 export function listKeyFor(field) {

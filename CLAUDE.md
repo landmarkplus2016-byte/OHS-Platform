@@ -373,6 +373,7 @@ One row per random-drug-test event. An employee may have many rows per fiscal ye
 |---|---|---|
 | `equipment_id` | text | Primary key (e.g. `LM-EQP-0001`) |
 | `team_leader_id` | text | FK to Employees, can be empty (unassigned) |
+| `subcontractor` | text | Owning company. From FieldOptions (`subcontractors`) — the same list Employees uses |
 | `item` | text | From FieldOptions (`equipment_items`) |
 | `brand` | text | From FieldOptions (`equipment_brands`) |
 | `date_of_manufacture` | date | |
@@ -394,6 +395,12 @@ One row per random-drug-test event. An employee may have many rows per fiscal ye
 | `created_by` | user_id | |
 | `updated_at` | ISO datetime | |
 | `updated_by` | user_id | |
+
+**Two ownership columns, on purpose.** `team_leader_id` is who is *carrying* the item; `subcontractor` is who *owns* it. In-house gear names a team leader and carries Landmark as its subcontractor; a subcontractor's gear names the company and usually no leader, because the people holding it are not on the platform's roster. Neither can be derived from the other, and the question "whose expired harness is this" is answered by the second one.
+
+It borrows the employees' `subcontractors` FieldOptions list rather than getting one of its own — the company that supplies the people supplies the gear, and two lists would drift the first time somebody renamed one.
+
+**Adding this column to an existing Sheet:** run `addEquipmentSubcontractorColumn()` once from the Apps Script editor. It is idempotent. Nothing is backfilled — blank means "not recorded", and guessing that every existing row is in-house would be inventing ownership. Until it has run the platform still works: an absent column reads as `''` and every item behaves exactly as before, simply with no owner on file.
 
 ### `InspectionHistory`
 
@@ -1191,6 +1198,7 @@ Same permission model as employees but keyed to the `equipment` module.
   "filters": {
     "item": "Harness",
     "brand": "3M",
+    "subcontractor": "Upper",
     "team_leader_id": "LM-EMP-0001",
     "worst_state": "blocked"
   },
@@ -1199,7 +1207,7 @@ Same permission model as employees but keyed to the `equipment` module.
 }
 ```
 
-`search` matches `serial_no`, `third_party_sn`, or `item` name.
+`search` matches `serial_no`, `third_party_sn`, `subcontractor`, or `item` name.
 
 **Success `data`:**
 ```json

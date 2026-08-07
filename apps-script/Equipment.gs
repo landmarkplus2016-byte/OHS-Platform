@@ -25,13 +25,19 @@
 // ---------------------------------------------------------------------------
 
 /** Dropdown columns → the FieldOptions list that governs them. */
+/*
+ * `subcontractor` shares the employees' `subcontractors` list rather than
+ * getting one of its own. A company that supplies people supplies their gear;
+ * two lists would drift the moment somebody renamed "Upper" on one of them.
+ */
 var EQUIPMENT_OPTION_FIELDS = {
   item: 'equipment_items',
-  brand: 'equipment_brands'
+  brand: 'equipment_brands',
+  subcontractor: 'subcontractors'
 };
 
 /** Dropdowns bulk import may extend when `auto_add_unknown_options` is set. */
-var EQUIPMENT_AUTO_ADD_FIELDS = ['item', 'brand'];
+var EQUIPMENT_AUTO_ADD_FIELDS = ['item', 'brand', 'subcontractor'];
 
 /** The only two results a completed wave can carry (Section 2). */
 var EQUIPMENT_WAVE_RESULTS = ['pass', 'fail'];
@@ -73,7 +79,7 @@ var EQUIPMENT_EMPLOYEES_CACHE_ = null;
 function equipmentWritableFields_() {
   if (EQUIPMENT_WRITABLE_CACHE_) return EQUIPMENT_WRITABLE_CACHE_;
 
-  var fields = ['team_leader_id', 'item', 'brand', 'date_of_manufacture',
+  var fields = ['team_leader_id', 'subcontractor', 'item', 'brand', 'date_of_manufacture',
     'serial_no', 'third_party_sn', 'third_party_inspection_end_date'];
 
   for (var w = 0; w < EQUIPMENT_WAVES.length; w++) {
@@ -120,7 +126,9 @@ function handleListEquipment(session, payload) {
     return errResponse('validation_failed', 'invalid_filters', { filters: 'invalid_type' });
   }
 
-  var filterUnknown = collectUnknownKeys_(filters, ['item', 'brand', 'team_leader_id', 'worst_state']);
+  var filterUnknown = collectUnknownKeys_(filters, [
+    'item', 'brand', 'subcontractor', 'team_leader_id', 'worst_state'
+  ]);
   if (hasKeys_(filterUnknown)) {
     return errResponse('validation_failed', 'unknown_filter_fields', filterUnknown);
   }
@@ -148,6 +156,7 @@ function handleListEquipment(session, payload) {
   var search = normalizeString(payload && payload.search).toLowerCase();
   var item = normalizeString(filters.item).toLowerCase();
   var brand = normalizeString(filters.brand).toLowerCase();
+  var subcontractor = normalizeString(filters.subcontractor).toLowerCase();
   var teamLeaderId = normalizeString(filters.team_leader_id);
 
   // --- Cheap filters first, derivation last -------------------------------
@@ -160,6 +169,7 @@ function handleListEquipment(session, payload) {
     if (!includeRejected && normalizeBoolean(row.rejected)) continue;
     if (item !== '' && normalizeString(row.item).toLowerCase() !== item) continue;
     if (brand !== '' && normalizeString(row.brand).toLowerCase() !== brand) continue;
+    if (subcontractor !== '' && normalizeString(row.subcontractor).toLowerCase() !== subcontractor) continue;
     if (teamLeaderId !== '' && normalizeString(row.team_leader_id) !== teamLeaderId) continue;
     if (search !== '' && !matchesEquipmentSearch_(row, search)) continue;
     matched.push({ row: row, derived: null });
@@ -1091,6 +1101,7 @@ function shapeEquipment_(row, derived, employeesById) {
     team_leader_id: leaderId,
     team_leader_name: leader ? normalizeString(leader.name) : '',
     team_leader_archived: leader ? normalizeBoolean(leader.archived) : false,
+    subcontractor: normalizeString(row.subcontractor),
     item: normalizeString(row.item),
     brand: normalizeString(row.brand),
     date_of_manufacture: normalizeIsoDate(row.date_of_manufacture),
@@ -1247,10 +1258,19 @@ function isVerdict_(value) {
   return value === VERDICTS.CLEARED || value === VERDICTS.WARNING || value === VERDICTS.BLOCKED;
 }
 
-/** @private Case-insensitive contains across both serials and item (Section 3.6). */
+/**
+ * @private
+ * Case-insensitive contains across both serials, item, and owning
+ * subcontractor (Section 3.6).
+ *
+ * The subcontractor is searchable as well as filterable because the question
+ * asked at a desk is usually "show me Upper's gear", and typing the name is
+ * faster than reaching for the filter.
+ */
 function matchesEquipmentSearch_(row, lowerQuery) {
   if (normalizeString(row.serial_no).toLowerCase().indexOf(lowerQuery) !== -1) return true;
   if (normalizeString(row.third_party_sn).toLowerCase().indexOf(lowerQuery) !== -1) return true;
+  if (normalizeString(row.subcontractor).toLowerCase().indexOf(lowerQuery) !== -1) return true;
   return normalizeString(row.item).toLowerCase().indexOf(lowerQuery) !== -1;
 }
 
@@ -1370,4 +1390,50 @@ function reserveEquipmentIds_(count, existingIds, actingUserId) {
 
   writeConfigCounter_('next_equipment_number', next, actingUserId);
   return ids;
+}
+
+// ---------------------------------------------------------------------------
+// Schema migration
+// ---------------------------------------------------------------------------
+
+/**
+ * One-shot: adds the `subcontractor` column to the Equipment tab.
+ *
+ * Run once from the Apps Script editor after deploying this version. It is
+ * idempotent — a column that already exists is left alone — so re-running after
+ * a failure is safe.
+ *
+ * Nothing is backfilled. The column is text, blank is a legal value meaning
+ * "not recorded", and there is no honest default: guessing that every existing
+ * row is in-house would be inventing ownership data. Rows get their owner from
+ * the import, or from the equipment form, one deliberate act at a time.
+ *
+ * Until it has run the platform still works: a missing column reads as
+ * undefined, normalizeString turns that into '', and every piece of equipment
+ * behaves exactly as it did before — it simply has no owner on file. That
+ * degradation is deliberate, because the frontend deploys by pushing to main
+ * and the Sheet cannot be migrated in the same instant.
+ *
+ * @return {{added: boolean, column_index: number}}
+ */
+function addEquipmentSubcontractorColumn() {
+  var sheet = getSheet(SHEET_NAMES.EQUIPMENT);
+  var headers = getHeaders(SHEET_NAMES.EQUIPMENT).slice();
+
+  var existing = headers.indexOf('subcontractor');
+  if (existing !== -1) {
+    console.log('addEquipmentSubcontractorColumn: nothing to do — column already at index ' +
+      (existing + 1));
+    return { added: false, column_index: existing + 1 };
+  }
+
+  headers.push('subcontractor');
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  clearSheetCache();
+  console.log('addEquipmentSubcontractorColumn: added column at index ' + headers.length);
+  return { added: true, column_index: headers.length };
 }

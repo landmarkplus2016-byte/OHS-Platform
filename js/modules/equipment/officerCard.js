@@ -40,7 +40,8 @@ function inventory(snapshot) {
  */
 function toResult(equipment) {
   const title = [equipment.item, equipment.brand].filter(Boolean).join(' · ');
-  const sub = [equipment.serial_no, equipment.team_leader_name].filter(Boolean).join(' · ');
+  const sub = [equipment.serial_no, equipment.team_leader_name || equipment.subcontractor]
+    .filter(Boolean).join(' · ');
 
   return {
     kind: 'equipment',
@@ -100,6 +101,7 @@ function renderIdentity(equipment) {
       <div class="id-sub">${escapeHtml(equipment.serial_no || '')}</div>
       <div class="id-tags">
         ${identityTag(equipment.equipment_id, '')}
+        ${equipment.subcontractor ? identityTag(equipment.subcontractor, '') : ''}
         ${equipment.team_leader_name
           ? identityTag(equipment.team_leader_name, equipment.team_leader_archived ? 'bad' : '')
           : ''}

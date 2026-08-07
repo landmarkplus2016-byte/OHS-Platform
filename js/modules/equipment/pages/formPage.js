@@ -81,7 +81,8 @@ function pageState() {
 /** Every column this form can write (Section 2, Equipment tab). */
 function writableFields() {
   const fields = ['item', 'brand', 'serial_no', 'third_party_sn',
-    'date_of_manufacture', 'third_party_inspection_end_date', 'team_leader_id'];
+    'date_of_manufacture', 'third_party_inspection_end_date',
+    'subcontractor', 'team_leader_id'];
 
   WAVES.forEach((wave) => {
     fields.push(waveDateField(wave));
@@ -353,6 +354,7 @@ export function renderEquipmentFormPage(params) {
       <div class="section-head">${escapeHtml(t('eqp_section_assignment'))}</div>
       <div class="card">
         <div class="detail-grid">
+          ${selectInput(s, 'subcontractor', 'eqp_field_subcontractor')}
           ${teamLeaderInput(s)}
         </div>
       </div>

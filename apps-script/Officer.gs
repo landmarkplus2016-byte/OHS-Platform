@@ -351,6 +351,10 @@ function shapeOfficerEmployee_(row, derived) {
  * and `team_leader_archived` because the "needs reassignment" warning reads
  * better next to the flag that caused it. Neither is an audit field.
  *
+ * `subcontractor` is included for the same reason: at a tower an officer holds
+ * a harness and needs to know whose it is before asking anyone to stop using
+ * it. It is identity, not admin metadata — Section 7.6 strips the latter.
+ *
  * @param {Object} row      Raw Equipment row.
  * @param {Object} derived  Block from deriveEquipmentDerived.
  * @param {Object<string, Object>} employeesById
@@ -365,6 +369,7 @@ function shapeOfficerEquipment_(row, derived, employeesById) {
     team_leader_id: leaderId,
     team_leader_name: leader ? normalizeString(leader.name) : '',
     team_leader_archived: leader ? normalizeBoolean(leader.archived) : false,
+    subcontractor: normalizeString(row.subcontractor),
     item: normalizeString(row.item),
     brand: normalizeString(row.brand),
     date_of_manufacture: normalizeIsoDate(row.date_of_manufacture),
