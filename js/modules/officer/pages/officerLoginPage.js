@@ -43,7 +43,7 @@ export function renderOfficerLoginPage() {
 
   return `
     <div class="officer-login">
-      <div class="mark">OHS</div>
+      <div class="mark">LMP</div>
       <h1>${appName}</h1>
       <div class="sub">${company} — ${escapeHtml(t('off_login_subtitle'))}</div>
 

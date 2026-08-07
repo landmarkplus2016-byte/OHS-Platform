@@ -47,7 +47,7 @@ export function renderChangePasswordPage() {
   return `
     <div class="login-wrap">
       <div class="login-card">
-        <div class="mark">OHS</div>
+        <div class="mark">LMP</div>
         <h1>${t('change_password_title')}</h1>
         <div class="sub">${t('change_password_intro')}</div>
 

@@ -53,7 +53,7 @@ export function renderLoginPage(config) {
   return `
     <div class="login-wrap">
       <div class="login-card">
-        <div class="mark">OHS</div>
+        <div class="mark">LMP</div>
         <h1>${appName}</h1>
         <div class="sub">${companyName} — ${t('app_sub')}</div>
 

@@ -44,7 +44,7 @@ function renderHeader() {
   return `
     <div class="officer-hbar">
       <div class="brand">
-        <div class="mark">OHS</div>
+        <div class="mark">LMP</div>
         <div>
           <div class="name">${appName}</div>
           <div class="sub">${who}</div>

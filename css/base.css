@@ -21,6 +21,28 @@ body {
   font-size: 14px;
 }
 
+/* ---------- Platform background art ----------
+   A fixed, full-viewport watermark behind every screen. Painted as a body
+   pseudo-element rather than a `background-image` on body so the transparency
+   is a real opacity (87% transparent = .13 opaque) instead of a hardcoded
+   colour wash over the art, which rule 15 forbids outside tokens.css.
+
+   z-index: -1 keeps it above the page canvas and below every block-level
+   background — the navy sidebar, white cards and the officer phone frame all
+   paint over it, so nothing here costs contrast on text. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: url('../background.png');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: .13;
+  pointer-events: none;
+}
+
 button {
   font-family: inherit;
   font-size: inherit;
