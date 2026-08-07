@@ -15,10 +15,17 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
   color: var(--text);
   font-family: var(--font-base);
   font-size: 14px;
+}
+
+/* The page colour lives on <html> alone, never on <body>. A background on body
+   paints in the same step as any other in-flow block descendant — which is
+   *after* negative-z-index boxes — so it would seal the watermark below away.
+   <html>'s background is the page canvas, painted before everything. */
+html {
+  background: var(--bg);
 }
 
 /* ---------- Platform background art ----------
