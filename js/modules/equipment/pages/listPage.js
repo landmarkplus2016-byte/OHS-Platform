@@ -314,11 +314,10 @@ export function renderEquipmentListPage() {
 
   return `
     <div class="equipment-list">
-      <div class="page-head">
-        <div class="page-head-title">${escapeHtml(t('nav_equipment_active'))}</div>
-        ${editable ? `
-          <button type="button" class="btn btn-primary btn-sm" data-action="add">${escapeHtml(t('eqp_add'))}</button>` : ''}
-      </div>
+      ${editable ? `
+        <div class="page-head-actions" data-topbar-actions>
+          <button type="button" class="btn btn-primary btn-sm" data-action="add">${escapeHtml(t('eqp_add'))}</button>
+        </div>` : ''}
 
       ${renderFilters(s)}
       ${renderTable(s, editable)}

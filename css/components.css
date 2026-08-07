@@ -211,9 +211,11 @@
 .ok  { color: var(--success); font-size: 12px; margin-block-start: 6px; }
 
 /* ---------- Page head ----------
-   Title, subtitle and page actions, above the filter bar. Distinct from the
-   topbar: the topbar belongs to the shell and shows the route's name, this
-   belongs to the page and carries its buttons. */
+   Subtitle and page actions, above the filter bar. The route's own name is the
+   topbar's job and is never repeated here — a page head carries a title only
+   when it says something the topbar cannot, like the name of the record on
+   screen. Actions marked [data-topbar-actions] are hoisted into the topbar by
+   render.js, so this block is empty of them by the time it is painted. */
 .page-head {
   display: flex;
   align-items: flex-start;
@@ -221,8 +223,8 @@
   gap: 12px;
   margin-block-end: 14px;
 }
-.page-head-title { font-size: 16px; font-weight: 700; color: var(--text); }
-.page-head-sub { font-size: 12.5px; color: var(--text2); margin-block-start: 3px; }
+.page-head-title { font-size: 16px; font-weight: 700; color: var(--text); margin-block-end: 3px; }
+.page-head-sub { font-size: 12.5px; color: var(--text2); }
 .page-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ---------- Section header ---------- */

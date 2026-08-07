@@ -241,7 +241,6 @@ export function renderRenewalsPage() {
       <div class="employee-renewals">
         <div class="page-head">
           <div>
-            <div class="page-head-title">${escapeHtml(t('nav_renewals'))}</div>
             <div class="page-head-sub">${escapeHtml(t('emp_renewals_intro'))}</div>
           </div>
         </div>
@@ -258,7 +257,6 @@ export function renderRenewalsPage() {
     <div class="employee-renewals">
       <div class="page-head">
         <div>
-          <div class="page-head-title">${escapeHtml(t('nav_renewals'))}</div>
           <div class="page-head-sub">${escapeHtml(t('emp_renewals_intro'))}</div>
         </div>
       </div>

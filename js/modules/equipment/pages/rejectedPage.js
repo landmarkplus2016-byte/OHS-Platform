@@ -130,7 +130,6 @@ export function renderRejectedEquipmentPage() {
   const head = `
     <div class="page-head">
       <div>
-        <div class="page-head-title">${escapeHtml(t('nav_equipment_rejected'))}</div>
         <div class="page-head-sub">${escapeHtml(t('eqp_rejected_intro'))}</div>
       </div>
     </div>`;

@@ -336,7 +336,6 @@ export function renderRdtPage() {
   const head = `
     <div class="page-head">
       <div>
-        <div class="page-head-title">${escapeHtml(t('nav_rdt'))}</div>
         <div class="page-head-sub">${escapeHtml(t('emp_rdt_intro'))}</div>
       </div>
     </div>`;

@@ -90,7 +90,6 @@ export function renderDashboardPage() {
     <div class="dashboard">
       <div class="page-head">
         <div>
-          <div class="page-head-title">${escapeHtml(t('nav_dashboard'))}</div>
           <div class="page-head-sub">${escapeHtml(t('dash_greeting', {
             name: (CURRENT_USER && CURRENT_USER.display_name) || '',
           }))}</div>

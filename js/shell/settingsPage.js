@@ -1952,7 +1952,6 @@ export function renderSettingsPage() {
     <div class="settings">
       <div class="page-head">
         <div>
-          <div class="page-head-title">${escapeHtml(t('nav_settings'))}</div>
           <div class="page-head-sub">${escapeHtml(t('settings_sub', {
             company: CONFIG.company_name || t('company_name'),
           }))}</div>

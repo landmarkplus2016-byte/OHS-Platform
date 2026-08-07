@@ -6,6 +6,12 @@
    actions belong to the page that supplied them, so that page binds them in its
    own bind*Events function. Otherwise every new button in the app would need a
    line in this file.
+
+   In practice `actionsHtml` arrives empty and the trailing edge is filled after
+   the fact: a page marks its buttons [data-topbar-actions] and render.js moves
+   them into .topbar-actions once the page has bound them (hoistPageActions).
+   The parameter stays because a shell-drawn action would have no page to come
+   from, and this is where it would go.
    ========================================================================== */
 
 import { escapeHtml } from '../utils/format.js';

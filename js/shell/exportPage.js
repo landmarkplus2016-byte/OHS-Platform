@@ -506,7 +506,6 @@ export function renderExportPage() {
     <div class="export-page">
       <div class="page-head">
         <div>
-          <div class="page-head-title">${escapeHtml(t('nav_export'))}</div>
           <div class="page-head-sub">${escapeHtml(t('export_intro'))}</div>
         </div>
       </div>

@@ -180,11 +180,15 @@
   color: var(--navy-text-strong);
 }
 
-/* ---------- Topbar ---------- */
+/* ---------- Topbar ----------
+   min-height holds the ribbon at the height it takes with a button in it, so
+   navigating from a page that has page actions to one that does not leaves the
+   header where it was instead of shifting the whole page up a few pixels. */
 .topbar {
   background: var(--card);
   border-block-end: 1px solid var(--border);
-  padding: 16px 26px;
+  padding: 12px 26px;
+  min-height: 62px;
   display: flex;
   align-items: center;
   justify-content: space-between;

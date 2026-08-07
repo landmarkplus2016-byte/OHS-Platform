@@ -82,6 +82,36 @@ function bindPage(entry) {
   }
 }
 
+/* ---------- Page actions in the topbar ------------------------------------ */
+
+/**
+ * Move a page's primary buttons out of the page body and into the topbar.
+ *
+ * The topbar already owns the route's name (see topbar.js), so a page that also
+ * drew its own title was saying the same thing twice. With the page title gone,
+ * a lone "+ Add" row floating above the filter bar would be worse than the
+ * duplication was — so the buttons go up beside the title they belong to, which
+ * is what the topbar's trailing edge was built for.
+ *
+ * A page opts in by wrapping its buttons in an element marked
+ * `data-topbar-actions`. Everything inside is moved; the wrapper itself is
+ * dropped, so a page that opts in leaves no empty row behind.
+ *
+ * Called *after* bindPage on purpose. The page binds its buttons while they are
+ * still inside its own root — `root.querySelector('[data-action="add"]')` finds
+ * them exactly as before — and appendChild moves a node without disturbing the
+ * listeners already on it. That is what keeps this a shell concern only: no
+ * page had to learn where its buttons end up.
+ */
+function hoistPageActions(app) {
+  const slot = app.querySelector('.topbar-actions');
+  const source = app.querySelector('[data-topbar-actions]');
+  if (!slot || !source) return;
+
+  while (source.firstChild) slot.appendChild(source.firstChild);
+  source.remove();
+}
+
 /* ---------- Caret preservation across a redraw ---------------------------- */
 
 /**
@@ -233,5 +263,6 @@ export function render() {
 
   bindSidebarEvents();
   bindPage(entry);
+  hoistPageActions(app);
   restoreFocus(focusSnapshot);
 }

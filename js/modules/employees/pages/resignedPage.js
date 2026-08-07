@@ -129,7 +129,6 @@ export function renderResignedPage() {
   const head = `
     <div class="page-head">
       <div>
-        <div class="page-head-title">${escapeHtml(t('nav_resigned'))}</div>
         <div class="page-head-sub">${escapeHtml(t('emp_resigned_intro'))}</div>
       </div>
     </div>`;
