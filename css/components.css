@@ -260,6 +260,11 @@
 .badge-team-field  { background: var(--team-field-bg);  color: var(--team-field-tx); }
 .badge-team-safety { background: var(--team-safety-bg); color: var(--team-safety-tx); }
 
+/* An outstanding RDT pick, and the phase label above it. This is the
+   non-compliance use the --plan tokens were kept for (Section 8.3): work not
+   done yet is neither a problem nor a success. */
+.badge-rdt-selected { background: var(--plan-bg); color: var(--plan-tx); }
+
 .badge-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-block-end: 16px; }
 
 /* ---------- Certificate state pills (Section 6.1) ----------

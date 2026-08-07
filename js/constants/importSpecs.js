@@ -104,9 +104,11 @@ const EMPLOYEE_COLUMNS = [
   { field: 'qual_iso_45001', type: 'bool', aliases: ['iso', 'iso 45001', 'iso 45001 lead auditor'] },
   { field: 'qual_osha', type: 'bool', aliases: ['osha', 'osha 30', 'osha certificate'] },
 
-  { field: 'rdt_1', type: 'date', aliases: ['rdt 1', 'rdt one', 'rdt wave 1', 'drug test 1'] },
-  { field: 'rdt_2', type: 'date', aliases: ['rdt 2', 'rdt two', 'rdt wave 2', 'drug test 2'] },
-  { field: 'rdt', type: 'date', aliases: ['rdt', 'drug test', 'random drug test'] },
+  /* No RDT columns. Drug tests are events on the RdtLog tab, not employee
+     columns, and there is no import path for them — a test is created by the
+     monthly selection on #/rdt and completed there. A legacy spreadsheet that
+     still carries RDT-shaped columns imports fine; those columns map to nothing
+     and are ignored. */
 ];
 
 /* ---------- Equipment (Section 3.6) --------------------------------------- */

@@ -88,6 +88,38 @@ const THRESHOLD_FIELDS = [
 ];
 
 /**
+ * The RDT programme's settings, which live on ModuleSettings under `employees`
+ * rather than in Config (Section 2).
+ *
+ * They sit on the Thresholds tab because that is what they are — the numbers
+ * the RDT selection derives from. A fifth tab for seven fields would be more
+ * furniture than content.
+ *
+ * `type` decides the control: `number` bounds-checks against min/max, `text`
+ * takes whatever is typed, `bool` renders a checkbox and writes TRUE/FALSE.
+ */
+const RDT_SETTING_FIELDS = [
+  { key: 'rdt_enabled', type: 'bool', labelKey: 'settings_rdt_enabled' },
+  { key: 'rdt_fiscal_year_start_month', type: 'number', labelKey: 'settings_rdt_fy_start', min: 1, max: 12 },
+  { key: 'rdt_monthly_target_pct', type: 'number', labelKey: 'settings_rdt_monthly_pct', min: 0, max: 100 },
+  { key: 'rdt_yearly_target_pct', type: 'number', labelKey: 'settings_rdt_yearly_pct', min: 0, max: 1000 },
+  { key: 'rdt_hire_grace_months', type: 'number', labelKey: 'settings_rdt_hire_grace', min: 0, max: 60 },
+  { key: 'rdt_repeat_months', type: 'text', labelKey: 'settings_rdt_repeat_months' },
+  { key: 'rdt_safety_title', type: 'text', labelKey: 'settings_rdt_safety_title' },
+];
+
+/** What a missing RDT setting reads as. Mirrors RDT_DEFAULTS in Rdt.gs. */
+const RDT_SETTING_DEFAULTS = {
+  rdt_enabled: 'FALSE',
+  rdt_fiscal_year_start_month: '4',
+  rdt_monthly_target_pct: '10',
+  rdt_yearly_target_pct: '120',
+  rdt_hire_grace_months: '3',
+  rdt_repeat_months: '2,3',
+  rdt_safety_title: 'Safety Officer',
+};
+
+/**
  * Read-only Config rows the Data tab reports. These are server-owned counters —
  * Config.gs keeps them out of ALLOWED_CONFIG_KEYS so an admin cannot set them
  * and mint duplicate IDs — shown here because "what is the next ID" is a fair
@@ -123,6 +155,7 @@ function pageState() {
       users: { status: 'idle', seq: 0, data: null, error: null, includeInactive: false, busy: false },
       lists: { status: 'idle', seq: 0, data: null, error: null, draft: null, saving: '' },
       config: { status: 'idle', seq: 0, data: null, error: null, draft: null, saving: false },
+      rdt: { status: 'idle', seq: 0, data: null, error: null, draft: null, saving: false },
       health: { status: 'idle', seq: 0, data: null, error: null },
 
       // One import slot per target, keyed the way IMPORT_TARGETS is.
@@ -213,6 +246,7 @@ function loadActiveTab() {
 
   if (s.tab === 'thresholds') {
     loadInto(s.config, () => api.call('list_config', {}));
+    loadInto(s.rdt, () => api.call('list_module_settings', { module: MODULE_NAMES.EMPLOYEES }));
     return;
   }
 
@@ -991,7 +1025,158 @@ function renderThresholdsTab(s) {
                   t(s.config.saving ? 'saving' : 'save')
                 )}</button>
       </div>
+    </div>
+
+    ${renderRdtSettingsCard(s)}`;
+}
+
+/* ---------- RDT settings (ModuleSettings, not Config) ---------------------- */
+
+/** An RDT setting as a string, falling back to the server's own default. */
+function rdtSettingValue(s, key) {
+  const settings = (s.rdt.data && s.rdt.data.settings && s.rdt.data.settings[MODULE_NAMES.EMPLOYEES]) || {};
+
+  if (settings[key] !== undefined && settings[key] !== '') return String(settings[key]);
+  return RDT_SETTING_DEFAULTS[key];
+}
+
+function rdtDraft(s) {
+  if (!s.rdt.draft && s.rdt.status === 'ready') {
+    s.rdt.draft = {};
+    RDT_SETTING_FIELDS.forEach((field) => {
+      s.rdt.draft[field.key] = rdtSettingValue(s, field.key);
+    });
+  }
+  return s.rdt.draft || {};
+}
+
+function rdtDirty(s) {
+  const draft = rdtDraft(s);
+  return RDT_SETTING_FIELDS.some((field) => String(draft[field.key]) !== rdtSettingValue(s, field.key));
+}
+
+function renderRdtSettingsCard(s) {
+  if (s.rdt.status !== 'ready') return slotState(s.rdt, 'retry-rdt');
+
+  const draft = rdtDraft(s);
+  const dirty = rdtDirty(s);
+
+  const control = (field) => {
+    const value = String(draft[field.key]);
+
+    if (field.type === 'bool') {
+      return `
+        <label class="check-row">
+          <input type="checkbox" data-rdt-key="${escapeHtml(field.key)}"
+                 ${value.toUpperCase() === 'TRUE' ? 'checked' : ''}>
+          <span>${escapeHtml(t(field.labelKey))}</span>
+        </label>`;
+    }
+
+    const attrs = field.type === 'number'
+      ? `type="number" min="${field.min}" max="${field.max}" step="1"`
+      : 'type="text"';
+
+    return `
+      <div class="field">
+        <label for="rdt-${escapeHtml(field.key)}">${escapeHtml(t(field.labelKey))}</label>
+        <input id="rdt-${escapeHtml(field.key)}" ${attrs}
+               data-rdt-key="${escapeHtml(field.key)}" value="${escapeHtml(value)}">
+        <div class="field-hint">${escapeHtml(t(field.labelKey + '_hint'))}</div>
+      </div>`;
+  };
+
+  const [enabledField, ...rest] = RDT_SETTING_FIELDS;
+
+  return `
+    <div class="section-head">${escapeHtml(t('settings_rdt_title'))}</div>
+    <div class="card">
+      <p class="tab-intro">${escapeHtml(t('settings_rdt_intro'))}</p>
+
+      ${control(enabledField)}
+      <div class="field-hint">${escapeHtml(t('settings_rdt_enabled_hint'))}</div>
+
+      <div class="threshold-grid">${rest.map(control).join('')}</div>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" data-action="reset-rdt"
+                ${dirty ? '' : 'disabled'}>${escapeHtml(t('cancel'))}</button>
+        <button type="button" class="btn btn-primary" data-action="save-rdt"
+                ${!dirty || s.rdt.saving ? 'disabled' : ''}>${escapeHtml(
+                  t(s.rdt.saving ? 'saving' : 'save')
+                )}</button>
+      </div>
     </div>`;
+}
+
+/** Send only what changed, after bounds-checking the numbers. */
+async function saveRdtSettings() {
+  const s = pageState();
+  if (s.rdt.saving) return;
+
+  const draft = rdtDraft(s);
+  const updates = {};
+
+  for (const field of RDT_SETTING_FIELDS) {
+    const value = String(draft[field.key]).trim();
+    if (value === rdtSettingValue(s, field.key)) continue;
+
+    if (field.type === 'number') {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num < field.min || num > field.max) {
+        toast(t('settings_err_out_of_range', {
+          field: t(field.labelKey), min: field.min, max: field.max,
+        }), 'error');
+        return;
+      }
+      updates[field.key] = String(Math.round(num));
+      continue;
+    }
+
+    // The repeat-months list is the one text field with a shape. A typo here
+    // would silently drop the Feb/Mar phase, so it is checked rather than
+    // trusted — the server coerces unparseable entries away without complaint.
+    if (field.key === 'rdt_repeat_months' && value !== '') {
+      const months = value.split(',').map((part) => Number(part.trim()));
+      const valid = months.every((m) => Number.isInteger(m) && m >= 1 && m <= 12);
+
+      if (!valid) {
+        toast(t('settings_rdt_repeat_invalid'), 'error');
+        return;
+      }
+    }
+
+    updates[field.key] = value;
+  }
+
+  if (!Object.keys(updates).length) return;
+
+  s.rdt.saving = true;
+  render();
+
+  try {
+    const data = await api.call('update_module_settings', {
+      module: MODULE_NAMES.EMPLOYEES,
+      updates,
+    });
+
+    s.rdt.data = { settings: data.settings };
+    s.rdt.draft = null;
+
+    // Every RDT number decides what the RDT page and the dashboard card show,
+    // and both are holding an answer computed under the old ones.
+    delete UI.employeeRdt;
+    delete UI.employeeRdtHistory;
+    delete UI.employeeDashboard;
+
+    toastSuccess(t('settings_config_saved'));
+  } catch (err) {
+    console.error('[settings] update_module_settings failed:', err);
+    toastError(err);
+  } finally {
+    s.rdt.saving = false;
+    render();
+  }
 }
 
 /** Send only the keys that actually changed. */
@@ -1057,6 +1242,7 @@ function invalidateModuleCaches() {
   delete UI.employeeList;
   delete UI.employeeDashboard;
   delete UI.employeeRdt;
+  delete UI.employeeRdtHistory;
   delete UI.equipmentList;
   delete UI.equipmentDashboard;
 }
@@ -1088,6 +1274,55 @@ function bindThresholdsTab(root) {
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       s.config.draft = null;
+      render();
+    });
+  }
+
+  bindRdtSettings(root);
+}
+
+/** The RDT card at the bottom of the same tab. */
+function bindRdtSettings(root) {
+  const s = pageState();
+  const draft = rdtDraft(s);
+
+  const retry = root.querySelector('[data-action="retry-rdt"]');
+  if (retry) {
+    retry.addEventListener('click', () => {
+      s.rdt.draft = null;
+      loadInto(
+        s.rdt,
+        () => api.call('list_module_settings', { module: MODULE_NAMES.EMPLOYEES }),
+        { force: true }
+      );
+    });
+  }
+
+  root.querySelectorAll('[data-rdt-key]').forEach((input) => {
+    // The checkbox has no half-typed state, so it can redraw immediately and
+    // light up Save. Text and number inputs write to the draft on every
+    // keystroke and only redraw on blur, so the caret is never disturbed.
+    if (input.type === 'checkbox') {
+      input.addEventListener('change', () => {
+        draft[input.dataset.rdtKey] = input.checked ? 'TRUE' : 'FALSE';
+        render();
+      });
+      return;
+    }
+
+    input.addEventListener('input', () => {
+      draft[input.dataset.rdtKey] = input.value;
+    });
+    input.addEventListener('blur', () => render());
+  });
+
+  const saveBtn = root.querySelector('[data-action="save-rdt"]');
+  if (saveBtn) saveBtn.addEventListener('click', saveRdtSettings);
+
+  const resetBtn = root.querySelector('[data-action="reset-rdt"]');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      s.rdt.draft = null;
       render();
     });
   }

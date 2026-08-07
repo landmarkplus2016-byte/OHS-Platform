@@ -89,14 +89,29 @@ export function listRenewalHistory(params) {
 }
 
 /**
- * `list_rdt_eligible` — active, non-archived employees whose MCU has not
- * expired.
+ * `list_rdt_overview` — everything the RDT dashboard draws.
  *
- * @param {string} [team] 'field' | 'safety'; omit for both
- * @returns {Promise<{employees: Array, total_matching: number}>}
+ * One call rather than four: the page needs the pool, the quota, this month's
+ * selection, yearly progress and recent activity to render a single screen, and
+ * the server reads the same two tabs to answer all five.
+ *
+ * Resolves to `{enabled: false}` when RDT has not been switched on for this
+ * dataset — the page renders its onboarding card from that.
+ *
+ * @returns {Promise<Object>}
  */
-export function listRdtEligible(team) {
-  return api.call('list_rdt_eligible', team ? { team } : {});
+export function listRdtOverview() {
+  return api.call('list_rdt_overview', {});
+}
+
+/**
+ * `list_rdt_history` — the fiscal-year log, filtered and paged server-side.
+ *
+ * @param {Object} [params] {fiscal_year, month, team, status, result, page, page_size}
+ * @returns {Promise<{entries: Array, total_matching: number, page: number, page_size: number}>}
+ */
+export function listRdtHistory(params) {
+  return api.call('list_rdt_history', params || {});
 }
 
 /**
@@ -193,15 +208,75 @@ export function bulkImportEmployees(rows, opts) {
 }
 
 /**
- * `record_rdt_wave` — stamps one wave date across many employees.
+ * `generate_rdt_selection` — draw this month's random list and write it.
  *
- * @param {Array<string>} employeeIds
- * @param {'rdt_1'|'rdt_2'|'rdt'} wave
- * @param {string} date ISO 'YYYY-MM-DD'
- * @returns {Promise<{updated: number, not_found: Array<string>}>}
+ * `regenerate` discards this month's not-yet-completed picks first. Completed
+ * and missed entries are never touched by either mode.
+ *
+ * @param {boolean} [regenerate]
+ * @returns {Promise<{created: Array, quota: number, pool_size: number,
+ *                    candidates: number, is_repeat_phase: boolean}>}
  */
-export function recordRdtWave(employeeIds, wave, date) {
-  return api.call('record_rdt_wave', { employee_ids: employeeIds, wave, date });
+export function generateRdtSelection(regenerate) {
+  return api.call('generate_rdt_selection', { regenerate: regenerate === true });
+}
+
+/**
+ * `update_rdt_entry` — mark completed, mark missed, revert, or correct.
+ *
+ * Omit `status` to edit test_date / result / notes without changing state.
+ *
+ * @param {string} logId
+ * @param {{status?: string, test_date?: string, result?: string, notes?: string}} updates
+ * @returns {Promise<{entry: Object}>}
+ */
+export function updateRdtEntry(logId, updates) {
+  return api.call('update_rdt_entry', { log_id: logId, ...updates });
+}
+
+/**
+ * `swap_rdt_selection` — replace one pick with a random draw from the pool.
+ *
+ * Rejects with `conflict` and `message: "no_replacement_available"` when the
+ * pool is exhausted; the original pick is left untouched in that case.
+ *
+ * @param {string} logId
+ * @returns {Promise<{removed_employee_id: string, removed_employee_name: string, entry: Object}>}
+ */
+export function swapRdtSelection(logId) {
+  return api.call('swap_rdt_selection', { log_id: logId });
+}
+
+/**
+ * `delete_rdt_entry` — remove one log row. Idempotent.
+ *
+ * @param {string} logId
+ * @returns {Promise<{deleted: boolean}>}
+ */
+export function deleteRdtEntry(logId) {
+  return api.call('delete_rdt_entry', { log_id: logId });
+}
+
+/**
+ * `list_module_settings` — the ModuleSettings rows for one module, or all.
+ *
+ * @param {string} [module]
+ * @returns {Promise<{settings: Object<string, Object<string, string>>}>}
+ */
+export function listModuleSettings(module) {
+  return api.call('list_module_settings', module ? { module } : {});
+}
+
+/**
+ * `update_module_settings` — super admin only. Upserts the keys sent; leaves
+ * every other key on the module untouched.
+ *
+ * @param {string} module
+ * @param {Object<string, string>} updates
+ * @returns {Promise<{settings: Object}>}
+ */
+export function updateModuleSettings(module, updates) {
+  return api.call('update_module_settings', { module, updates });
 }
 
 /* ---------- Field options cache ------------------------------------------- */

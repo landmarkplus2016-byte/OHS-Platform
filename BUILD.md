@@ -64,7 +64,7 @@ Do not write any logic until I confirm the structure looks correct.
 
 # Stage 1 — The Google Sheet
 
-**Goal:** The Sheet has all 12 tabs with correct headers. Nothing else. This becomes the database.
+**Goal:** The Sheet has all 13 tabs with correct headers. Nothing else. This becomes the database.
 
 **Prompt:**
 ```
@@ -72,8 +72,8 @@ Read CLAUDE.md Section 2. We are on Stage 1.
 
 I've created a new Google Sheet named 'OHS Platform DB'. Give me:
 
-1. A step-by-step guide (bullet list) to create the 12 tabs in the exact order:
-   Config, Users, Sessions, Permissions, Employees, RenewalHistory,
+1. A step-by-step guide (bullet list) to create the 13 tabs in the exact order:
+   Config, Users, Sessions, Permissions, Employees, RenewalHistory, RdtLog,
    Equipment, InspectionHistory, FieldOptions, ModuleSettings,
    Vehicles, VehicleHistory.
 
@@ -99,6 +99,18 @@ I've created a new Google Sheet named 'OHS Platform DB'. Give me:
    - (employees, warning_certs, fa,ff,ra,ec)
    - (equipment, urgent_days, 30)
 
+   Plus the RDT block under the employees module (Section 2, "RDT
+   configuration"). These can be left out — the RDT page seeds them itself when
+   the super admin enables the feature — but adding them up front means the
+   programme is ready to run on day one:
+   - (employees, rdt_enabled, FALSE)
+   - (employees, rdt_fiscal_year_start_month, 4)
+   - (employees, rdt_monthly_target_pct, 10)
+   - (employees, rdt_yearly_target_pct, 120)
+   - (employees, rdt_hire_grace_months, 3)
+   - (employees, rdt_repeat_months, 2,3)
+   - (employees, rdt_safety_title, Safety Officer)
+
 6. For the Users tab, ONE row: the bootstrap super admin, with:
    - user_id: USR001
    - username: khaled (or whatever I confirm)
@@ -119,11 +131,12 @@ Do NOT write any Apps Script code yet. This stage is Sheet setup only.
 ```
 
 **Tests for Stage 1:**
-- [ ] All 12 tabs exist in the correct order
+- [ ] All 13 tabs exist in the correct order
 - [ ] Every tab's row 1 contains the exact column headers from CLAUDE.md Section 2
 - [ ] Config tab has all 16 required rows with default values
 - [ ] FieldOptions tab has rows for all 8 list_keys
-- [ ] ModuleSettings tab has 3 rows
+- [ ] ModuleSettings tab has 3 rows, plus 7 more if the RDT block was seeded
+- [ ] Employees tab has NO rdt_1 / rdt_2 / rdt columns — drug tests live on RdtLog
 - [ ] Users tab has 1 row (bootstrap super admin, password_hash empty)
 - [ ] All other tabs have only their header row
 
@@ -664,7 +677,8 @@ js/modules/employees/manifest.js with real page functions.
 
 6. js/modules/employees/pages/formPage.js:
    - Handles both new and edit routes
-   - Team-conditional fields (safety shows PPE/Lifting/Scaffolding + qualifications + single RDT)
+   - Team-conditional fields (safety shows PPE/Lifting/Scaffolding + qualifications)
+   - No drug-test inputs: tests are RdtLog events, recorded from the RDT page
    - Validates client-side (name, national_id required, dropdowns from field options)
    - Save → calls createEmployee or updateEmployee → routes to detail
    - Cancel → routes back
@@ -674,10 +688,17 @@ js/modules/employees/manifest.js with real page functions.
    - Filters: days window, team, subcontractor, cert type
    - Row click → jump to employee detail
 
-8. js/modules/employees/pages/rdtPage.js:
-   - Lists RDT-eligible employees (MCU not expired)
-   - Bulk select + record wave (rdt_1 / rdt_2 / rdt)
-   - Uses listRdtEligible + recordRdtWave
+8. js/modules/employees/pages/rdtPage.js + rdtHistoryPage.js:
+   - The random drug testing programme (CLAUDE.md Section 3.5, apps-script/Rdt.gs)
+   - Onboarding card when rdt_enabled is not set; super admin only can enable
+   - Yearly progress hero: completed / target, coverage %, pool size, phase
+   - This month's card: quota line, Generate / Regenerate, and per-row
+     Complete / Miss / Swap / Undo / Delete
+   - Recent activity strip, linking to the full log at #/rdt/history
+   - History page filters by month, team, status, result; pages server-side;
+     exports the whole filtered set to Excel
+   - Uses listRdtOverview, listRdtHistory, generateRdtSelection,
+     updateRdtEntry, swapRdtSelection, deleteRdtEntry
 
 9. js/modules/employees/pages/resignedPage.js:
    - Shows archived employees only
@@ -694,9 +715,21 @@ js/modules/employees/manifest.js with real page functions.
 - [ ] Refresh the browser (re-login required) → employee still there (persisted to Sheet)
 - [ ] Edit MCU expiry → save → detail shows renewal history row
 - [ ] Navigate to Safety Team → separate list
-- [ ] Add a safety employee → form shows all 10 certs, qualifications section, single RDT
+- [ ] Add a safety employee → form shows all 10 certs and the qualifications section
 - [ ] Renewals page → sorted list of upcoming expirations
-- [ ] RDT page → shows eligible employees; select 2, record rdt_1 with today's date → saves, refreshes
+- [ ] RDT page as super admin, before enabling → onboarding card with an Enable button
+- [ ] Enable → hero, quota line and an empty month card appear
+- [ ] Generate → roughly 10% of the eligible pool is picked, at random
+- [ ] Generate again in the same month → nothing new is drawn (nobody is left eligible this month)
+- [ ] Regenerate → a different list; anything already completed or missed survives it
+- [ ] Mark one completed with a pass → coverage % and the progress bar both move
+- [ ] Mark one missed → it stops counting, and that person can be drawn again next month
+- [ ] Swap one → the original disappears, a different name takes its place
+- [ ] An employee with an expired MCU is never drawn, and the month card says how many were excluded
+- [ ] An employee hired inside the grace window is never drawn
+- [ ] A safety-team employee whose title is not "Safety Officer" is never drawn
+- [ ] #/rdt/history → filters by month/team/status/result, pages, and the Excel export matches the filtered view
+- [ ] Employee detail → RDT history section lists that person's entries, read-only
 - [ ] Archive an employee → moves to Resigned list; unarchive from there → back to active
 - [ ] Language toggle → all labels translated
 - [ ] Type a full name into the search box in one continuous keystroke burst — cursor stays in the box the whole time; you never have to click back into it. Same for other filter dropdowns that trigger re-renders.

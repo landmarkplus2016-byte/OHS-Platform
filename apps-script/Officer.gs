@@ -286,8 +286,7 @@ function officerLeaderMap_(teamLeaderId) {
 /**
  * @private
  * One employee as an officer sees them: who they are, when their certificates
- * expire, which qualifications they hold, when they were drug tested, and the
- * verdict.
+ * expire, which qualifications they hold, and the verdict.
  *
  * Certificate expiry dates are emitted without their `_link` partners. The cert
  * keys come from EMPLOYEE_CERT_KEYS rather than a list of their own, so a cert
@@ -323,9 +322,11 @@ function shapeOfficerEmployee_(row, derived) {
   for (var q = 0; q < EMPLOYEE_QUAL_KEYS.length; q++) {
     out['qual_' + EMPLOYEE_QUAL_KEYS[q]] = normalizeBoolean(row['qual_' + EMPLOYEE_QUAL_KEYS[q]]);
   }
-  for (var r = 0; r < EMPLOYEE_RDT_KEYS.length; r++) {
-    out[EMPLOYEE_RDT_KEYS[r]] = normalizeIsoDate(row[EMPLOYEE_RDT_KEYS[r]]);
-  }
+
+  /* No RDT here, deliberately (Section 7.6). Drug testing is HR compliance
+     paperwork and has no bearing on whether someone may work today — the
+     verdict does not depend on it, so an officer at a tower has no use for it
+     and no business seeing who has been tested. */
 
   out.derived = derived;
   return out;

@@ -56,12 +56,23 @@ export const LIST_FIELD_KEYS = {
   legal_permission: 'legal_permission',
 };
 
-/** The drug-test columns, by team. Field runs two waves; safety runs one. */
-export const RDT_KEYS_FIELD = ['rdt_1', 'rdt_2'];
-export const RDT_KEYS_SAFETY = ['rdt'];
+/**
+ * The three states an RdtLog row moves between (Section 2).
+ *
+ * `selected` is a plan, `completed` is a fact, `missed` is a recorded failure
+ * to carry the plan out. Only `completed` counts toward yearly coverage.
+ */
+export const RDT_STATUSES = ['selected', 'completed', 'missed'];
 
-/** Every wave `record_rdt_wave` accepts. */
-export const RDT_WAVES = ['rdt_1', 'rdt_2', 'rdt'];
+/** The only two outcomes a completed test can carry. */
+export const RDT_RESULTS = ['pass', 'fail'];
+
+/* Status and result labels are built by concatenation in badge.js —
+   `emp_rdt_status_<status>`, `emp_rdt_result_<result>` — the same way cert
+   states and verdicts are, so a new value needs one key and no map entry. */
+
+/** Rows on the RDT history page. The server caps page_size at 500. */
+export const RDT_HISTORY_PAGE_SIZE = 100;
 
 /** Boolean qualification columns, stored as `qual_<key>`. Safety team only. */
 export const QUAL_KEYS = ['nebosh', 'iso_45001', 'osha'];
@@ -105,16 +116,6 @@ export const MAX_PAGE_WALK = 20;
  */
 export function certKeysFor(team) {
   return team === TEAMS.SAFETY ? CERT_KEYS_SAFETY : CERT_KEYS_FIELD;
-}
-
-/**
- * Which drug-test columns apply to a team.
- *
- * @param {string} team
- * @returns {Array<string>}
- */
-export function rdtKeysFor(team) {
-  return team === TEAMS.SAFETY ? RDT_KEYS_SAFETY : RDT_KEYS_FIELD;
 }
 
 /**

@@ -159,15 +159,9 @@ const EXPORT_MODULES = [
               [t('qual_osha'), pdfFlag(e.qual_osha)],
             ] : [],
           },
-          {
-            heading: t('emp_section_drug'),
-            rows: e.team === 'safety'
-              ? [[t('emp_field_rdt'), pdfDate(e.rdt)]]
-              : [
-                [t('emp_field_rdt_1'), pdfDate(e.rdt_1)],
-                [t('emp_field_rdt_2'), pdfDate(e.rdt_2)],
-              ],
-          },
+          // No drug-testing section. An employee card prints what is on the
+          // employee record, and drug tests are not on it — they are events on
+          // RdtLog. The RDT log has its own export on #/rdt/history.
         ];
       },
     },

@@ -9,15 +9,13 @@
  *                   written by super admins only — a dropdown edit touches
  *                   every module, so it is not a module-admin power.
  *
- *   ModuleSettings  per-module tunables (blocker_certs, warning_certs, …).
- *                   Only the loader lives here for now; Compliance.gs is its
- *                   sole consumer.
+ *   ModuleSettings  per-module tunables — blocker_certs, warning_certs, and the
+ *                   whole rdt_* block Rdt.gs runs on. Read by any authenticated
+ *                   admin, written by super admins only, for the same reason:
+ *                   these are the rules a module derives by, not a preference.
  *
  * Both are loaded once per request and cached, so a list action that validates
  * fifty rows against `subcontractors` reads the tab once (Section 3.9).
- *
- * Built so far: list_field_options, update_field_options.
- * Still to come: list_module_settings, update_module_settings.
  */
 
 /**
@@ -370,6 +368,146 @@ function handleUpdateFieldOptions(session, payload) {
   var result = {};
   result[listKey] = getFieldOptionList(listKey);
   return okResponse({ options: result });
+}
+
+/**
+ * `list_module_settings` — the ModuleSettings tab, whole or for one module
+ * (Section 3.7).
+ *
+ * Readable by any authenticated admin, because the settings decide what pages
+ * show: the RDT page cannot render its onboarding state without knowing whether
+ * RDT is on. Officers never reach this — the shell routes them elsewhere and
+ * officer_sync strips settings from their snapshot regardless.
+ *
+ * @param {Object} session
+ * @param {Object} payload  {module?}
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleListModuleSettings(session, payload) {
+  var unknown = collectUnknownKeys_(payload, ['module']);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  var module = normalizeString(payload && payload.module);
+  var map = getModuleSettingsMap();
+
+  if (module === '') return okResponse({ settings: map });
+
+  var single = {};
+  single[module] = map[module] || {};
+  return okResponse({ settings: single });
+}
+
+/**
+ * `update_module_settings` — super admin only (Section 3.7).
+ *
+ * Same reasoning as update_field_options: these are the numbers a module's
+ * behavior is derived from, so changing one changes what every admin sees. A
+ * module admin who owns `employees` still cannot rewrite the rules the
+ * employees module runs by.
+ *
+ * Keys are upserted, not replaced wholesale — sending one key leaves the rest
+ * of the module's settings untouched. That matters because the RDT settings
+ * form and a future compliance-rules form would both write to `employees`, and
+ * neither should silently blank the other's rows.
+ *
+ * @param {{user: Object}} session
+ * @param {Object} payload  {module, updates: {key: value}}
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleUpdateModuleSettings(session, payload) {
+  if (!session.user.is_super_admin) {
+    return errResponse('forbidden', 'super_admin_required');
+  }
+
+  var unknown = collectUnknownKeys_(payload, ['module', 'updates']);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  var module = normalizeString(payload && payload.module);
+  var updates = payload && payload.updates;
+
+  var fieldErrors = {};
+  if (module === '') fieldErrors.module = 'required';
+  else if (REGISTERED_MODULES.indexOf(module) === -1) fieldErrors.module = 'unknown';
+
+  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+    fieldErrors.updates = 'required';
+  }
+
+  if (hasKeys_(fieldErrors)) {
+    return errResponse('validation_failed', 'invalid_payload', fieldErrors);
+  }
+
+  // Everything on this tab is stored as a string (Section 2). Coercion into
+  // numbers and booleans happens where a setting is read, not here — this
+  // handler has no idea what any given key means.
+  var clean = {};
+  for (var key in updates) {
+    if (!Object.prototype.hasOwnProperty.call(updates, key)) continue;
+
+    var settingKey = normalizeString(key);
+    if (settingKey === '') {
+      fieldErrors.updates = 'invalid_key';
+      continue;
+    }
+    clean[settingKey] = normalizeString(updates[key]);
+  }
+
+  if (hasKeys_(fieldErrors)) {
+    return errResponse('validation_failed', 'invalid_payload', fieldErrors);
+  }
+
+  var stampedAt = nowIso();
+  var stampedBy = session.user.user_id;
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    console.error('update_module_settings: could not acquire script lock');
+    return errResponse('server_error', 'lock_timeout');
+  }
+
+  try {
+    var pairs = readAllRowsWithIndex(SHEET_NAMES.MODULE_SETTINGS);
+    var existing = {};
+
+    for (var r = 0; r < pairs.length; r++) {
+      if (normalizeString(pairs[r].data.module) !== module) continue;
+      var storedKey = normalizeString(pairs[r].data.setting_key);
+      if (storedKey !== '') existing[storedKey] = pairs[r];
+    }
+
+    var rowUpdates = [];
+    var additions = [];
+
+    for (var settingName in clean) {
+      if (!Object.prototype.hasOwnProperty.call(clean, settingName)) continue;
+
+      var fields = {
+        module: module,
+        setting_key: settingName,
+        setting_value: clean[settingName],
+        updated_at: stampedAt,
+        updated_by: stampedBy
+      };
+
+      if (existing[settingName]) rowUpdates.push({ row: existing[settingName].row, data: fields });
+      else additions.push(fields);
+    }
+
+    updateRowsAt(SHEET_NAMES.MODULE_SETTINGS, rowUpdates);
+    appendRows(SHEET_NAMES.MODULE_SETTINGS, additions);
+  } finally {
+    lock.releaseLock();
+  }
+
+  clearModuleSettingsCache();
+
+  var result = {};
+  result[module] = getModuleSettingsMap()[module] || {};
+  return okResponse({ settings: result });
 }
 
 // ---------------------------------------------------------------------------

@@ -34,8 +34,9 @@ var EMPLOYEE_CERT_KEYS = [
 /** Boolean qualification flags, stored as `qual_<key>`. */
 var EMPLOYEE_QUAL_KEYS = ['nebosh', 'iso_45001', 'osha'];
 
-/** Drug-test date columns. Field team uses the two waves, safety uses `rdt`. */
-var EMPLOYEE_RDT_KEYS = ['rdt_1', 'rdt_2', 'rdt'];
+/* Drug testing is not a column on this tab. One employee can be tested many
+   times a year, and each test carries a status, a result and notes — that is an
+   event log, and it lives on RdtLog (Section 2). Rdt.gs owns all of it. */
 
 /** The only two teams. `team` is immutable after creation. */
 var EMPLOYEE_TEAMS = ['field', 'safety'];
@@ -83,21 +84,6 @@ var RENEWAL_HISTORY_CAP = 500;
 /** How many "Recently updated" rows list_employee_stats returns (Section 5.5). */
 var EMPLOYEE_RECENT_LIMIT = 6;
 
-/**
- * ModuleSettings keys that switch the dashboard's RDT coverage card on.
- *
- * Both are optional and both must be present for the card to show a number —
- * Section 5.5 says it renders an "RDT tracking is off" state otherwise. Keeping
- * them in ModuleSettings rather than Config means the RDT year can be set per
- * module without touching a platform-wide setting, and adding them needs no
- * schema change (the tab is already a free key/value store, Section 2).
- *
- *   employees.rdt_year_start   'MM-DD', the day the RDT year rolls over
- *   employees.rdt_target_pct   the yearly coverage goal, e.g. '120'
- */
-var EMPLOYEE_RDT_YEAR_START_KEY = 'rdt_year_start';
-var EMPLOYEE_RDT_TARGET_KEY = 'rdt_target_pct';
-
 /** @private Built once per execution by employeeWritableFields_(). */
 var EMPLOYEE_WRITABLE_CACHE_ = null;
 
@@ -118,9 +104,6 @@ function employeeWritableFields_() {
   }
   for (var q = 0; q < EMPLOYEE_QUAL_KEYS.length; q++) {
     fields.push('qual_' + EMPLOYEE_QUAL_KEYS[q]);
-  }
-  for (var r = 0; r < EMPLOYEE_RDT_KEYS.length; r++) {
-    fields.push(EMPLOYEE_RDT_KEYS[r]);
   }
 
   EMPLOYEE_WRITABLE_CACHE_ = fields;
@@ -270,6 +253,7 @@ function handleGetEmployee(session, payload) {
   return okResponse({
     employee: shapeEmployee_(row, deriveEmployee_(row, ctx)),
     renewal_history: renewalHistoryFor_(employeeId, ''),
+    rdt_history: rdtHistoryFor_(employeeId),
     assigned_equipment: canViewModule(session, 'equipment')
       ? assignedEquipmentFor_(row, ctx)
       : []
@@ -304,67 +288,6 @@ function handleListRenewalHistory(session, payload) {
     renewal_history: history.slice(0, RENEWAL_HISTORY_CAP),
     total_matching: history.length
   });
-}
-
-/**
- * `list_rdt_eligible` — employees who may be tested in the current RDT wave
- * (Section 3.5): active, not archived, MCU not expired.
- *
- * A blank MCU date does not disqualify anyone. The rule is "MCU not expired",
- * and an employee with no medical on file is a data gap for the admin to close,
- * not a reason to leave them out of the testing pool.
- *
- * @param {Object} session
- * @param {Object} payload  {team?}
- * @return {GoogleAppsScript.Content.TextOutput}
- */
-function handleListRdtEligible(session, payload) {
-  var denied = requireModuleView(session, 'employees');
-  if (denied) return denied;
-
-  var unknown = collectUnknownKeys_(payload, ['team']);
-  if (hasKeys_(unknown)) {
-    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
-  }
-
-  var team = normalizeString(payload && payload.team).toLowerCase();
-  if (team !== '' && EMPLOYEE_TEAMS.indexOf(team) === -1) {
-    return errResponse('validation_failed', 'invalid_payload', { team: 'invalid_value' });
-  }
-
-  var ctx = employeeContext_();
-  var rows = readAllRows(SHEET_NAMES.EMPLOYEES);
-  var eligible = [];
-
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (normalizeString(row.employee_id) === '') continue;
-    if (normalizeBoolean(row.archived)) continue;
-    if (normalizeString(row.employment_status).toLowerCase() !== 'active') continue;
-    if (team !== '' && normalizeString(row.team).toLowerCase() !== team) continue;
-
-    var mcuState = deriveCertState(row.cert_mcu_expiry, ctx.today, ctx.thresholds);
-    if (mcuState === CERT_STATES.EXPIRED) continue;
-
-    eligible.push({
-      employee_id: normalizeString(row.employee_id),
-      name: normalizeString(row.name),
-      national_id: normalizeString(row.national_id),
-      subcontractor: normalizeString(row.subcontractor),
-      team: normalizeString(row.team).toLowerCase(),
-      rdt_1: normalizeIsoDate(row.rdt_1),
-      rdt_2: normalizeIsoDate(row.rdt_2),
-      rdt: normalizeIsoDate(row.rdt),
-      last_rdt_date: lastRdtDate_(row)
-    });
-  }
-
-  eligible.sort(function (a, b) {
-    return a.name.toLowerCase() < b.name.toLowerCase() ? -1
-      : (a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0);
-  });
-
-  return okResponse({ employees: eligible, total_matching: eligible.length });
 }
 
 /**
@@ -753,91 +676,6 @@ function handleUnarchiveEmployee(session, payload) {
 }
 
 /**
- * `record_rdt_wave` — stamps one drug-test wave date across many employees
- * (Section 3.5).
- *
- * The whole batch is one read and one write; recording a wave for 300 field
- * employees one row at a time would not finish inside the execution budget.
- *
- * @param {Object} session
- * @param {Object} payload  {employee_ids, wave, date}
- * @return {GoogleAppsScript.Content.TextOutput}
- */
-function handleRecordRdtWave(session, payload) {
-  var denied = requireModuleEdit(session, 'employees');
-  if (denied) return denied;
-
-  var unknown = collectUnknownKeys_(payload, ['employee_ids', 'wave', 'date']);
-  if (hasKeys_(unknown)) {
-    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
-  }
-
-  var employeeIds = payload && payload.employee_ids;
-  var wave = normalizeString(payload && payload.wave);
-  var rawDate = payload && payload.date;
-
-  var fieldErrors = {};
-  if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
-    fieldErrors.employee_ids = 'required';
-  } else if (employeeIds.length > EMPLOYEE_IMPORT_MAX_ROWS) {
-    fieldErrors.employee_ids = 'too_many';
-  }
-  if (EMPLOYEE_RDT_KEYS.indexOf(wave) === -1) fieldErrors.wave = 'invalid_value';
-
-  var date = normalizeIsoDate(rawDate);
-  if (normalizeString(rawDate) === '') {
-    fieldErrors.date = 'required';
-  } else if (date === '') {
-    fieldErrors.date = 'invalid_format';
-  }
-
-  if (hasKeys_(fieldErrors)) {
-    return errResponse('validation_failed', 'invalid_payload', fieldErrors);
-  }
-
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    console.error('record_rdt_wave: could not acquire script lock');
-    return errResponse('server_error', 'lock_timeout');
-  }
-
-  try {
-    var pairs = readAllRowsWithIndex(SHEET_NAMES.EMPLOYEES);
-    var byId = {};
-    for (var p = 0; p < pairs.length; p++) {
-      var id = normalizeString(pairs[p].data.employee_id);
-      if (id !== '') byId[id] = pairs[p];
-    }
-
-    var stampedAt = nowIso();
-    var rowUpdates = [];
-    var notFound = [];
-    var seen = {};
-
-    for (var i = 0; i < employeeIds.length; i++) {
-      var employeeId = normalizeString(employeeIds[i]);
-      if (employeeId === '' || seen[employeeId]) continue;
-      seen[employeeId] = true;
-
-      var target = byId[employeeId];
-      if (!target) {
-        notFound.push(employeeId);
-        continue;
-      }
-
-      var data = { updated_at: stampedAt, updated_by: session.user.user_id };
-      data[wave] = date;
-      rowUpdates.push({ row: target.row, data: data });
-    }
-
-    var updated = updateRowsAt(SHEET_NAMES.EMPLOYEES, rowUpdates);
-    return okResponse({ updated: updated, not_found: notFound });
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/**
  * `bulk_import_employees` — validate everything, then write everything
  * (Section 3.5).
  *
@@ -1125,10 +963,7 @@ function validateEmployeeInput_(input, ctx) {
   }
 
   // --- dates ----------------------------------------------------------------
-  var dateFields = ['hired_date'].concat(EMPLOYEE_RDT_KEYS);
-  for (var d = 0; d < dateFields.length; d++) {
-    applyDateField_(values, errors, input, dateFields[d]);
-  }
+  applyDateField_(values, errors, input, 'hired_date');
 
   for (var c = 0; c < EMPLOYEE_CERT_KEYS.length; c++) {
     applyDateField_(values, errors, input, 'cert_' + EMPLOYEE_CERT_KEYS[c] + '_expiry');
@@ -1275,9 +1110,6 @@ function shapeEmployee_(row, derived) {
   }
   for (var q = 0; q < EMPLOYEE_QUAL_KEYS.length; q++) {
     out['qual_' + EMPLOYEE_QUAL_KEYS[q]] = normalizeBoolean(row['qual_' + EMPLOYEE_QUAL_KEYS[q]]);
-  }
-  for (var r = 0; r < EMPLOYEE_RDT_KEYS.length; r++) {
-    out[EMPLOYEE_RDT_KEYS[r]] = normalizeIsoDate(row[EMPLOYEE_RDT_KEYS[r]]);
   }
 
   out.derived = derived;
@@ -1435,105 +1267,11 @@ function compareEmployeesByName_(a, b) {
   return an < bn ? -1 : 1;
 }
 
-/**
- * @private
- * The dashboard's RDT coverage block (Section 5.5).
- *
- * Coverage is *unique eligible employees tested this RDT year* ÷ *the eligible
- * pool*, which is the definition Section 5.5 gives. `tests_recorded` is
- * returned alongside it because a year with two waves records roughly twice as
- * many tests as it does tested people, and the 120% target only makes sense
- * against that second number — the card shows coverage, and the raw test count
- * is there for the admin who wants to know why the two disagree.
- *
- * Eligibility is the same rule `list_rdt_eligible` applies: active, not
- * archived, MCU not expired. Stated once there and mirrored here rather than
- * shared, because the two answers are shaped differently — that one returns
- * people, this one returns counts.
- *
- * @param {Array<Object>} rows  Every Employees row, already read.
- * @param {{today: string, thresholds: Object, moduleSettings: Object}} ctx
- * @return {Object} {tracking: false} or the full coverage block.
- */
-function rdtCoverage_(rows, ctx) {
-  var yearStart = normalizeString(
-    readModuleSetting_(ctx.moduleSettings, 'employees', EMPLOYEE_RDT_YEAR_START_KEY)
-  );
-  var targetRaw = Number(
-    readModuleSetting_(ctx.moduleSettings, 'employees', EMPLOYEE_RDT_TARGET_KEY)
-  );
-
-  if (!/^\d{2}-\d{2}$/.test(yearStart) || !isFinite(targetRaw) || targetRaw <= 0) {
-    return { tracking: false };
-  }
-
-  var windowStart = rdtYearStart_(ctx.today, yearStart);
-  if (windowStart === '') return { tracking: false };
-
-  var pool = 0;
-  var tested = 0;
-  var testsRecorded = 0;
-
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    if (normalizeString(row.employee_id) === '') continue;
-    if (normalizeBoolean(row.archived)) continue;
-    if (normalizeString(row.employment_status).toLowerCase() !== 'active') continue;
-    if (deriveCertState(row.cert_mcu_expiry, ctx.today, ctx.thresholds) === CERT_STATES.EXPIRED) continue;
-
-    pool++;
-
-    var inWindow = 0;
-    for (var k = 0; k < EMPLOYEE_RDT_KEYS.length; k++) {
-      var date = normalizeIsoDate(row[EMPLOYEE_RDT_KEYS[k]]);
-      if (date !== '' && date >= windowStart && date <= ctx.today) inWindow++;
-    }
-
-    testsRecorded += inWindow;
-    if (inWindow > 0) tested++;
-  }
-
-  return {
-    tracking: true,
-    year_start: windowStart,
-    target_pct: targetRaw,
-    pool: pool,
-    tested_employees: tested,
-    tests_recorded: testsRecorded,
-    coverage_pct: pool === 0 ? 0 : Math.round((tested / pool) * 1000) / 10
-  };
-}
-
-/**
- * @private
- * The first day of the RDT year that `today` falls inside.
- *
- * The setting is a bare 'MM-DD', so the year is whichever one puts the start on
- * or before today: with a start of 04-01, the 2026-03-15 dashboard reports on
- * the year that began 2025-04-01.
- *
- * @param {string} today   ISO 'YYYY-MM-DD'
- * @param {string} mmdd    'MM-DD'
- * @return {string} ISO date, or '' when today is unreadable.
- */
-function rdtYearStart_(today, mmdd) {
-  var iso = normalizeIsoDate(today);
-  if (iso === '') return '';
-
-  var year = Number(iso.slice(0, 4));
-  var candidate = year + '-' + mmdd;
-  return candidate <= iso ? candidate : (year - 1) + '-' + mmdd;
-}
-
-/** @private The latest of an employee's recorded drug-test dates, or ''. */
-function lastRdtDate_(row) {
-  var latest = '';
-  for (var i = 0; i < EMPLOYEE_RDT_KEYS.length; i++) {
-    var date = normalizeIsoDate(row[EMPLOYEE_RDT_KEYS[i]]);
-    if (date !== '' && date > latest) latest = date;
-  }
-  return latest;
-}
+/* The dashboard's RDT coverage block used to be computed here from the flat
+   rdt_* columns. It now reads the RdtLog tab and lives in Rdt.gs beside the
+   eligibility rules it shares with the selection algorithm — list_employee_stats
+   above still calls rdtCoverage_(rows, ctx), it just resolves to the other file
+   now (Apps Script has one global scope). */
 
 /** @private Linear lookup in an already-loaded row set. */
 function findEmployeeRow_(rows, employeeId) {

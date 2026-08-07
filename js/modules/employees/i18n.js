@@ -59,7 +59,6 @@ const en = {
   emp_col_employee: 'Employee',
   emp_col_team: 'Team',
   emp_col_archived_on: 'Archived on',
-  emp_col_last_rdt: 'Last RDT',
 
   /* ---------- Field labels ---------- */
   emp_field_name: 'Full name',
@@ -72,9 +71,6 @@ const en = {
   emp_field_legal_permission: 'Legal permission',
   emp_field_expiry_date: 'Expiry date',
   emp_field_cert_link: 'Certificate link',
-  emp_field_rdt_1: 'RDT — wave 1',
-  emp_field_rdt_2: 'RDT — wave 2',
-  emp_field_rdt: 'RDT',
 
   /* ---------- Section headers ---------- */
   emp_section_personal: 'Personal Details',
@@ -149,20 +145,93 @@ const en = {
   emp_days_ago: '{days}d ago',
 
   /* ---------- RDT page ---------- */
-  emp_rdt_intro: 'Employees eligible for testing — active, not archived, medical check-up not expired.',
-  emp_rdt_wave: 'Wave',
-  emp_rdt_wave_1: 'RDT wave 1',
-  emp_rdt_wave_2: 'RDT wave 2',
-  emp_rdt_wave_single: 'RDT (safety team)',
-  emp_rdt_date: 'Test date',
-  emp_rdt_record: 'Record wave',
-  emp_rdt_selected: '{count} selected',
-  emp_rdt_none_selected: 'Select at least one employee.',
+  emp_rdt_intro: 'Monthly random selection and yearly coverage tracking.',
+  emp_rdt_pct: '{pct}%',
+
+  // Onboarding
+  emp_rdt_enable_title: 'Random Drug Testing Is Not Set Up',
+  emp_rdt_enable_body: 'Turn this on to run the monthly random selection and track coverage across the fiscal year. Defaults are an April–March year, 10% of the eligible pool each month, and a 120% yearly target — all adjustable in Settings afterwards.',
+  emp_rdt_enable_button: 'Enable RDT',
+  emp_rdt_enable_super_admin_only: 'Only a super admin can enable RDT.',
+  emp_rdt_enabled: 'RDT is on.',
+  emp_rdt_disabled: 'RDT is not enabled for this dataset.',
+
+  // Yearly progress
+  emp_rdt_fiscal_year: 'Fiscal year {label}',
+  emp_rdt_pool_size: 'Eligible employees',
+  emp_rdt_unique_tested: 'Employees tested',
+  emp_rdt_coverage: 'Coverage',
+  emp_rdt_target_progress: '{pct}% of the yearly target',
+  emp_rdt_first_round_marker: 'First round complete',
+
+  // Monthly selection
+  emp_rdt_this_month: "This Month's Selection",
+  emp_rdt_phase_first: 'First-round tests (Apr–Jan)',
+  emp_rdt_phase_repeat: 'Repeat tests (Feb–Mar)',
+  emp_rdt_quota_line: '{quota} of {pool} eligible ({pct}%)',
+  emp_rdt_mcu_excluded: '{count} otherwise eligible employees are excluded this month — their medical check-up has expired, and the renewal includes a drug test.',
+  emp_rdt_no_selection: 'No selection has been generated for this month yet.',
+  emp_rdt_generate: 'Generate This Month',
+  emp_rdt_regenerate: 'Regenerate',
+  emp_rdt_regenerate_confirm: "Draw this month's list again? Picks not yet marked completed or missed will be discarded. Completed and missed entries are kept.",
+  emp_rdt_generated: '{count} employees selected.',
+  emp_rdt_no_candidates: 'Nobody is available to select for this phase right now.',
+
+  // Row actions
+  emp_rdt_mark_completed: 'Mark completed',
+  emp_rdt_mark_missed: 'Mark missed',
+  emp_rdt_swap: 'Swap',
+  emp_rdt_edit: 'Edit',
+  emp_rdt_revert: 'Undo',
+  emp_rdt_delete: 'Delete',
+
+  // Complete / edit dialog
+  emp_rdt_complete_title: 'Record Test Result',
+  emp_rdt_edit_title: 'Correct Test Result',
+  emp_rdt_test_date: 'Test date',
+  emp_rdt_result: 'Result',
+  emp_rdt_result_pass: 'Pass',
+  emp_rdt_result_fail: 'Fail',
+  emp_rdt_notes: 'Notes',
   emp_rdt_date_required: 'Pick the date the test was carried out.',
-  emp_rdt_recorded: 'Recorded for {count} employees.',
-  emp_rdt_none_eligible: 'No employees are eligible for testing right now.',
-  emp_rdt_confirm_title: 'Record This Wave?',
-  emp_rdt_confirm_message: '{count} employees will have {wave} set to {date}. Existing dates for that wave are overwritten.',
+  emp_rdt_completed: 'Test recorded.',
+  emp_rdt_edited: 'Entry updated.',
+
+  // Miss
+  emp_rdt_miss_title: 'Mark Test Missed',
+  emp_rdt_miss_body: 'The employee returns to the untested pool and can be selected again in a later month.',
+  emp_rdt_miss_reason: 'Reason',
+  emp_rdt_miss_placeholder: 'On leave, refused, no-show…',
+  emp_rdt_missed: 'Marked missed.',
+
+  // Swap
+  emp_rdt_swap_confirm: 'Replace {name} with a random draw from the remaining eligible pool?',
+  emp_rdt_swapped: '{oldName} swapped for {newName}.',
+  emp_rdt_swap_no_replacement: 'Nobody is left in the eligible pool to swap in. Mark the test missed instead.',
+
+  // Revert and delete
+  emp_rdt_revert_confirm: 'Return this entry to "selected"? The recorded date and result are cleared.',
+  emp_rdt_reverted: 'Entry reset to selected.',
+  emp_rdt_delete_confirm: 'Delete this entry? This cannot be undone.',
+  emp_rdt_deleted: 'Entry deleted.',
+
+  // Statuses
+  emp_rdt_status_selected: 'Selected',
+  emp_rdt_status_completed: 'Completed',
+  emp_rdt_status_missed: 'Missed',
+
+  // Recent activity + history
+  emp_rdt_recent: 'Recent Activity',
+  emp_rdt_view_history: 'View full log',
+  emp_rdt_history_title: 'RDT Log',
+  emp_rdt_history_sub: 'Every selection, completion and miss this fiscal year.',
+  emp_rdt_history_empty: 'No RDT entries yet.',
+  emp_rdt_filter_month: 'Month',
+  emp_rdt_col_status: 'Status',
+  emp_rdt_col_selected_at: 'Selected',
+  emp_rdt_col_log_id: 'Log ID',
+  emp_rdt_n_entries: '{count} entries',
+  emp_rdt_export: 'Export log',
 
   /* ---------- Resigned page ---------- */
   emp_resigned_intro: 'Archived employees. Read-only — unarchive one to edit it again.',
@@ -205,7 +274,7 @@ const en = {
   emp_dash_rdt_tests: '{count} tests recorded',
   emp_dash_rdt_since: 'since {date}',
   emp_dash_rdt_off: 'RDT Tracking Is Off',
-  emp_dash_rdt_off_hint: 'Set rdt_year_start and rdt_target_pct for the employees module to track coverage here.',
+  emp_dash_rdt_off_hint: 'Enable random drug testing on the RDT page to track coverage here.',
 
   emp_dash_recent: 'Recently Updated',
   emp_dash_recent_none: 'No employee has been updated yet.',
@@ -252,7 +321,6 @@ const ar = {
   emp_col_employee: 'الموظف',
   emp_col_team: 'الفريق',
   emp_col_archived_on: 'تاريخ الأرشفة',
-  emp_col_last_rdt: 'آخر اختبار',
 
   /* ---------- Field labels ---------- */
   emp_field_name: 'الاسم بالكامل',
@@ -265,9 +333,6 @@ const ar = {
   emp_field_legal_permission: 'التصريح القانوني',
   emp_field_expiry_date: 'تاريخ الانتهاء',
   emp_field_cert_link: 'رابط الشهادة',
-  emp_field_rdt_1: 'اختبار المخدرات — الموجة 1',
-  emp_field_rdt_2: 'اختبار المخدرات — الموجة 2',
-  emp_field_rdt: 'اختبار المخدرات',
 
   /* ---------- Section headers ---------- */
   emp_section_personal: 'البيانات الشخصية',
@@ -342,20 +407,93 @@ const ar = {
   emp_days_ago: 'منذ {days} يوم',
 
   /* ---------- RDT page ---------- */
-  emp_rdt_intro: 'الموظفون المؤهلون للاختبار — نشطون، غير مؤرشفين، والفحص الطبي غير منتهٍ.',
-  emp_rdt_wave: 'الموجة',
-  emp_rdt_wave_1: 'اختبار المخدرات — الموجة 1',
-  emp_rdt_wave_2: 'اختبار المخدرات — الموجة 2',
-  emp_rdt_wave_single: 'اختبار المخدرات (فريق السلامة)',
-  emp_rdt_date: 'تاريخ الاختبار',
-  emp_rdt_record: 'تسجيل الموجة',
-  emp_rdt_selected: 'تم تحديد {count}',
-  emp_rdt_none_selected: 'اختر موظفًا واحدًا على الأقل.',
+  emp_rdt_intro: 'الاختيار العشوائي الشهري وتتبع التغطية السنوية.',
+  emp_rdt_pct: '{pct}%',
+
+  // Onboarding
+  emp_rdt_enable_title: 'الاختبار العشوائي للمخدرات غير مُفعّل',
+  emp_rdt_enable_body: 'فعّل هذه الخاصية لتشغيل الاختيار العشوائي الشهري وتتبع التغطية على مدار السنة المالية. الإعدادات الافتراضية: سنة من أبريل إلى مارس، 10% من المؤهلين كل شهر، وهدف سنوي 120% — وكلها قابلة للتعديل من الإعدادات لاحقًا.',
+  emp_rdt_enable_button: 'تفعيل اختبار المخدرات',
+  emp_rdt_enable_super_admin_only: 'التفعيل متاح للمشرف العام فقط.',
+  emp_rdt_enabled: 'تم تفعيل اختبار المخدرات.',
+  emp_rdt_disabled: 'اختبار المخدرات غير مُفعّل لهذه البيانات.',
+
+  // Yearly progress
+  emp_rdt_fiscal_year: 'السنة المالية {label}',
+  emp_rdt_pool_size: 'الموظفون المؤهلون',
+  emp_rdt_unique_tested: 'الموظفون الذين تم اختبارهم',
+  emp_rdt_coverage: 'التغطية',
+  emp_rdt_target_progress: '{pct}% من الهدف السنوي',
+  emp_rdt_first_round_marker: 'اكتمال الجولة الأولى',
+
+  // Monthly selection
+  emp_rdt_this_month: 'اختيار هذا الشهر',
+  emp_rdt_phase_first: 'اختبارات الجولة الأولى (أبريل–يناير)',
+  emp_rdt_phase_repeat: 'اختبارات معادة (فبراير–مارس)',
+  emp_rdt_quota_line: '{quota} من {pool} مؤهل ({pct}%)',
+  emp_rdt_mcu_excluded: 'تم استبعاد {count} من الموظفين المؤهلين هذا الشهر — انتهى فحصهم الطبي، وتجديده يتضمن اختبار مخدرات.',
+  emp_rdt_no_selection: 'لم يتم إنشاء اختيار لهذا الشهر بعد.',
+  emp_rdt_generate: 'إنشاء اختيار هذا الشهر',
+  emp_rdt_regenerate: 'إعادة الإنشاء',
+  emp_rdt_regenerate_confirm: 'إعادة سحب قائمة هذا الشهر؟ سيتم حذف الاختيارات التي لم تُسجَّل كمكتملة أو فائتة. أما المكتملة والفائتة فتبقى كما هي.',
+  emp_rdt_generated: 'تم اختيار {count} موظف.',
+  emp_rdt_no_candidates: 'لا يوجد أحد متاح للاختيار في هذه المرحلة حاليًا.',
+
+  // Row actions
+  emp_rdt_mark_completed: 'تسجيل كمكتمل',
+  emp_rdt_mark_missed: 'تسجيل كفائت',
+  emp_rdt_swap: 'استبدال',
+  emp_rdt_edit: 'تعديل',
+  emp_rdt_revert: 'تراجع',
+  emp_rdt_delete: 'حذف',
+
+  // Complete / edit dialog
+  emp_rdt_complete_title: 'تسجيل نتيجة الاختبار',
+  emp_rdt_edit_title: 'تصحيح نتيجة الاختبار',
+  emp_rdt_test_date: 'تاريخ الاختبار',
+  emp_rdt_result: 'النتيجة',
+  emp_rdt_result_pass: 'ناجح',
+  emp_rdt_result_fail: 'راسب',
+  emp_rdt_notes: 'ملاحظات',
   emp_rdt_date_required: 'اختر تاريخ إجراء الاختبار.',
-  emp_rdt_recorded: 'تم التسجيل لعدد {count} موظف.',
-  emp_rdt_none_eligible: 'لا يوجد موظفون مؤهلون للاختبار حاليًا.',
-  emp_rdt_confirm_title: 'تسجيل هذه الموجة؟',
-  emp_rdt_confirm_message: 'سيتم ضبط {wave} بتاريخ {date} لعدد {count} موظف. ستُستبدل التواريخ الحالية لهذه الموجة.',
+  emp_rdt_completed: 'تم تسجيل الاختبار.',
+  emp_rdt_edited: 'تم تحديث السجل.',
+
+  // Miss
+  emp_rdt_miss_title: 'تسجيل الاختبار كفائت',
+  emp_rdt_miss_body: 'يعود الموظف إلى مجموعة غير المختبَرين ويمكن اختياره مرة أخرى في شهر لاحق.',
+  emp_rdt_miss_reason: 'السبب',
+  emp_rdt_miss_placeholder: 'في إجازة، رفض، لم يحضر…',
+  emp_rdt_missed: 'تم التسجيل كفائت.',
+
+  // Swap
+  emp_rdt_swap_confirm: 'استبدال {name} بموظف يُسحب عشوائيًا من المؤهلين المتبقين؟',
+  emp_rdt_swapped: 'تم استبدال {oldName} بـ {newName}.',
+  emp_rdt_swap_no_replacement: 'لم يتبق أحد في مجموعة المؤهلين للاستبدال. سجّل الاختبار كفائت بدلًا من ذلك.',
+
+  // Revert and delete
+  emp_rdt_revert_confirm: 'إعادة هذا السجل إلى حالة «مختار»؟ سيتم مسح التاريخ والنتيجة المسجلين.',
+  emp_rdt_reverted: 'تمت إعادة السجل إلى «مختار».',
+  emp_rdt_delete_confirm: 'حذف هذا السجل؟ لا يمكن التراجع عن ذلك.',
+  emp_rdt_deleted: 'تم حذف السجل.',
+
+  // Statuses
+  emp_rdt_status_selected: 'مختار',
+  emp_rdt_status_completed: 'مكتمل',
+  emp_rdt_status_missed: 'فائت',
+
+  // Recent activity + history
+  emp_rdt_recent: 'النشاط الأخير',
+  emp_rdt_view_history: 'عرض السجل الكامل',
+  emp_rdt_history_title: 'سجل اختبار المخدرات',
+  emp_rdt_history_sub: 'كل اختيار واكتمال وتفويت خلال السنة المالية.',
+  emp_rdt_history_empty: 'لا توجد سجلات اختبار مخدرات بعد.',
+  emp_rdt_filter_month: 'الشهر',
+  emp_rdt_col_status: 'الحالة',
+  emp_rdt_col_selected_at: 'تاريخ الاختيار',
+  emp_rdt_col_log_id: 'رقم السجل',
+  emp_rdt_n_entries: '{count} سجل',
+  emp_rdt_export: 'تصدير السجل',
 
   /* ---------- Resigned page ---------- */
   emp_resigned_intro: 'الموظفون المؤرشفون. للعرض فقط — ألغِ الأرشفة للتعديل.',
@@ -392,7 +530,7 @@ const ar = {
   emp_dash_rdt_tests: '{count} اختبار مسجل',
   emp_dash_rdt_since: 'منذ {date}',
   emp_dash_rdt_off: 'تتبع اختبار المخدرات غير مُفعّل',
-  emp_dash_rdt_off_hint: 'اضبط rdt_year_start و rdt_target_pct لوحدة الموظفين لتتبع التغطية هنا.',
+  emp_dash_rdt_off_hint: 'فعّل الاختبار العشوائي للمخدرات من صفحة RDT لتتبع التغطية هنا.',
 
   emp_dash_recent: 'آخر التحديثات',
   emp_dash_recent_none: 'لم يُحدَّث أي موظف بعد.',

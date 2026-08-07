@@ -19,12 +19,13 @@ import { canEdit, canView } from '../../../utils/permissions.js';
 import { MODULE_NAMES } from '../../../constants/globals.js';
 import {
   certStateBadge, worstStateBadge, verdictBadge, teamBadge, statusBadge, qualBadge,
+  rdtStatusBadge, rdtResultBadge,
 } from '../../../components/badge.js';
 import { toastSuccess, toastError, toast } from '../../../components/toast.js';
 import { confirmDialog } from '../../../components/modal.js';
 import { getEmployee, archiveEmployee, unarchiveEmployee } from '../dataActions.js';
 import {
-  TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor, rdtKeysFor,
+  TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor,
 } from '../constants.js';
 
 /** Page state, keyed by employee so returning to a different one refetches. */
@@ -142,6 +143,47 @@ function renderHistory(history) {
               <td>${escapeHtml(fmtDate(row.new_expiry))}</td>
               <td>${escapeHtml(fmtDateTime(row.renewed_at))}</td>
               <td class="cell-sub">${escapeHtml(row.renewed_by)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/**
+ * This employee's drug-test log, newest first.
+ *
+ * Read-only here. Every RDT write happens on the RDT page, where the monthly
+ * quota and the eligible pool are in view — a completion marked from a detail
+ * page with no sight of either is how a programme quietly drifts off target.
+ *
+ * @param {Array<Object>} history rows from get_employee's `rdt_history`
+ * @returns {string} HTML
+ */
+function renderRdtHistory(history) {
+  if (!history || history.length === 0) {
+    return `<div class="card"><div class="cell-empty">${escapeHtml(t('emp_rdt_history_empty'))}</div></div>`;
+  }
+
+  return `
+    <div class="card">
+      <table class="tbl tbl-flush">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t('emp_rdt_col_selected_at'))}</th>
+            <th>${escapeHtml(t('emp_rdt_test_date'))}</th>
+            <th>${escapeHtml(t('emp_rdt_col_status'))}</th>
+            <th>${escapeHtml(t('emp_rdt_result'))}</th>
+            <th>${escapeHtml(t('emp_rdt_notes'))}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${history.map((row) => `
+            <tr>
+              <td>${escapeHtml(fmtDate(row.selected_at))}</td>
+              <td>${escapeHtml(row.test_date ? fmtDate(row.test_date) : '—')}</td>
+              <td>${rdtStatusBadge(row.status)}</td>
+              <td>${rdtResultBadge(row.result) || '—'}</td>
+              <td class="rdt-notes-cell">${escapeHtml(row.notes || '')}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -278,13 +320,7 @@ export function renderEmployeeDetailPage(params) {
         </div>` : ''}
 
       <div class="section-head">${escapeHtml(t('emp_section_drug'))}</div>
-      <div class="card">
-        <div class="detail-grid">
-          ${rdtKeysFor(employee.team)
-            .map((key) => displayField('emp_field_' + key, employee[key] ? fmtDate(employee[key]) : ''))
-            .join('')}
-        </div>
-      </div>
+      ${renderRdtHistory(s.data.rdt_history)}
 
       <div class="section-head">${escapeHtml(t('emp_section_history'))}</div>
       ${renderHistory(s.data.renewal_history)}

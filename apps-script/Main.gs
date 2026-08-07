@@ -98,14 +98,31 @@ var AUTHENTICATED_ACTIONS = {
   'bulk_import_employees': function (session, payload) {
     return handleBulkImportEmployees(session, payload);
   },
-  'list_rdt_eligible': function (session, payload) {
-    return handleListRdtEligible(session, payload);
-  },
-  'record_rdt_wave': function (session, payload) {
-    return handleRecordRdtWave(session, payload);
-  },
   'list_employee_stats': function (session, payload) {
     return handleListEmployeeStats(session, payload);
+  },
+
+  // --- Random drug testing (Section 3.5, Rdt.gs) ---------------------------
+  // Part of the employees module: every handler gates on `employees` view or
+  // edit, so a module admin who owns employees runs the testing programme and
+  // nobody else sees it exists.
+  'list_rdt_overview': function (session, payload) {
+    return handleListRdtOverview(session, payload);
+  },
+  'list_rdt_history': function (session, payload) {
+    return handleListRdtHistory(session, payload);
+  },
+  'generate_rdt_selection': function (session, payload) {
+    return handleGenerateRdtSelection(session, payload);
+  },
+  'update_rdt_entry': function (session, payload) {
+    return handleUpdateRdtEntry(session, payload);
+  },
+  'swap_rdt_selection': function (session, payload) {
+    return handleSwapRdtSelection(session, payload);
+  },
+  'delete_rdt_entry': function (session, payload) {
+    return handleDeleteRdtEntry(session, payload);
   },
 
   // --- Equipment (Section 3.6) ---------------------------------------------
@@ -143,6 +160,12 @@ var AUTHENTICATED_ACTIONS = {
   },
   'update_field_options': function (session, payload) {
     return handleUpdateFieldOptions(session, payload);
+  },
+  'list_module_settings': function (session, payload) {
+    return handleListModuleSettings(session, payload);
+  },
+  'update_module_settings': function (session, payload) {
+    return handleUpdateModuleSettings(session, payload);
   },
 
   // --- Officer app (Section 3.8) -------------------------------------------

@@ -6,8 +6,8 @@
      #/employee/LM-…/edit   → update, team read from the record
 
    Team decides the shape of the form (Section 6.1): safety-team employees carry
-   three extra certificates, three qualification flags and a single RDT date;
-   field-team employees carry two RDT waves and none of the extras.
+   three extra certificates and three qualification flags that field-team
+   employees do not.
 
    Typing never redraws. Every input writes straight into the page's `values`
    object, so the DOM is the source of truth for nothing — which means an
@@ -29,7 +29,7 @@ import { teamBadge } from '../../../components/badge.js';
 import { createEmployee, updateEmployee, getEmployee, loadFieldOptions } from '../dataActions.js';
 import { invalidateEmployeeDetail } from './detailPage.js';
 import {
-  TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor, rdtKeysFor, listKeyFor,
+  TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor, listKeyFor,
 } from '../constants.js';
 
 /**
@@ -81,7 +81,10 @@ function writableFields(team) {
   });
 
   if (team === TEAMS.SAFETY) QUAL_KEYS.forEach((key) => fields.push('qual_' + key));
-  rdtKeysFor(team).forEach((key) => fields.push(key));
+
+  // No drug-test fields. Tests are events on the RdtLog tab, not columns on the
+  // employee, and they are recorded from the RDT page where the selection they
+  // belong to is in view.
 
   return fields;
 }
@@ -317,12 +320,6 @@ export function renderEmployeeFormPage(params) {
           </div>
         </div>` : ''}
 
-      <div class="section-head">${escapeHtml(t('emp_section_drug'))}</div>
-      <div class="card">
-        <div class="detail-grid">
-          ${rdtKeysFor(s.team).map((key) => textInput(s, key, 'emp_field_' + key, { type: 'date' })).join('')}
-        </div>
-      </div>
     </div>`;
 }
 

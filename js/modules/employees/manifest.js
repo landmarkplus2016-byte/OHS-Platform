@@ -27,6 +27,7 @@ import { renderEmployeeDetailPage, bindEmployeeDetailPageEvents } from './pages/
 import { renderEmployeeFormPage, bindEmployeeFormEvents } from './pages/formPage.js';
 import { renderRenewalsPage, bindRenewalsPageEvents } from './pages/renewalsPage.js';
 import { renderRdtPage, bindRdtPageEvents } from './pages/rdtPage.js';
+import { renderRdtHistoryPage, bindRdtHistoryPageEvents } from './pages/rdtHistoryPage.js';
 import { renderResignedPage, bindResignedPageEvents } from './pages/resignedPage.js';
 import {
   renderEmployeeKpis, renderEmployeeCharts, bindEmployeeDashboard,
@@ -46,6 +47,10 @@ export const manifest = {
     { path: 'renewals', page: renderRenewalsPage,   bind: bindRenewalsPageEvents },
     { path: 'rdt',      page: renderRdtPage,        bind: bindRdtPageEvents },
     { path: 'resigned', page: renderResignedPage,   bind: bindResignedPageEvents },
+
+    // The full RDT log. No sidebar entry — it is reached from the RDT
+    // dashboard, the same way employee detail is reached from a list.
+    { path: 'rdt/history', page: renderRdtHistoryPage, bind: bindRdtHistoryPageEvents },
 
     // Detail and form routes have no sidebar entry, so the topbar falls back to
     // the module's display name. `employee/new/:team` is registered before

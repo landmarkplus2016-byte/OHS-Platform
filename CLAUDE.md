@@ -133,7 +133,7 @@ This is the foundation. Every tab, every column, every key. Once locked, the App
 3. **Compliance state is never stored.** Derived at read time from dates + Config thresholds.
 4. **Deletion is deactivation.** No row is ever removed. Employees archive, equipment gets rejected, users deactivate. Historical records live forever.
 
-## The tabs (12 total)
+## The tabs (13 total)
 
 ### System tabs (3)
 
@@ -141,10 +141,11 @@ This is the foundation. Every tab, every column, every key. Once locked, the App
 **`Users`** — all admin and officer accounts.
 **`Sessions`** — active login tokens, auto-cleaned nightly.
 
-### Employee module tabs (2)
+### Employee module tabs (3)
 
 **`Employees`** — the employee records.
 **`RenewalHistory`** — append-only log of certificate renewals per employee.
+**`RdtLog`** — one row per random-drug-test event: who was selected, when, and what happened.
 
 ### Equipment module tabs (2)
 
@@ -296,15 +297,14 @@ Full column list. Mirrors OHS-DB with adjustments for the new architecture.
 | `qual_nebosh` | boolean | Safety team only |
 | `qual_iso_45001` | boolean | Safety team only |
 | `qual_osha` | boolean | Safety team only |
-| `rdt_1` | date | Field team RDT wave 1 |
-| `rdt_2` | date | Field team RDT wave 2 |
-| `rdt` | date | Safety team single RDT |
 | `created_at` | ISO datetime | |
 | `created_by` | user_id | |
 | `updated_at` | ISO datetime | |
 | `updated_by` | user_id | |
 
 **Key change from OHS-DB:** Certificates are flat columns instead of a nested object. Sheets doesn't do nested structures. Every cert has `cert_<key>_expiry` and `cert_<key>_link` as two flat columns.
+
+**No RDT columns on this tab.** Drug testing is an event log, not a date field — one employee can be tested many times in a year, and each test carries a status, a result, and notes. It lives on `RdtLog`. The flat `rdt_1` / `rdt_2` / `rdt` columns that shipped in the first cut of this schema are retired; nothing reads or writes them.
 
 ### `RenewalHistory`
 
@@ -319,6 +319,29 @@ Append-only. One row per certificate renewal event.
 | `new_expiry` | date | |
 | `renewed_at` | ISO datetime | |
 | `renewed_by` | user_id | |
+
+### `RdtLog`
+
+One row per random-drug-test event. An employee may have many rows per fiscal year.
+
+| Column | Type | Purpose |
+|---|---|---|
+| `log_id` | text | Primary key (e.g. `RDT-000001`) |
+| `employee_id` | text | FK to Employees |
+| `fiscal_year` | text | `"2026-2027"` — computed at selection time, never recomputed |
+| `selected_at` | date | ISO date the monthly selection was generated |
+| `selected_by` | user_id | Who generated it |
+| `test_date` | date | ISO date the test actually happened. Blank until completed; stays blank for missed |
+| `status` | text | `selected` \| `completed` \| `missed` |
+| `result` | text | `pass` \| `fail` \| blank. Only meaningful when `status = completed` |
+| `notes` | text | Free text, ≤500 chars |
+| `updated_at` | ISO datetime | |
+| `updated_by` | user_id | |
+
+**Rules:**
+- `fiscal_year` is stamped once at selection and never recalculated. A test selected in March 2027 belongs to FY 2026-2027 even if it completes in April.
+- A `completed` row is the only kind that counts toward yearly coverage. `missed` re-opens the employee for a later month; it counts for nothing.
+- Deleting a row is permitted here and nowhere else in the schema. An RdtLog row is a *plan*, not a record of an entity — a selection that was generated in error and never carried out is noise in the audit trail, not history worth keeping. The UI confirms before every delete. This is the sole documented exception to rule 6.
 
 ### `Equipment`
 
@@ -400,6 +423,20 @@ Per-module config that would otherwise clutter Config.
 - (`employees`, `blocker_certs`, `wah_practical,wah_theoretical,mcu`)
 - (`employees`, `warning_certs`, `fa,ff,ra,ec`)
 - (`equipment`, `blocker_condition`, `third_party_expired_or_latest_wave_failed`)
+
+**RDT configuration** lives here too, all under the `employees` module. The RDT page is off until `rdt_enabled` is `TRUE`; the page offers a one-click enable that seeds every row below with its default.
+
+| `setting_key` | Default | Purpose |
+|---|---|---|
+| `rdt_enabled` | `FALSE` | Master switch. `FALSE` → the RDT page shows its onboarding card |
+| `rdt_fiscal_year_start_month` | `4` | 1–12. April starts Landmark's RDT year |
+| `rdt_monthly_target_pct` | `10` | Percent of the eligible pool selected each month |
+| `rdt_yearly_target_pct` | `120` | Yearly coverage goal |
+| `rdt_hire_grace_months` | `3` | New hires are covered by their hiring medical for this long |
+| `rdt_repeat_months` | `2,3` | Months that draw from already-tested employees instead of untested ones |
+| `rdt_safety_title` | `Safety Officer` | The only safety-team title in scope. Field team is in scope at every title |
+
+The retired `rdt_year_start` and `rdt_target_pct` keys are superseded by these.
 
 ### `Vehicles` and `VehicleHistory`
 
@@ -877,6 +914,7 @@ The frontend never re-derives what the server has already derived. Compliance de
 {
   "employee": { ...full employee object with derived... },
   "renewal_history": [ ...RenewalHistory rows for this employee, sorted desc by renewed_at... ],
+  "rdt_history": [ ...RdtLog rows for this employee, sorted desc by selected_at... ],
   "assigned_equipment": [ ...brief equipment refs: {equipment_id, item, brand, serial_no, verdict}... ]
 }
 ```
@@ -970,30 +1008,140 @@ Both fields optional. If both omitted, returns entire tab (capped at 500 rows, s
 3. Insert new rows, or update existing ones per `on_duplicate` policy
 4. Return `{added: N, updated: N, skipped: N, list_added: {subcontractor: [...], title: [...]}}`
 
-### `list_rdt_eligible`
+### `list_rdt_overview`
 
-Specialized action for the RDT feature. Returns employees eligible for the current RDT wave (MCU not expired, active, not archived).
+Everything the RDT dashboard draws, in one call: settings, the current fiscal year, the phase, the eligible pool, this month's quota, this month's selection, yearly progress, and recent activity.
 
 **Permission:** `view employees`.
 
-**Payload:** `{ "team": "field" | "safety" }` (RDT is typically field-only)
+**Payload:** none.
 
-**Success `data`:** array of employee brief objects (id, name, national_id, subcontractor, last RDT date).
+**Success `data`:**
+```json
+{
+  "enabled": true,
+  "settings": {
+    "fiscal_year_start_month": 4, "monthly_target_pct": 10, "yearly_target_pct": 120,
+    "hire_grace_months": 3, "repeat_months": [2, 3], "safety_title": "Safety Officer"
+  },
+  "fiscal_year": { "label": "2026-2027", "start_date": "2026-04-01", "end_date": "2027-03-31" },
+  "month": { "iso": "2026-08", "is_repeat_phase": false, "quota": 14 },
+  "pool": { "size": 137, "mcu_excluded": 6 },
+  "progress": {
+    "pool_size": 137, "yearly_target": 164, "completed_count": 48,
+    "unique_tested_count": 48, "coverage_pct": 35.0, "target_pct": 29.3
+  },
+  "this_month": [ { ...entry with employee fields joined... } ],
+  "recent": [ { ...15 newest entries this fiscal year... } ]
+}
+```
 
-### `record_rdt_wave`
+When RDT is not enabled the response is `{ "enabled": false }` and nothing else — the frontend renders the onboarding card.
+
+Every entry object carries the RdtLog row plus `name`, `team`, and `title` joined from Employees, so the page never makes a second call to render a table.
+
+### `list_rdt_history`
+
+The full fiscal-year log, filtered and paged.
+
+**Permission:** `view employees`.
+
+**Payload:**
+```json
+{
+  "fiscal_year": "2026-2027",
+  "month": "2026-08",
+  "team": "field",
+  "status": "completed",
+  "result": "pass",
+  "page": 1,
+  "page_size": 100
+}
+```
+
+All fields optional. `fiscal_year` defaults to the current one. Sorted by `selected_at` descending. `page_size` capped at 500.
+
+**Success `data`:** `{ "entries": [...], "total_matching": 212, "page": 1, "page_size": 100 }`
+
+### `generate_rdt_selection`
+
+Runs the monthly random selection and writes the resulting `selected` rows.
+
+**Permission:** `edit employees`.
+
+**Payload:** `{ "regenerate": false }`
+
+**Server behavior:**
+1. Reject unless `rdt_enabled` → `validation_failed` with `field_errors: {rdt: "disabled"}`
+2. If `regenerate` is true, delete every `selected` row whose `selected_at` falls in the current calendar month. `completed` and `missed` rows are never touched.
+3. Recompute the eligible pool *now* — never a pool frozen at the start of the year
+4. Exclude anyone already `selected` or `completed` this calendar month
+5. Apr–Jan: draw only from employees with no `completed` row this fiscal year. Feb–Mar (`rdt_repeat_months`): draw only from employees who *do* have one.
+6. Fisher–Yates shuffle, slice to `round(monthly_target_pct% × pool)`. Never pad past the candidates available.
+7. Append one `selected` row per pick, IDs from the highest existing `RDT-######` under a script lock
+
+**Success `data`:** `{ "created": [...entries...], "quota": 14, "pool_size": 137 }`
+
+### `update_rdt_entry`
+
+Every state change to one log row: mark completed, mark missed, revert to selected, or correct a completed entry.
 
 **Permission:** `edit employees`.
 
 **Payload:**
 ```json
 {
-  "employee_ids": ["LM-EMP-0001", "LM-EMP-0002"],
-  "wave": "rdt_1" | "rdt_2" | "rdt",
-  "date": "2026-08-01"
+  "log_id": "RDT-000042",
+  "status": "completed",
+  "test_date": "2026-08-11",
+  "result": "pass",
+  "notes": ""
 }
 ```
 
-**Server behavior:** for each employee, set the specified wave field to `date`, stamp `updated_at`, `updated_by`. Returns count updated.
+`status` is optional — omit it to edit `test_date` / `result` / `notes` in place without changing state.
+
+**Validation:**
+- `status = completed` requires a `test_date` and a `result` of `pass` or `fail`
+- `status = missed` forces `test_date` and `result` blank; `notes` is the reason
+- `status = selected` (revert) clears `test_date` and `result`
+- `notes` ≤ 500 chars
+
+### `swap_rdt_selection`
+
+Replaces one selected employee with a random draw from the remaining eligible pool — for someone known in advance to be unavailable.
+
+**Permission:** `edit employees`.
+
+**Payload:** `{ "log_id": "RDT-000042" }`
+
+**Server behavior:** deletes the original row (a swap is "we knew in advance", not "we tried and failed" — that is what `missed` is for), draws one replacement from the pool excluding anyone already selected or completed this month, and appends a new `selected` row for them. The replacement pool respects every eligibility rule including the MCU exclusion.
+
+Returns `conflict` with `message: "no_replacement_available"` when the pool is exhausted. The original row is left intact in that case.
+
+**Success `data`:** `{ "removed_employee_id": "...", "entry": {...the replacement...} }`
+
+### `delete_rdt_entry`
+
+**Permission:** `edit employees`.
+
+**Payload:** `{ "log_id": "RDT-000042" }`
+
+Hard-deletes the row. The documented exception to rule 6 — see the `RdtLog` notes in Section 2. Idempotent: deleting an already-gone row succeeds.
+
+### RDT eligibility — the one rule every action above shares
+
+An employee is in the RDT pool when **all** of these hold:
+
+- `archived === false`
+- `employment_status === 'Active'`
+- Team is `field` (any title), **or** team is `safety` and `title === rdt_safety_title`
+- `hired_date` is set and at least `rdt_hire_grace_months` before today — new hires are covered by their hiring medical
+- `cert_mcu_expiry` is set and `>= today`
+
+That last one is a hard exclusion, not a warning: an expired MCU means the employee is in the medical-renewal window, and the renewal itself includes a drug test. Selecting them for a standalone RDT is redundant work. They re-enter the pool automatically the moment a renewed MCU expiry is recorded. The boundary is `>= today`, matching how `deriveCertState` treats it.
+
+The pool is recomputed at the moment of every selection. It is never frozen at the start of the fiscal year — hires crossing the grace period mid-year join it, and archived or resigned employees drop out.
 
 ## 3.6 Equipment actions (8)
 
@@ -1461,7 +1609,7 @@ Super admin sees the full stack: employee KPIs + employee charts, then equipment
 - **Charts** (row of 3):
   - *Expiries in Next 30 Days by Certificate* — horizontal bar chart. The window is 30 days (`urgent_days`), matching the KPI directly above it, not 90.
   - *Headcount by Subcontractor* — horizontal bars.
-  - *RDT Coverage* card — big headline coverage % (unique eligible employees tested this fiscal year ÷ eligible pool) with a target-progress bar toward the yearly 120% goal. Shows an "RDT tracking is off" state when RDT settings are absent. Replaces the older "Compliance State" donut, which was removed.
+  - *RDT Coverage* card — big headline coverage % (unique eligible employees with a `completed` RdtLog row this fiscal year ÷ eligible pool) with a target-progress bar toward the yearly 120% goal. Shows an "RDT tracking is off" state when `rdt_enabled` is not set. Replaces the older "Compliance State" donut, which was removed.
 - **Recently Updated** — small list of the 6 most recently modified employees.
 
 **Equipment dashboard composition:**
@@ -1701,7 +1849,7 @@ The Apps Script `officer_sync` handler strips these before returning:
 - **The entire `users` list** — officers don't need to know who else has an account
 - **All `_link` fields on certificates and equipment** — file URLs are irrelevant at a tower site
 - **`comments` field on equipment** — admin notes not intended for officers
-- **All history tabs** — RenewalHistory, InspectionHistory not returned
+- **All history tabs** — RenewalHistory, InspectionHistory, RdtLog not returned. Officers never see any RDT data at all: not the log, not the settings, not a "last tested" date. RDT is HR compliance paperwork, and it has no bearing on whether someone may work today.
 - **`created_by`, `updated_by`, `archived_by`, `rejected_by`** — audit trail hidden from officers
 - **All ModuleSettings that aren't display-relevant** — verdict is pre-derived, so officers don't need to see the rules
 
@@ -1820,7 +1968,7 @@ EMPLOYEES
   Field Team
   Safety Team
   Renewals
-  RDT
+  RDT              → #/rdt, with the full log at #/rdt/history
   Resigned & Terminated
 
 EQUIPMENT
@@ -1860,6 +2008,7 @@ ohs-platform/
 │   ├── Auth.gs                      # login, logout, session validation
 │   ├── Users.gs                     # user + permission actions
 │   ├── Employees.gs                 # employee actions
+│   ├── Rdt.gs                       # RDT selection algorithm + the six RDT actions
 │   ├── Equipment.gs                 # equipment actions
 │   ├── FieldOptions.gs              # field options + module settings actions
 │   ├── Officer.gs                   # officer sync + entity fetches
@@ -1965,6 +2114,13 @@ ohs-platform/
 - Never hardcode a visible string in JS. Always `t('key')`.
 - Never show a verdict from a stale officer cache (>72h). Fail-closed lockout, no override.
 - Never let an officer session write to Sheets in v1. Read-only, period.
+- Never sort the RDT eligible pool by anything but a random shuffle before slicing to the monthly quota. No "least recently tested first", no alphabetical, no seeding the RNG — the randomness is the point of the programme.
+- Never freeze the RDT eligible pool at the start of the fiscal year. Recompute it at every selection.
+- Never select an employee with an expired or missing MCU for RDT, including as a swap replacement.
+- Never let Feb/Mar draw an employee who has no `completed` entry this fiscal year — that would book a repeat test for someone who never had a first one.
+- Never let RDT status affect a site-check verdict or a dashboard compliance KPI. An employee overdue for RDT is still `cleared` if their certificates are in order. RDT is HR paperwork, not a safety blocker.
+- Never expose RdtLog or any RDT setting to an officer session.
+- Never re-introduce flat RDT date columns on Employees. RdtLog is the sole source of truth.
 - Never let a module admin call user-management actions. Super admin only, enforced server-side.
 - Never allow demoting or deactivating the last super admin. Server-side check on every user mutation.
 - Never render an unpaginated list. All list_* actions have server-side paging; frontend respects `page_size`.

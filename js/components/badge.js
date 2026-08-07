@@ -111,3 +111,44 @@ export function statusBadge(text, positive) {
 export function qualBadge(label, held) {
   return `<span class="badge ${held ? 'badge-cleared' : 'badge-inactive'}">${escapeHtml(label)} ${held ? '✓' : '—'}</span>`;
 }
+
+/**
+ * The three RDT log states (Section 2).
+ *
+ * `selected` reuses the amber `plan` tokens, which Section 8.3 keeps around for
+ * exactly this kind of non-compliance badge — an outstanding pick is neither a
+ * problem nor a success, it is work not done yet.
+ */
+const RDT_STATUS_CLASSES = {
+  selected: 'badge-rdt-selected',
+  completed: 'badge-cleared',
+  missed: 'badge-blocked',
+};
+
+/**
+ * An RDT status badge — Selected / Completed / Missed.
+ *
+ * @param {string} status
+ * @returns {string} HTML
+ */
+export function rdtStatusBadge(status) {
+  const cls = RDT_STATUS_CLASSES[status] || 'badge-inactive';
+  const label = RDT_STATUS_CLASSES[status] ? t('emp_rdt_status_' + status) : status;
+
+  return `<span class="badge ${cls}">${escapeHtml(label)}</span>`;
+}
+
+/**
+ * An RDT result badge — Pass / Fail. Returns '' for an entry with no result,
+ * so a caller can drop it in unconditionally beside a status badge.
+ *
+ * @param {string} result 'pass' | 'fail' | ''
+ * @returns {string} HTML
+ */
+export function rdtResultBadge(result) {
+  if (result !== 'pass' && result !== 'fail') return '';
+
+  return `<span class="badge ${result === 'pass' ? 'badge-cleared' : 'badge-blocked'}">${
+    escapeHtml(t('emp_rdt_result_' + result))
+  }</span>`;
+}
