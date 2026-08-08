@@ -1685,7 +1685,7 @@ Every certificate is classified into one of seven states based on today's date, 
 | State | Condition | Color |
 |---|---|---|
 | `na` | `cert_<key>_na` is TRUE | Slate |
-| `suspended` | `cert_<key>_suspended` is TRUE, **or** the certificate is a WAH cert (`wah_practical` / `wah_theoretical`) and the employee's `mcu` is `expired`. Applied regardless of the cert's own expiry date. | Violet |
+| `suspended` | `cert_<key>_suspended` is TRUE, **or** the certificate is a WAH cert (`wah_practical` / `wah_theoretical`) and the employee's `mcu` is `expired`. Applied regardless of the cert's own expiry date. | Yellow |
 | `missing` | expiry_date is empty | Gray |
 | `expired` | expiry_date < today | Red |
 | `urgent` | expiry_date within `urgent_days` (default 30) | Orange |
@@ -1975,7 +1975,7 @@ Same as OHS-DB. Full `:root` block below. `css/tokens.css` is the single source 
   --blocked:      #dc2626;  --blocked-bg:   #fee2e2;  --blocked-dark: #991b1b;
   --urgent-bg:    #ffe4e6;  --urgent-tx:    #9f1239;
   --missing-bg:   #f3f4f6;  --missing-tx:   #6b7280;
-  --suspended-bg: #ede9fe;  --suspended-tx: #5b21b6;
+  --suspended-bg: #fef08a;  --suspended-tx: #713f12;
   /* --plan-bg / --plan-tx kept available for non-compliance uses (e.g. RDT phase badges).
      No cert state currently maps to them. */
   --plan-bg:      #fef9c3;  --plan-tx:      #854d0e;

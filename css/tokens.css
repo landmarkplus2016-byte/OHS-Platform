@@ -26,15 +26,20 @@
   --blocked:      #dc2626;  --blocked-bg:   #fee2e2;  --blocked-dark: #991b1b;
   --urgent-bg:    #ffe4e6;  --urgent-tx:    #9f1239;
   --missing-bg:   #f3f4f6;  --missing-tx:   #6b7280;
-  --suspended-bg: #ede9fe;  --suspended-tx: #5b21b6;
+  /* Yellow, by Khaled's call — this state was violet (#ede9fe / #5b21b6) until
+     Aug 2026. Deliberately a *saturated* yellow, not the pale amber --warn-bg
+     that `soon` wears: the two would otherwise be hard to tell apart in a cert
+     list, and they sit at opposite ends of the ladder (suspended is the worst
+     state there is, `soon` the mildest tier that still shows). */
+  --suspended-bg: #fef08a;  --suspended-tx: #713f12;
   /* `na` reads as a deliberate decision, not absent data — a cool slate rather
      than the neutral grey `missing` uses, so the two never look alike in a
      certificate list. */
   --na-bg:        #e6ecf4;  --na-tx:        #4a5a72;
   /* --plan-bg / --plan-tx kept available for non-compliance uses — RDT phase
-     badges, and the "Course suspended" tint on the employee form's certificate
-     panels. No cert *state* maps to them; a derived `suspended` is violet
-     wherever it is actually reported. */
+     badges. No cert *state* maps to them. (They also used to tint the employee
+     form's "Course suspended" panel; that panel now uses the --suspended
+     tokens, so the form and the badge finally agree.) */
   --plan-bg:      #fef9c3;  --plan-tx:      #854d0e;
 
   /* Team badges. Not compliance colors — they identify which roster someone is
