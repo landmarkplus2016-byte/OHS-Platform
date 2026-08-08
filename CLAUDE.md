@@ -2120,16 +2120,88 @@ ohs-platform/
 │   │   ├── theme.js                 # THEMES, getTheme, setTheme
 │   │   ├── permissions.js           # canView(module), canEdit(module), canAccessRoute(route)
 │   │   ├── excelImport.js           # Shared Excel parsing helpers
-│   │   └── exportHelpers.js         # Shared Excel/PDF export helpers
+│   │   ├── exportHelpers.js         # Shared Excel/PDF export helpers
+│   │   └── pwa.js                   # registerServiceWorker() — called once from main.js
 │   │
 │   └── constants/
 │       └── globals.js               # ROLES, ERROR_CODES, MODULE_NAMES — cross-module enums
 │
 ├── manifest.webmanifest             # PWA manifest
 ├── service-worker.js                # Cache shell assets for officer PWA offline shell
+├── icons/                           # Generated from `OHS icon.png` — see PWA assets below
+│   ├── icon-192.png                 # purpose "any", transparent
+│   ├── icon-512.png                 # purpose "any", transparent
+│   ├── icon-maskable-192.png        # purpose "maskable", navy plate, artwork at 60%
+│   ├── icon-maskable-512.png        # purpose "maskable", navy plate, artwork at 60%
+│   ├── apple-touch-icon.png         # 180px, navy plate — iOS ignores alpha and the manifest
+│   └── favicon-16/32/48.png         # PNG favicons, also the payloads inside favicon.ico
 ├── favicon.ico
+├── OHS icon.png                     # Icon source of truth, 512px with alpha
+├── tools/
+│   └── make-icons.ps1               # Regenerates icons/ + favicon.ico. Manual, never at deploy
 └── background.png                   # Optional background art (same as OHS-DB)
 ```
+
+## 9.4 PWA assets
+
+The platform installs to a home screen on both shells — an officer adds it from
+Safari or Chrome and gets a standalone app; an admin can install it on the
+desktop from the browser's address bar. Both use the same manifest.
+
+**Regenerating the icons.** Every file in `icons/` and `favicon.ico` derives
+from `OHS icon.png` at the repo root. Replace that file and re-run
+`tools/make-icons.ps1` to reproduce the whole set — never hand-edit a generated
+icon, because the next regeneration silently discards the edit.
+
+That script is not a build step and does not violate the no-build-tools rule.
+Nothing runs it at deploy time; GitHub Pages still serves the repo exactly as
+committed, generated PNGs included. It is a manual one-off, run by the
+developer on the rare occasion the logo changes, and it uses only
+`System.Drawing` from the Windows runtime — no npm, no toolchain to install.
+
+**The two icon purposes are not interchangeable.** A `maskable` icon is cropped
+by the platform to whatever shape it likes (circle, squircle, rounded square),
+and only the centre 80%-diameter circle is guaranteed to survive. That is why
+the maskable variants carry a navy plate with the artwork at 60% — a
+transparent icon declared maskable gets a black plate on Android, and one drawn
+edge to edge loses its corners. The `any` variants stay transparent and
+full-bleed. Both must be present; neither substitutes for the other.
+
+**Every path is relative.** GitHub Pages serves this repo from `/OHS-Platform/`,
+not from a domain root, so `start_url`, `scope`, and every icon `src` in the
+manifest are relative, as are the `<link>` tags in `index.html` and the worker
+URL in `pwa.js`. A leading slash resolves one directory too high and breaks
+installation with no visible error.
+
+**`theme_color` is duplicated in `index.html`.** The `<meta name="theme-color">`
+tag colours the browser chrome before the manifest is parsed. It must stay in
+step with `theme_color` in the manifest — both are `--navy` (`#0f1942`).
+
+### What the service worker may cache
+
+The worker caches shell assets only: HTML, CSS, JS, icons, background art. It
+never caches platform data, and the fetch handler is written so that API calls
+never enter its control flow at all — it calls `respondWith()` only for
+same-origin GETs and the three pinned CDN libraries, and every Apps Script
+action is a cross-origin POST.
+
+This is rule 18, not a performance preference. The officer's data cache is the
+IndexedDB snapshot governed by `staleCheck.js`. A second, ungoverned copy of an
+API response in the HTTP cache would let an officer past `max_stale_hours` read
+a verdict the fail-closed lockout never inspects — exactly the outcome the rule
+exists to prevent.
+
+Add to this list of prohibitions rather than reasoning case by case:
+
+- **Never cache a response from the Apps Script Web App**, under any strategy.
+- **Never cache a response to a non-GET request.**
+- **Never precache an exhaustive list of the JS modules.** `main.js` statically
+  imports the whole tree, so one online visit populates the runtime cache on
+  its own. A hand-maintained list is a second source of truth, and a forgotten
+  entry is a blank screen offline.
+- **Bump `CACHE_VERSION` when a file is renamed or removed**, or when a cached
+  asset is known to be bad. Routine deploys do not need it — the
+  stale-while-revalidate strategy picks changes up on the following load.
 
 ## 9.2 Naming conventions
 

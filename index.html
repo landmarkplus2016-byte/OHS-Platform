@@ -13,6 +13,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OHS Platform — Landmark Occupational Health &amp; Safety</title>
 
+  <!-- PWA. Every path here is relative: GitHub Pages serves this repo from
+       /OHS-Platform/, so a leading slash would resolve one directory too high.
+       theme-color must stay in step with theme_color in the manifest — it is
+       the navy the sidebar and the officer header already wear. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f1942">
+
+  <!-- iOS ignores the manifest for both of these. It has no maskable-icon
+       concept and does not honour alpha, so apple-touch-icon is the pre-plated
+       one; status-bar-style stays "default" because black-translucent would
+       run the page up under the status bar and behind the navy header. -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="OHS Platform">
+
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+
   <!-- Design tokens first, then base, layout, components, page-specific (in this order) -->
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/base.css">

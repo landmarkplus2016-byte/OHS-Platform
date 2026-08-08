@@ -16,6 +16,7 @@ import { api } from './api.js';
 import { initRouter, registerModules } from './router.js';
 import { render } from './render.js';
 import { t, setLanguage, hasDeviceLanguagePreference } from './i18n/i18n.js';
+import { registerServiceWorker } from './utils/pwa.js';
 
 import { manifest as employeesManifest } from './modules/employees/manifest.js';
 import { manifest as equipmentManifest } from './modules/equipment/manifest.js';
@@ -295,6 +296,11 @@ function boot() {
     console.error('[OHS Platform] Mount point #app not found in index.html.');
     return;
   }
+
+  // Before the script-URL check, not after: the offline shell is worth caching
+  // on a device that has not been configured yet, and this call blocks nothing
+  // — it registers in the background and never rejects into boot.
+  registerServiceWorker();
 
   setScriptUrl(localStorage.getItem(SCRIPT_URL_KEY) || '');
 
