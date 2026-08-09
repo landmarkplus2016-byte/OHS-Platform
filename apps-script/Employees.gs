@@ -1543,3 +1543,364 @@ function addEmployeeCertFlagColumns() {
     ' columns, backfilled ' + dataRows + ' rows');
   return { added: added, backfilled_rows: dataRows };
 }
+
+// ---------------------------------------------------------------------------
+// Data backfill — blank certificates that are not required
+// ---------------------------------------------------------------------------
+
+/**
+ * The certificates this backfill may flag N/A.
+ *
+ * wah_practical, wah_theoretical and mcu are deliberately absent. A blank date
+ * on one of those reads as "not entered yet" far more often than "this man does
+ * not need it", and the two are not interchangeable: `missing` says the record
+ * is owed, `na` says it never will be. Flagging a blank medical N/A would also
+ * settle the RDT question by decision rather than by data (Section 3.5) — an
+ * employee excluded from the pool because nobody recorded a medical is a gap to
+ * chase; one excluded because an admin declared no medical is needed is not.
+ * Anyone genuinely exempt from those three still gets ticked by hand on the
+ * form, one employee at a time, which is the level of deliberation they want.
+ */
+var BLANK_NA_CERTS = ['ra', 'fa', 'ff', 'ec', 'ppe', 'lifting', 'scaffolding'];
+
+/**
+ * Where applyBlankCertsNa records what it changed, so revertBlankCertsNa can
+ * undo exactly that and nothing else.
+ *
+ * Script properties rather than a tab: rule 5 of Section 5.7 keeps new tabs out
+ * of the schema, and this is scaffolding for one operation, not data anybody
+ * reads. One property caps at 9KB, so the record is written in chunks — at four
+ * certs per field employee the whole roster encodes to a couple of KB, but a
+ * limit that only bites once the company grows is the worst kind.
+ */
+var BLANK_NA_UNDO_PREFIX = 'blank_na_undo_';
+var BLANK_NA_UNDO_META = 'blank_na_undo_meta';
+var BLANK_NA_UNDO_CHUNK = 7000;
+
+/**
+ * Logs what applyBlankCertsNa would change, and writes nothing.
+ *
+ * Run this first from the Apps Script editor and read the execution log. The
+ * per-certificate counts are the check: if one of them is far larger than the
+ * roster it means a cert is blank across the board for a reason other than "not
+ * required", and that is worth knowing before the write, not after.
+ *
+ * @return {Object} the same summary applyBlankCertsNa returns
+ */
+function previewBlankCertsNa() {
+  return blankCertsNa_(false);
+}
+
+/**
+ * Flags every blank non-critical certificate as N/A, across both teams,
+ * archived rows included.
+ *
+ * This exists because the roster carries hundreds of certificates that read
+ * `Missing` when the truth is that the course does not apply to that employee —
+ * a rigger who never needs Emergency Care, a helper who never needs Risk
+ * Assessment. `missing` and `na` derive differently on purpose (Section 6.1):
+ * missing is an absence to be chased, na is a decision already taken. Ticking
+ * them one at a time through the form is the same decision, made a thousand
+ * times.
+ *
+ * Three limits keep it honest:
+ *
+ *   It only touches a cert whose expiry is blank. A dated certificate is
+ *   evidence, and evidence is never overwritten by a bulk run.
+ *
+ *   It only touches certs that apply to the row's team — a field employee's
+ *   ppe/lifting/scaffolding columns are already outside APPLICABLE_CERTS_FIELD,
+ *   so flagging them would write noise that derives to nothing.
+ *
+ *   It leaves a manually suspended cert alone and counts it. Suspension is an
+ *   admin's explicit statement that the cert applies and is void right now;
+ *   overwriting it with na would silently reverse that judgement. Those rows are
+ *   reported so they can be settled by hand.
+ *
+ * Idempotent — a cert already flagged N/A is skipped, so a second run reports
+ * zero changes. Reversible — unticking N/A on the form restores exactly what was
+ * underneath, because the flag never rewrote the date.
+ *
+ * `updated_at` / `updated_by` are deliberately NOT stamped. Rule 8 governs writes
+ * made on behalf of a session; this is a developer-run normalization with no
+ * session behind it, and stamping 137 rows with today's date would wipe out the
+ * "Recently updated" panel and the UPDATED column's only signal. The change is
+ * recorded here in the code and in the execution log instead.
+ *
+ * @return {{applied: boolean, rows_touched: number, cells_flagged: number,
+ *     per_cert: Object, skipped_suspended: number}}
+ */
+function applyBlankCertsNa() {
+  return blankCertsNa_(true);
+}
+
+/**
+ * @private
+ * @param {boolean} apply
+ * @return {Object}
+ */
+function blankCertsNa_(apply) {
+  var sheet = getSheet(SHEET_NAMES.EMPLOYEES);
+  var headers = getHeaders(SHEET_NAMES.EMPLOYEES);
+
+  for (var k = 0; k < BLANK_NA_CERTS.length; k++) {
+    var needed = 'cert_' + BLANK_NA_CERTS[k] + '_na';
+    if (headers.indexOf(needed) === -1) {
+      throw new Error('Column ' + needed + ' is missing. Run ' +
+        'addEmployeeCertFlagColumns() first.');
+    }
+  }
+
+  var rows = readAllRowsWithIndex(SHEET_NAMES.EMPLOYEES);
+  if (!rows.length) {
+    console.log('blankCertsNa_: Employees tab holds no data rows');
+    return {
+      applied: false, rows_touched: 0, cells_flagged: 0,
+      per_cert: {}, skipped_suspended: 0
+    };
+  }
+
+  // One column of 'TRUE'/'FALSE' per cert, seeded from what is on the tab, so a
+  // column that ends up written keeps every value this run did not decide.
+  // Blanks normalize to 'FALSE' on the way past — Section 2 stores booleans as
+  // literal strings and never blank-for-false, and a column being rewritten
+  // anyway is the cheapest place to settle that.
+  var columns = {};
+  var perCert = {};
+  var touchedRows = {};
+  var undoByEmployee = {};
+  var skippedSuspended = 0;
+  var cellsFlagged = 0;
+
+  for (var c = 0; c < BLANK_NA_CERTS.length; c++) {
+    columns[BLANK_NA_CERTS[c]] = [];
+    perCert[BLANK_NA_CERTS[c]] = 0;
+  }
+
+  for (var r = 0; r < rows.length; r++) {
+    var data = rows[r].data;
+    var applicable = normalizeString(data.team).toLowerCase() === 'safety'
+      ? APPLICABLE_CERTS_SAFETY
+      : APPLICABLE_CERTS_FIELD;
+
+    // A row with no employee_id is a blank line inside the range, not a person.
+    // Without this it would read as field team with seven blank certs and get
+    // flagged — writing TRUE into a row that holds nothing.
+    var isEmployee = normalizeString(data.employee_id) !== '';
+
+    for (var i = 0; i < BLANK_NA_CERTS.length; i++) {
+      var cert = BLANK_NA_CERTS[i];
+      var alreadyNa = normalizeBoolean(data['cert_' + cert + '_na']);
+      var value = isEmployee
+        ? (alreadyNa ? 'TRUE' : 'FALSE')
+        : normalizeString(data['cert_' + cert + '_na']);   // blank row stays blank
+
+      var eligible = isEmployee &&
+        applicable.indexOf(cert) !== -1 &&
+        !alreadyNa &&
+        normalizeString(data['cert_' + cert + '_expiry']) === '';
+
+      if (eligible && normalizeBoolean(data['cert_' + cert + '_suspended'])) {
+        skippedSuspended++;
+        console.log('blankCertsNa_: leaving ' + data.employee_id + ' ' + cert +
+          ' alone — suspended by hand');
+        eligible = false;
+      }
+
+      if (eligible) {
+        value = 'TRUE';
+        perCert[cert]++;
+        cellsFlagged++;
+        touchedRows[rows[r].row] = true;
+        if (!undoByEmployee[data.employee_id]) undoByEmployee[data.employee_id] = [];
+        undoByEmployee[data.employee_id].push(i);
+      }
+
+      columns[cert].push([value]);
+    }
+  }
+
+  var rowsTouched = Object.keys(touchedRows).length;
+
+  if (apply && cellsFlagged > 0) {
+    for (var w = 0; w < BLANK_NA_CERTS.length; w++) {
+      var key = BLANK_NA_CERTS[w];
+      if (perCert[key] === 0) continue;   // nothing decided here, leave it be
+      var col = getColumnIndex(SHEET_NAMES.EMPLOYEES, 'cert_' + key + '_na');
+      var range = sheet.getRange(2, col, rows.length, 1);
+      range.setNumberFormat('@');
+      range.setValues(columns[key]);
+    }
+    clearSheetCache();
+    saveBlankCertsNaUndo_(undoByEmployee);
+  }
+
+  var summary = {
+    applied: apply && cellsFlagged > 0,
+    rows_touched: rowsTouched,
+    cells_flagged: cellsFlagged,
+    per_cert: perCert,
+    skipped_suspended: skippedSuspended
+  };
+
+  console.log((apply ? 'applyBlankCertsNa' : 'previewBlankCertsNa') + ': ' +
+    cellsFlagged + ' certificates across ' + rowsTouched + ' of ' + rows.length +
+    ' employees' + (apply ? ' flagged N/A' : ' would be flagged N/A') +
+    ', ' + skippedSuspended + ' skipped as suspended');
+  console.log('per certificate: ' + JSON.stringify(perCert));
+
+  return summary;
+}
+
+/**
+ * @private
+ * Records what a run changed, as `LM-EMP-0104:013` — employee, then indices into
+ * BLANK_NA_CERTS — joined with semicolons and split across chunked properties.
+ *
+ * Any previous record is cleared first. Two applies in a row leave only the
+ * second one undoable, which is honest: reverting the first after the second has
+ * run would be reasoning about a sheet state that no longer exists.
+ *
+ * @param {Object} undoByEmployee employee_id → array of cert index
+ */
+function saveBlankCertsNaUndo_(undoByEmployee) {
+  var props = PropertiesService.getScriptProperties();
+  clearBlankCertsNaUndo_(props);
+
+  var parts = [];
+  for (var id in undoByEmployee) {
+    if (!Object.prototype.hasOwnProperty.call(undoByEmployee, id)) continue;
+    parts.push(id + ':' + undoByEmployee[id].join(''));
+  }
+  if (!parts.length) return;
+
+  var payload = parts.join(';');
+  var chunks = [];
+  for (var p = 0; p < payload.length; p += BLANK_NA_UNDO_CHUNK) {
+    chunks.push(payload.substring(p, p + BLANK_NA_UNDO_CHUNK));
+  }
+
+  var toWrite = {};
+  for (var c = 0; c < chunks.length; c++) {
+    toWrite[BLANK_NA_UNDO_PREFIX + c] = chunks[c];
+  }
+  toWrite[BLANK_NA_UNDO_META] = JSON.stringify({
+    chunks: chunks.length,
+    employees: parts.length,
+    at: nowIso()
+  });
+  props.setProperties(toWrite);
+}
+
+/** @private Removes the undo record, chunks and meta alike. */
+function clearBlankCertsNaUndo_(props) {
+  var store = props || PropertiesService.getScriptProperties();
+  var metaRaw = store.getProperty(BLANK_NA_UNDO_META);
+  if (!metaRaw) return;
+
+  var count = 0;
+  try {
+    count = JSON.parse(metaRaw).chunks || 0;
+  } catch (err) {
+    count = 0;
+  }
+  for (var i = 0; i < count; i++) store.deleteProperty(BLANK_NA_UNDO_PREFIX + i);
+  store.deleteProperty(BLANK_NA_UNDO_META);
+}
+
+/**
+ * Undoes the last applyBlankCertsNa run, cell for cell.
+ *
+ * It reverts only the certificates that run flagged — read back from the record
+ * it left behind, not recomputed. A cert somebody ticked N/A by hand afterwards
+ * is not in the record and is not touched; one somebody unticked by hand is
+ * already FALSE and the write is a no-op. Dates are never written, here or in
+ * the forward run.
+ *
+ * The record survives one run only. After a revert it is cleared, so calling
+ * this twice reverts nothing the second time.
+ *
+ * @return {{reverted: number, employees: number, missing: number}}
+ */
+function revertBlankCertsNa() {
+  var props = PropertiesService.getScriptProperties();
+  var metaRaw = props.getProperty(BLANK_NA_UNDO_META);
+  if (!metaRaw) {
+    console.log('revertBlankCertsNa: nothing recorded — no run to undo');
+    return { reverted: 0, employees: 0, missing: 0 };
+  }
+
+  var meta = JSON.parse(metaRaw);
+  var payload = '';
+  for (var i = 0; i < meta.chunks; i++) {
+    payload += props.getProperty(BLANK_NA_UNDO_PREFIX + i) || '';
+  }
+
+  var wanted = {};
+  var parts = payload.split(';');
+  for (var p = 0; p < parts.length; p++) {
+    if (!parts[p]) continue;
+    var split = parts[p].split(':');
+    var indices = {};
+    for (var d = 0; d < split[1].length; d++) indices[Number(split[1].charAt(d))] = true;
+    wanted[split[0]] = indices;
+  }
+
+  var sheet = getSheet(SHEET_NAMES.EMPLOYEES);
+  var rows = readAllRowsWithIndex(SHEET_NAMES.EMPLOYEES);
+  var columns = {};
+  var changedCerts = {};
+  for (var c = 0; c < BLANK_NA_CERTS.length; c++) {
+    columns[BLANK_NA_CERTS[c]] = [];
+    changedCerts[BLANK_NA_CERTS[c]] = 0;
+  }
+
+  var reverted = 0;
+  var seen = {};
+
+  for (var r = 0; r < rows.length; r++) {
+    var data = rows[r].data;
+    var entry = wanted[data.employee_id];
+    if (entry) seen[data.employee_id] = true;
+    var isEmployeeRow = normalizeString(data.employee_id) !== '';
+
+    for (var n = 0; n < BLANK_NA_CERTS.length; n++) {
+      var cert = BLANK_NA_CERTS[n];
+      var current = normalizeBoolean(data['cert_' + cert + '_na']);
+      var value = isEmployeeRow
+        ? (current ? 'TRUE' : 'FALSE')
+        : normalizeString(data['cert_' + cert + '_na']);
+
+      if (entry && entry[n] && current) {
+        value = 'FALSE';
+        reverted++;
+        changedCerts[cert]++;
+      }
+      columns[cert].push([value]);
+    }
+  }
+
+  for (var w = 0; w < BLANK_NA_CERTS.length; w++) {
+    var key = BLANK_NA_CERTS[w];
+    if (changedCerts[key] === 0) continue;
+    var col = getColumnIndex(SHEET_NAMES.EMPLOYEES, 'cert_' + key + '_na');
+    var range = sheet.getRange(2, col, rows.length, 1);
+    range.setNumberFormat('@');
+    range.setValues(columns[key]);
+  }
+
+  var missing = 0;
+  for (var id in wanted) {
+    if (!Object.prototype.hasOwnProperty.call(wanted, id)) continue;
+    if (!seen[id]) missing++;
+  }
+
+  clearSheetCache();
+  clearBlankCertsNaUndo_(props);
+
+  console.log('revertBlankCertsNa: restored ' + reverted + ' certificates across ' +
+    Object.keys(seen).length + ' employees (recorded ' + meta.at + ')' +
+    (missing ? ', ' + missing + ' recorded employees no longer on the tab' : ''));
+
+  return { reverted: reverted, employees: Object.keys(seen).length, missing: missing };
+}
