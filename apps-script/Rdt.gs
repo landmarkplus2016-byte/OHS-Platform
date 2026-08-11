@@ -42,6 +42,29 @@ var RDT_STATUSES = ['selected', 'completed', 'missed'];
 /** The only two results a completed test can carry. */
 var RDT_RESULTS = ['pass', 'fail'];
 
+/**
+ * Where a log row came from.
+ *
+ *   selection  the monthly random draw, or a swap within it
+ *   manual     an admin recorded a test that happened outside the draw
+ *   import     backfilled from a legacy record by bulk_import_rdt
+ *
+ * Nothing filters on this yet — every origin counts toward coverage alike. It
+ * is recorded so the question it exists for ("does a for-cause test discharge
+ * the random obligation?") can be answered later without a second migration,
+ * and so a coverage figure can always be traced back to how it was earned.
+ */
+var RDT_ORIGINS = ['selection', 'manual', 'import'];
+
+/**
+ * What an unset origin reads as.
+ *
+ * Every row written before the origin column existed came from the monthly draw
+ * — generate and swap were the only two writers — so a blank is not unknown
+ * provenance, it is a selection that predates the column.
+ */
+var RDT_ORIGIN_DEFAULT = 'selection';
+
 /** ModuleSettings keys under the `employees` module that configure RDT. */
 var RDT_SETTING_KEYS = {
   ENABLED: 'rdt_enabled',
@@ -75,6 +98,9 @@ var RDT_HISTORY_PAGE_SIZE_MAX = 500;
 
 /** Notes are an admin's shorthand, not a report. */
 var RDT_NOTES_MAX = 500;
+
+/** Rows per bulk_import_rdt call, matching the cap in Section 3.9. */
+var RDT_IMPORT_MAX_ROWS = 5000;
 
 // ---------------------------------------------------------------------------
 // Settings
@@ -320,11 +346,26 @@ function rdtAllEntries_() {
       status: normalizeString(rows[i].status).toLowerCase(),
       result: normalizeString(rows[i].result).toLowerCase(),
       notes: normalizeString(rows[i].notes),
+      origin: rdtNormalizeOrigin_(rows[i].origin),
       updated_at: normalizeIsoDateTime(rows[i].updated_at),
       updated_by: normalizeString(rows[i].updated_by)
     });
   }
   return out;
+}
+
+/**
+ * @private
+ * Reads the origin column, defaulting anything blank or unrecognised.
+ *
+ * An absent column reads as undefined until addRdtOriginColumn() has run, which
+ * is exactly the same as a blank cell — both mean "written before this existed",
+ * and both land on `selection`. That is what lets the code deploy before the
+ * Sheet is migrated.
+ */
+function rdtNormalizeOrigin_(raw) {
+  var value = normalizeString(raw).toLowerCase();
+  return RDT_ORIGINS.indexOf(value) === -1 ? RDT_ORIGIN_DEFAULT : value;
 }
 
 /** @private {employee_id → [entry]} */
@@ -379,6 +420,7 @@ function rdtShapeEntry_(entry, employeeRow) {
     status: entry.status,
     result: entry.result,
     notes: entry.notes,
+    origin: entry.origin || RDT_ORIGIN_DEFAULT,
     updated_at: entry.updated_at,
     updated_by: entry.updated_by,
     name: '',
@@ -739,6 +781,7 @@ function handleGenerateRdtSelection(session, payload) {
         status: 'selected',
         result: '',
         notes: '',
+        origin: 'selection',
         updated_at: stampedAt,
         updated_by: session.user.user_id
       });
@@ -761,6 +804,192 @@ function handleGenerateRdtSelection(session, payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * `create_rdt_entry` — record a test that happened outside the monthly draw.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Until now the only way a `completed` row could come into being was to draw a
+ * selection and then mark it done. That leaves no door for a test the programme
+ * did not plan: a for-cause test, one carried out while the platform was not yet
+ * running, or a paper record being transcribed. Those are facts, and a system
+ * that cannot record a fact pushes people back to the spreadsheet.
+ *
+ * WHY IT ONLY CREATES `completed`
+ * -------------------------------
+ * `selected` is refused outright. Hand-writing a selection is precisely the
+ * hand-picking the programme exists to prevent — the only two ways into that
+ * state stay the random draw and the swap, both of which shuffle. An admin who
+ * could type a name into a selection could quietly turn a testing programme into
+ * a targeting one, and no amount of audit trail undoes that.
+ *
+ * `missed` is refused for a duller reason: it means "a planned test did not
+ * happen", so there has to have been a plan. Turning a selection into a missed
+ * one is update_rdt_entry's job; creating a miss from nothing records an absence
+ * that was never expected in the first place.
+ *
+ * WHY `result` IS OPTIONAL HERE AND REQUIRED IN update_rdt_entry
+ * --------------------------------------------------------------
+ * They are different moments. Marking a pending test complete means the lab slip
+ * is in hand, so an outcome is fair to insist on. Recording a historical test
+ * often means copying a date off a register that never captured the outcome —
+ * Landmark's own legacy workbook holds 148 test dates and not one pass or fail.
+ * Section 2 already allows `result` to be blank on a completed row; demanding one
+ * here would only push admins into inventing a `pass`.
+ *
+ * @param {Object} session
+ * @param {Object} payload  {employee_id, test_date, result?, notes?}
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleCreateRdtEntry(session, payload) {
+  var denied = requireModuleEdit(session, 'employees');
+  if (denied) return denied;
+
+  var unknown = collectUnknownKeys_(payload, ['employee_id', 'test_date', 'result', 'notes']);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  var settings = rdtSettings_(getModuleSettingsMap());
+  if (!settings.enabled) {
+    return errResponse('validation_failed', 'rdt_disabled', { rdt: 'disabled' });
+  }
+
+  var today = todayIso();
+  var fieldErrors = {};
+
+  var employeeId = normalizeString(payload && payload.employee_id);
+  if (employeeId === '') fieldErrors.employee_id = 'required';
+
+  var testDate = normalizeIsoDate(payload && payload.test_date);
+  if (normalizeString(payload && payload.test_date) === '') {
+    fieldErrors.test_date = 'required';
+  } else if (testDate === '') {
+    fieldErrors.test_date = 'invalid_format';
+  } else if (testDate > today) {
+    // A test cannot have been completed tomorrow. Almost always a typo in the
+    // year, and one that would file the test under the wrong fiscal year.
+    fieldErrors.test_date = 'future';
+  }
+
+  var result = normalizeString(payload && payload.result).toLowerCase();
+  if (result !== '' && RDT_RESULTS.indexOf(result) === -1) fieldErrors.result = 'invalid_value';
+
+  var notes = normalizeString(payload && payload.notes);
+  if (notes.length > RDT_NOTES_MAX) fieldErrors.notes = 'too_long';
+
+  if (hasKeys_(fieldErrors)) {
+    return errResponse('validation_failed', 'invalid_payload', fieldErrors);
+  }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    console.error('create_rdt_entry: could not acquire script lock');
+    return errResponse('server_error', 'lock_timeout');
+  }
+
+  try {
+    // Archived employees are valid targets: their tests are history, and
+    // rdtProgress_ already drops them from coverage by counting over the current
+    // pool rather than over everyone who was ever tested.
+    var employeeRow = readRowByKey(SHEET_NAMES.EMPLOYEES, 'employee_id', employeeId);
+    if (!employeeRow) return errResponse('not_found', 'employee_not_found');
+
+    var entries = rdtAllEntries_();
+    var existing = rdtTestDateIndex_(entries)[rdtTestDateKey_(employeeId, testDate)];
+    if (existing !== undefined) {
+      // Two tests for one person on one day is double entry every time it is not
+      // a mistake in the date. Refusing is also what makes the import idempotent.
+      //
+      // The existing log_id goes in `message`, which Section 3.1 reserves for
+      // developer visibility — `field_errors` is for validation_failed, and this
+      // is not a bad field, it is a row that is already there.
+      console.warn('create_rdt_entry: ' + employeeId + ' already has a test on ' +
+        testDate + ' as ' + existing);
+      return errResponse('conflict', 'rdt_test_already_recorded');
+    }
+
+    var row = rdtCompletedRow_({
+      log_id: 'RDT-' + padNumber_(rdtNextNumber_(entries), 6),
+      employee_id: employeeId,
+      test_date: testDate,
+      result: result,
+      notes: notes,
+      origin: 'manual',
+      acting_user_id: session.user.user_id,
+      stamped_at: nowIso(),
+      settings: settings
+    });
+
+    appendRow(SHEET_NAMES.RDT_LOG, row);
+
+    return okResponse({ entry: rdtShapeEntry_(rdtNormalizeRow_(row), employeeRow) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * @private
+ * Builds one `completed` RdtLog row from a test that has already happened.
+ *
+ * Shared by create_rdt_entry and bulk_import_rdt so the two cannot drift on the
+ * three decisions that matter:
+ *
+ *   fiscal_year comes from the test date, computed once here and never again
+ *   (Section 2). A test on 20 March belongs to the year that is ending, not the
+ *   one starting in April, whatever month it is recorded in.
+ *
+ *   selected_at is set to the test date. There was no selection event to date it
+ *   from, and leaving it blank would drop the entry out of the history page's
+ *   month filter and sort it above everything else. The test date is the truest
+ *   thing available about when this belongs.
+ *
+ *   selected_by is the person recording it, not a claim about who drew it. The
+ *   `origin` column is what says nobody drew it at all.
+ *
+ * @param {Object} spec
+ * @return {Object} a row ready for appendRow / appendRows
+ */
+function rdtCompletedRow_(spec) {
+  return {
+    log_id: spec.log_id,
+    employee_id: spec.employee_id,
+    fiscal_year: rdtFiscalYear_(spec.test_date, spec.settings.fiscal_year_start_month).label,
+    selected_at: spec.test_date,
+    selected_by: spec.acting_user_id,
+    test_date: spec.test_date,
+    status: 'completed',
+    result: spec.result || '',
+    notes: spec.notes || '',
+    origin: spec.origin,
+    updated_at: spec.stamped_at,
+    updated_by: spec.acting_user_id
+  };
+}
+
+/** @private The key one employee's test on one day is identified by. */
+function rdtTestDateKey_(employeeId, testDate) {
+  return employeeId + '|' + testDate;
+}
+
+/**
+ * @private
+ * {employee|date → log_id} across every entry that carries a test date.
+ *
+ * Rows without one — `selected` and `missed` — are absent by construction, which
+ * is right: neither records a test having happened, so neither should block one
+ * from being recorded.
+ */
+function rdtTestDateIndex_(entries) {
+  var index = {};
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].test_date === '') continue;
+    index[rdtTestDateKey_(entries[i].employee_id, entries[i].test_date)] = entries[i].log_id;
+  }
+  return index;
 }
 
 /**
@@ -867,6 +1096,301 @@ function handleUpdateRdtEntry(session, payload) {
 }
 
 /**
+ * `bulk_import_rdt` — backfill completed tests from a legacy record.
+ *
+ * ONE ROW IS ONE TEST
+ * -------------------
+ * The payload is event-shaped: each row is a single test on a single date. That
+ * is deliberately *not* the shape of the workbook this was built for, which
+ * carries one row per employee with an `RDT 1 Date` and an `RDT 2 Date`. Fanning
+ * those two columns into events is a one-time transformation of one particular
+ * spreadsheet, and teaching either this action or the shared import UI to do it
+ * would leave that spreadsheet's shape fossilised in the platform forever. The
+ * transformation happens once, outside the codebase; this only ever sees tests.
+ *
+ * Column position in such a workbook carries no meaning worth importing, either.
+ * In Landmark's own file `RDT 1` spans two fiscal years and plenty of people's
+ * `RDT 2` is their only test of the current one, so reading the second column as
+ * "the repeat-phase test" would file tests under the wrong phase. Every row is
+ * just a date, and `fiscal_year` falls out of that date.
+ *
+ * ALL OR NOTHING
+ * --------------
+ * Same contract as bulk_import_employees: every row is validated before any row
+ * is written, and one bad row rejects the call with the Sheet untouched. A
+ * half-imported history is worse than none, because nobody can tell by looking
+ * which half arrived.
+ *
+ * @param {Object} session
+ * @param {Object} payload  {rows, on_duplicate?}
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleBulkImportRdt(session, payload) {
+  var denied = requireModuleEdit(session, 'employees');
+  if (denied) return denied;
+
+  var unknown = collectUnknownKeys_(payload, ['rows', 'on_duplicate']);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  var settings = rdtSettings_(getModuleSettingsMap());
+  if (!settings.enabled) {
+    return errResponse('validation_failed', 'rdt_disabled', { rdt: 'disabled' });
+  }
+
+  var inputRows = payload && payload.rows;
+  var onDuplicate = normalizeString(payload && payload.on_duplicate) || 'skip';
+
+  var fieldErrors = {};
+  if (!Array.isArray(inputRows) || inputRows.length === 0) {
+    fieldErrors.rows = 'required';
+  } else if (inputRows.length > RDT_IMPORT_MAX_ROWS) {
+    fieldErrors.rows = 'too_many';
+  }
+  if (onDuplicate !== 'skip' && onDuplicate !== 'overwrite') {
+    fieldErrors.on_duplicate = 'invalid_value';
+  }
+  if (hasKeys_(fieldErrors)) {
+    return errResponse('validation_failed', 'invalid_payload', fieldErrors);
+  }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    console.error('bulk_import_rdt: could not acquire script lock');
+    return errResponse('server_error', 'lock_timeout');
+  }
+
+  try {
+    var today = todayIso();
+    var employeeRows = readAllRows(SHEET_NAMES.EMPLOYEES);
+    var byId = rdtEmployeeIndex_(employeeRows);
+    var byNationalId = rdtNationalIdIndex_(employeeRows);
+
+    // One read of RdtLog, not two. rdtAllEntries_ would re-fetch the same range
+    // to give back the same rows in the same shape, and on a 5,000-row import
+    // that is a whole extra round trip for nothing.
+    var pairs = readAllRowsWithIndex(SHEET_NAMES.RDT_LOG);
+    var entries = [];
+    var rowByLogId = {};   // {log_id → sheet row}, for an overwrite to merge into
+
+    for (var p = 0; p < pairs.length; p++) {
+      if (normalizeString(pairs[p].data.log_id) === '') continue;
+
+      var entry = rdtNormalizeRow_(pairs[p].data);
+      entries.push(entry);
+      rowByLogId[entry.log_id] = pairs[p].row;
+    }
+
+    var existingIndex = rdtTestDateIndex_(entries);
+
+    var rowErrors = [];
+    var plan = [];
+    var seenInPayload = {};
+
+    // --- Pass 1: validate every row, write nothing --------------------------
+    for (var i = 0; i < inputRows.length; i++) {
+      var input = inputRows[i];
+      if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        rowErrors.push({ row: i, errors: { row: 'invalid_type' } });
+        continue;
+      }
+
+      var errors = collectUnknownKeys_(
+        input, ['employee_id', 'national_id', 'test_date', 'result', 'notes']
+      );
+
+      var resolved = rdtResolveEmployee_(input, byId, byNationalId);
+      if (resolved.error) errors.employee = resolved.error;
+
+      var testDate = normalizeIsoDate(input.test_date);
+      if (normalizeString(input.test_date) === '') {
+        errors.test_date = 'required';
+      } else if (testDate === '') {
+        errors.test_date = 'invalid_format';
+      } else if (testDate > today) {
+        errors.test_date = 'future';
+      }
+
+      var result = normalizeString(input.result).toLowerCase();
+      if (result !== '' && RDT_RESULTS.indexOf(result) === -1) errors.result = 'invalid_value';
+
+      var notes = normalizeString(input.notes);
+      if (notes.length > RDT_NOTES_MAX) errors.notes = 'too_long';
+
+      if (hasKeys_(errors)) {
+        rowErrors.push({ row: i, errors: errors });
+        continue;
+      }
+
+      var key = rdtTestDateKey_(resolved.employee_id, testDate);
+
+      // The same test twice in one file is always an error. Unlike a collision
+      // with the existing log, there is no policy under which both could apply —
+      // one of the two rows is simply wrong.
+      if (seenInPayload[key] !== undefined) {
+        rowErrors.push({ row: i, errors: { test_date: 'duplicate_in_payload' } });
+        continue;
+      }
+      seenInPayload[key] = true;
+
+      var clashesWith = existingIndex[key];
+      if (clashesWith !== undefined) {
+        // Skip is what makes re-running the same file a no-op. Overwrite is for
+        // the case that actually happens later: a lab returning outcomes for
+        // tests whose dates were imported months earlier.
+        plan.push(onDuplicate === 'overwrite'
+          ? { action: 'overwrite', row: rowByLogId[clashesWith], result: result, notes: notes }
+          : { action: 'skip' });
+        continue;
+      }
+
+      plan.push({
+        action: 'create',
+        employee_id: resolved.employee_id,
+        test_date: testDate,
+        result: result,
+        notes: notes
+      });
+    }
+
+    if (rowErrors.length > 0) {
+      return rowErrorResponse_(rowErrors);
+    }
+
+    // --- Pass 2: write ------------------------------------------------------
+    var actingUserId = session.user.user_id;
+    var stampedAt = nowIso();
+    var nextNumber = rdtNextNumber_(entries);
+
+    var newRows = [];
+    var rowUpdates = [];
+    var skipped = 0;
+    var byFiscalYear = {};
+
+    for (var k = 0; k < plan.length; k++) {
+      if (plan[k].action === 'skip') { skipped++; continue; }
+
+      if (plan[k].action === 'overwrite') {
+        rowUpdates.push({
+          row: plan[k].row,
+          data: {
+            result: plan[k].result,
+            notes: plan[k].notes,
+            updated_at: stampedAt,
+            updated_by: actingUserId
+          }
+        });
+        continue;
+      }
+
+      var row = rdtCompletedRow_({
+        log_id: 'RDT-' + padNumber_(nextNumber + newRows.length, 6),
+        employee_id: plan[k].employee_id,
+        test_date: plan[k].test_date,
+        result: plan[k].result,
+        notes: plan[k].notes,
+        origin: 'import',
+        acting_user_id: actingUserId,
+        stamped_at: stampedAt,
+        settings: settings
+      });
+
+      byFiscalYear[row.fiscal_year] = (byFiscalYear[row.fiscal_year] || 0) + 1;
+      newRows.push(row);
+    }
+
+    updateRowsAt(SHEET_NAMES.RDT_LOG, rowUpdates);
+    appendRows(SHEET_NAMES.RDT_LOG, newRows);
+
+    console.log('bulk_import_rdt: added ' + newRows.length + ', updated ' + rowUpdates.length +
+      ', skipped ' + skipped + ' — ' + JSON.stringify(byFiscalYear));
+
+    return okResponse({
+      added: newRows.length,
+      updated: rowUpdates.length,
+      skipped: skipped,
+
+      // The year breakdown is the check that the file landed where it was meant
+      // to. A backfill that reports every test under the current year has almost
+      // certainly had its dates misread.
+      by_fiscal_year: byFiscalYear
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * @private
+ * {lowercased national_id → {active: [employee_id], archived: [employee_id]}}
+ * across every employee, archived included.
+ *
+ * Deliberately not Employees.gs's nationalIdIndex_, which skips archived rows
+ * because it exists to police uniqueness among the living. This index exists to
+ * find whoever a historical test belongs to, and a fair share of Landmark's
+ * legacy test records name people who have since left — dropping them would
+ * silently lose that part of the history.
+ *
+ * The two buckets are kept apart rather than merged so an ambiguous national_id
+ * can be reported as ambiguous instead of resolved by luck of iteration order.
+ */
+function rdtNationalIdIndex_(rows) {
+  var index = {};
+
+  for (var i = 0; i < rows.length; i++) {
+    var employeeId = normalizeString(rows[i].employee_id);
+    if (employeeId === '') continue;
+
+    var nationalId = normalizeString(rows[i].national_id).toLowerCase();
+    if (nationalId === '') continue;
+
+    if (!index[nationalId]) index[nationalId] = { active: [], archived: [] };
+    if (normalizeBoolean(rows[i].archived)) index[nationalId].archived.push(employeeId);
+    else index[nationalId].active.push(employeeId);
+  }
+  return index;
+}
+
+/**
+ * @private
+ * Works out which employee an import row is about.
+ *
+ * `employee_id` wins when present — it is unambiguous by construction. Otherwise
+ * the national_id is matched, and the live record is preferred over an archived
+ * one: where the same person holds both (a rehire, or a roster that was never
+ * tidied), the tests belong on the record whose coverage is still being counted.
+ *
+ * Two live records for one national_id should be impossible — uniqueness is
+ * enforced on create — but if the tab ever holds them, this reports the row as
+ * ambiguous rather than picking one. Guessing which of two people was tested is
+ * not a thing an importer should do quietly.
+ *
+ * @return {{employee_id: string, error: string}} `error` is '' on success
+ */
+function rdtResolveEmployee_(input, byId, byNationalId) {
+  var employeeId = normalizeString(input.employee_id);
+  if (employeeId !== '') {
+    return byId[employeeId]
+      ? { employee_id: employeeId, error: '' }
+      : { employee_id: '', error: 'not_found' };
+  }
+
+  var nationalId = normalizeString(input.national_id).toLowerCase();
+  if (nationalId === '') return { employee_id: '', error: 'required' };
+
+  var found = byNationalId[nationalId];
+  if (!found) return { employee_id: '', error: 'not_found' };
+
+  if (found.active.length === 1) return { employee_id: found.active[0], error: '' };
+  if (found.active.length > 1) return { employee_id: '', error: 'ambiguous' };
+  if (found.archived.length === 1) return { employee_id: found.archived[0], error: '' };
+  if (found.archived.length > 1) return { employee_id: '', error: 'ambiguous' };
+
+  return { employee_id: '', error: 'not_found' };
+}
+
+/**
  * `swap_rdt_selection` — replace one selected employee with a random draw.
  *
  * A swap is not a miss. Missed means "we tried and it did not happen" and keeps
@@ -963,6 +1487,7 @@ function handleSwapRdtSelection(session, payload) {
       status: 'selected',
       result: '',
       notes: '',
+      origin: 'selection',
       updated_at: stampedAt,
       updated_by: session.user.user_id
     };
@@ -1074,6 +1599,68 @@ function rdtHistoryFor_(employeeId) {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Schema migration
+// ---------------------------------------------------------------------------
+
+/**
+ * One-shot: adds the `origin` column to the RdtLog tab and backfills every
+ * existing row with 'selection'.
+ *
+ * Run once from the Apps Script editor after deploying this version. It is
+ * idempotent — a column that already exists is left alone — so re-running after
+ * a failure is safe.
+ *
+ * The backfill is honest rather than a placeholder. Before this column existed,
+ * the only two writers of an RdtLog row were generate_rdt_selection and
+ * swap_rdt_selection, so every row already on the tab did come from the random
+ * draw. That is the difference between this migration and
+ * addEquipmentSubcontractorColumn, which backfills nothing because guessing an
+ * owner would be inventing data.
+ *
+ * Until it has run the platform still works: a missing column reads as
+ * undefined, rdtNormalizeOrigin_ turns that into 'selection', and nothing reads
+ * the value for anything but display. That degradation is deliberate — the
+ * frontend deploys by pushing to main and the Sheet cannot be migrated in the
+ * same instant.
+ *
+ * @return {{added: boolean, column_index: number, backfilled_rows: number}}
+ */
+function addRdtOriginColumn() {
+  var sheet = getSheet(SHEET_NAMES.RDT_LOG);
+  var headers = getHeaders(SHEET_NAMES.RDT_LOG).slice();
+
+  var existing = headers.indexOf('origin');
+  if (existing !== -1) {
+    console.log('addRdtOriginColumn: nothing to do — column already at index ' + (existing + 1));
+    return { added: false, column_index: existing + 1, backfilled_rows: 0 };
+  }
+
+  headers.push('origin');
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  // Backfill in one write. Section 2 keeps every column populated rather than
+  // relying on blank-means-default, so leaving the new cells empty would put the
+  // tab out of spec even though it would read the same.
+  var dataRows = sheet.getLastRow() - 1;
+  if (dataRows > 0) {
+    var block = [];
+    for (var r = 0; r < dataRows; r++) block.push([RDT_ORIGIN_DEFAULT]);
+
+    var range = sheet.getRange(2, headers.length, dataRows, 1);
+    range.setNumberFormat('@');
+    range.setValues(block);
+  }
+
+  clearSheetCache();
+  console.log('addRdtOriginColumn: added column at index ' + headers.length +
+    ', backfilled ' + dataRows + ' rows as ' + RDT_ORIGIN_DEFAULT);
+  return { added: true, column_index: headers.length, backfilled_rows: dataRows };
+}
+
 /**
  * @private
  * A raw sheet row (what updateRowAt hands back) in the shape rdtShapeEntry_
@@ -1091,6 +1678,7 @@ function rdtNormalizeRow_(row) {
     status: normalizeString(row.status).toLowerCase(),
     result: normalizeString(row.result).toLowerCase(),
     notes: normalizeString(row.notes),
+    origin: rdtNormalizeOrigin_(row.origin),
     updated_at: normalizeIsoDateTime(row.updated_at),
     updated_by: normalizeString(row.updated_by)
   };

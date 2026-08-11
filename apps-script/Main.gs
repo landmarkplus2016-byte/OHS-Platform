@@ -115,6 +115,9 @@ var AUTHENTICATED_ACTIONS = {
   'generate_rdt_selection': function (session, payload) {
     return handleGenerateRdtSelection(session, payload);
   },
+  'create_rdt_entry': function (session, payload) {
+    return handleCreateRdtEntry(session, payload);
+  },
   'update_rdt_entry': function (session, payload) {
     return handleUpdateRdtEntry(session, payload);
   },
@@ -123,6 +126,9 @@ var AUTHENTICATED_ACTIONS = {
   },
   'delete_rdt_entry': function (session, payload) {
     return handleDeleteRdtEntry(session, payload);
+  },
+  'bulk_import_rdt': function (session, payload) {
+    return handleBulkImportRdt(session, payload);
   },
 
   // --- Equipment (Section 3.6) ---------------------------------------------

@@ -40,6 +40,8 @@ import {
   swapRdtSelection, deleteRdtEntry, updateModuleSettings,
 } from '../dataActions.js';
 import { RDT_RESULTS } from '../constants.js';
+import { openRdtRecordDialog } from '../rdtRecordDialog.js';
+import { openRdtImportDialog } from '../rdtImportDialog.js';
 import { invalidateRdtHistory } from './rdtHistoryPage.js';
 
 /**
@@ -330,15 +332,27 @@ function renderOnboarding() {
     </div>`;
 }
 
-export function renderRdtPage() {
-  const s = pageState();
-
-  const head = `
+/**
+ * The page header, with an optional actions slot.
+ *
+ * "Record a test" is a page action rather than a month-card one on purpose: the
+ * test it records carries its own date and may belong to any month, so hanging
+ * it off the card headed "August 2026" would say something untrue about it.
+ */
+function renderHead(actionsHtml) {
+  return `
     <div class="page-head">
       <div>
         <div class="page-head-sub">${escapeHtml(t('emp_rdt_intro'))}</div>
       </div>
+      ${actionsHtml ? `<div class="page-head-actions">${actionsHtml}</div>` : ''}
     </div>`;
+}
+
+export function renderRdtPage() {
+  const s = pageState();
+
+  const head = renderHead('');
 
   if (s.status !== 'ready') {
     return `
@@ -358,7 +372,11 @@ export function renderRdtPage() {
 
   return `
     <div class="employee-rdt">
-      ${head}
+      ${renderHead(editable ? `
+        <button type="button" class="btn btn-ghost" data-rdt-action="import"
+                ${s.busy ? 'disabled' : ''}>${escapeHtml(t('emp_rdt_import'))}</button>
+        <button type="button" class="btn btn-ghost" data-rdt-action="record"
+                ${s.busy ? 'disabled' : ''}>${escapeHtml(t('emp_rdt_record'))}</button>` : '')}
       ${renderHero(s.data)}
       ${renderMonthCard(s.data, editable)}
       ${renderRecentCard(s.data)}
@@ -572,6 +590,56 @@ async function generate(regenerate) {
   );
 }
 
+/**
+ * Record a test that happened outside the draw.
+ *
+ * Not routed through runAction: the dialog owns its own submit and error line —
+ * a duplicate-date rejection has to land next to the date field, which it cannot
+ * do from a toast after the form has closed. All this does is refresh what the
+ * write invalidated.
+ */
+async function recordTest() {
+  const saved = await openRdtRecordDialog();
+  if (!saved) return;
+
+  invalidateRdt();
+  invalidateRdtHistory();
+  delete UI.employeeDashboard;
+  toastSuccess(t('emp_rdt_completed'));
+  render();
+}
+
+/**
+ * Backfill past tests from a file.
+ *
+ * The fiscal-year breakdown is toasted rather than buried in the console
+ * because it is the one number that says the import landed where it was meant
+ * to: a file of two years' history reporting every test under the current year
+ * has had its dates misread, and that is worth noticing immediately.
+ */
+async function importPastTests() {
+  const outcome = await openRdtImportDialog();
+  if (!outcome) return;
+
+  invalidateRdt();
+  invalidateRdtHistory();
+  delete UI.employeeDashboard;
+
+  toastSuccess(t('emp_rdt_import_done', {
+    added: outcome.added,
+    skipped: outcome.skipped,
+  }));
+
+  const years = Object.keys(outcome.by_fiscal_year || {}).sort();
+  if (years.length) {
+    toast(t('emp_rdt_import_years', {
+      breakdown: years.map((y) => `${y}: ${outcome.by_fiscal_year[y]}`).join(' · '),
+    }), 'info');
+  }
+
+  render();
+}
+
 async function enableRdt() {
   await runAction(
     () => updateModuleSettings(MODULE_NAMES.EMPLOYEES, RDT_SEED_SETTINGS),
@@ -589,6 +657,8 @@ export function bindRdtPageEvents() {
 
   const handlers = {
     enable: enableRdt,
+    record: recordTest,
+    import: importPastTests,
     generate: () => generate(false),
     regenerate: confirmAndRegenerate,
     complete: (logId) => openCompleteDialog(logId, null),

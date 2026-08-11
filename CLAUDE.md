@@ -361,6 +361,7 @@ One row per random-drug-test event. An employee may have many rows per fiscal ye
 | `status` | text | `selected` \| `completed` \| `missed` |
 | `result` | text | `pass` \| `fail` \| blank. Only meaningful when `status = completed` |
 | `notes` | text | Free text, ≤500 chars |
+| `origin` | text | `selection` \| `manual` \| `import` — how the row came to exist |
 | `updated_at` | ISO datetime | |
 | `updated_by` | user_id | |
 
@@ -368,6 +369,10 @@ One row per random-drug-test event. An employee may have many rows per fiscal ye
 - `fiscal_year` is stamped once at selection and never recalculated. A test selected in March 2027 belongs to FY 2026-2027 even if it completes in April.
 - A `completed` row is the only kind that counts toward yearly coverage. `missed` re-opens the employee for a later month; it counts for nothing.
 - Deleting a row is permitted here and nowhere else in the schema. An RdtLog row is a *plan*, not a record of an entity — a selection that was generated in error and never carried out is noise in the audit trail, not history worth keeping. The UI confirms before every delete. This is the sole documented exception to rule 6.
+- `origin` records how a row came to exist: `selection` from the monthly draw or a swap, `manual` from `create_rdt_entry`, `import` from `bulk_import_rdt`. Nothing filters on it — every origin counts toward coverage alike. It exists so the question it was added for ("does a for-cause test discharge the random obligation?") can be answered later without a second migration, and so any coverage figure can be traced back to how it was earned.
+- Only one employee, one `test_date` — a second row for the same pair is refused by both write paths. Rows with no test date (`selected`, `missed`) are outside that rule, since neither records a test having happened. This is also what makes a re-run of the same import file a no-op.
+
+**Adding the `origin` column to an existing Sheet:** run `addRdtOriginColumn()` once from the Apps Script editor. It appends the column and backfills every existing row with `selection`. That backfill is honest rather than a placeholder — before the column existed, `generate_rdt_selection` and `swap_rdt_selection` were the only two writers, so every row already on the tab did come from the draw. It is idempotent. Until it has run the platform still works: an absent column reads as blank, which normalizes to `selection`.
 
 ### `Equipment`
 
@@ -874,7 +879,7 @@ Returns the raw `Permissions` tab for the super admin's permissions management U
 
 Individual permission grants are always mutated through `create_user` / `update_user`, never as a standalone action. There is intentionally no `set_permission` action — it would create a second write path for the same data.
 
-## 3.5 Employee actions (10)
+## 3.5 Employee actions (16)
 
 Every employee action checks module permission for `employees`. Super admins bypass. Module admins with `can_view` see; with `can_edit` mutate.
 
@@ -1120,6 +1125,67 @@ Runs the monthly random selection and writes the resulting `selected` rows.
 7. Append one `selected` row per pick, IDs from the highest existing `RDT-######` under a script lock
 
 **Success `data`:** `{ "created": [...entries...], "quota": 14, "pool_size": 137 }`
+
+### `create_rdt_entry`
+
+Records a test that happened outside the monthly draw — a for-cause test, or one carried out on paper before the platform was running.
+
+**Permission:** `edit employees`.
+
+**Payload:**
+```json
+{
+  "employee_id": "LM-EMP-0001",
+  "test_date": "2026-08-04",
+  "result": "pass",
+  "notes": ""
+}
+```
+
+**It creates `completed` rows and nothing else.** There is no `status` field, and both other states are refused on principle rather than by omission:
+
+- `selected` would let an admin write a name into a selection by hand, which is exactly the hand-picking a random programme exists to prevent. The only two ways into that state stay `generate_rdt_selection` and `swap_rdt_selection`, both of which shuffle.
+- `missed` means a planned test did not happen, so there has to have been a plan. That transition belongs to `update_rdt_entry`, against a pick that already exists.
+
+**`result` is optional here, and required by `update_rdt_entry`.** Different moments: marking a *pending* test complete means the lab slip is in hand, so an outcome is fair to insist on; recording a historical test often means copying a date off a register that never captured one. Section 2 already permits a blank `result` on a completed row, and demanding one here would only push admins into inventing a `pass`.
+
+**Validation:**
+- `employee_id` must resolve — archived employees are valid targets, since their tests are history and `rdtProgress_` already drops them from coverage by counting over the current pool
+- `test_date` required, ISO, and not in the future
+- `result` must be `pass`, `fail`, or blank
+- An existing row for the same (`employee_id`, `test_date`) returns `conflict` with `message: "rdt_test_already_recorded"`
+
+**Server behavior:** stamps `fiscal_year` from `test_date`, sets `selected_at = test_date` (there was no selection event to date it from, and a blank would drop the entry out of the history page's month filter), `origin = manual`, and `selected_by` / `updated_by` from the session.
+
+**Success `data`:** `{ "entry": {...} }`
+
+### `bulk_import_rdt`
+
+Backfills completed tests from a legacy record.
+
+**Permission:** `edit employees`.
+
+**Payload:**
+```json
+{
+  "rows": [
+    { "national_id": "29809292503132", "test_date": "2025-01-05", "result": "", "notes": "" }
+  ],
+  "on_duplicate": "skip"
+}
+```
+
+**One row is one test.** The payload is event-shaped, deliberately unlike the per-employee workbooks this exists to rescue — Landmark's own carries an `RDT 1 Date` and an `RDT 2 Date` side by side on each employee row. Fanning those columns into events is a one-time transformation of one particular spreadsheet, done outside the codebase; building it in would fossilise that spreadsheet's layout in code that outlives it. Column position carries nothing worth importing either: in that file `RDT 1` spans two fiscal years and plenty of people's `RDT 2` is their only test of the current one, so reading the second column as "the repeat-phase test" would file tests under the wrong phase.
+
+**Identity** resolves `employee_id` when present, else `national_id` against *all* employees including archived — a fair share of historical tests name people who have since left, and skipping them would silently lose that part of the history. Where one national_id holds both a live and an archived record (a rehire, or an untidied roster), the live one wins: that is the record whose coverage is still being counted. Two live records for one national_id reports the row as `ambiguous` rather than guessing.
+
+**`on_duplicate`** decides what happens when a row names an employee and date that already carry a test. `skip` (default) is what makes re-running the same file a no-op; `overwrite` refreshes that entry's `result` and `notes`, for a lab returning outcomes against dates imported earlier.
+
+**Server behavior:** all-or-nothing, exactly as `bulk_import_employees` — every row validated before any row is written, `row_errors` on failure, Sheet untouched. Every written row is `status = completed`, `origin = import`, `fiscal_year` from its own date. Capped at 5,000 rows; a larger file is refused rather than split, because the all-or-nothing guarantee is per call and chunking would trade it away silently.
+
+**Success `data`:** `{ "added": 149, "updated": 0, "skipped": 0, "by_fiscal_year": {"2024-2025": 2, "2025-2026": 95, "2026-2027": 52} }`
+
+The year breakdown is the check that a backfill landed where it was meant to — a file of several years' history reporting every test under the current year has had its dates misread.
 
 ### `update_rdt_entry`
 
@@ -2247,7 +2313,9 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never let Feb/Mar draw an employee who has no `completed` entry this fiscal year — that would book a repeat test for someone who never had a first one.
 - Never let RDT status affect a site-check verdict or a dashboard compliance KPI. An employee overdue for RDT is still `cleared` if their certificates are in order. RDT is HR paperwork, not a safety blocker.
 - Never expose RdtLog or any RDT setting to an officer session.
-- Never re-introduce flat RDT date columns on Employees. RdtLog is the sole source of truth.
+- Never create an RdtLog row with status `selected` outside the random draw. `generate_rdt_selection` and `swap_rdt_selection` are the only two writers of that state, and both shuffle. A hand-written selection is hand-picking, which turns a testing programme into a targeting one — no audit trail undoes that. Recording a test that already happened is a different act and goes through `create_rdt_entry`, which writes `completed` and refuses everything else.
+- Never re-introduce flat RDT date columns on Employees. RdtLog is the sole source of truth. A single date column cannot hold a second test, a status, a result, or a fiscal year — which is exactly what the 120% programme, the Feb/Mar repeat phase, and the coverage count each need.
+- Never maintain drug-test records in the legacy workbook once they have been imported. Two sources that disagree fail silently: a test typed into the spreadsheet is invisible to the next draw, and one recorded in the platform is missing from the spreadsheet. After the backfill those columns are frozen history.
 - Never let a module admin call user-management actions. Super admin only, enforced server-side.
 - Never allow demoting or deactivating the last super admin. Server-side check on every user mutation.
 - Never render an unpaginated list. All list_* actions have server-side paging; frontend respects `page_size`.

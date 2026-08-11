@@ -485,6 +485,27 @@
 .modal-form { margin-block-start: 14px; }
 .modal-form .field:last-of-type { margin-block-end: 0; }
 
+/* A line of explanation above a form, where the title alone is not enough. */
+.modal-intro {
+  font-size: 12.5px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-block-end: 14px;
+}
+
+/* A field whose value is fixed and shown rather than edited — the employee on a
+   dialog opened from that employee's own page. Padded to match the inputs
+   beside it so the column of labels stays on one rhythm. */
+.field-static {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+}
+
 /* The permission checkbox grid in the user editor. */
 .perm-section {
   margin-block-start: 16px;

@@ -24,6 +24,9 @@ import {
 import { toastSuccess, toastError, toast } from '../../../components/toast.js';
 import { confirmDialog } from '../../../components/modal.js';
 import { getEmployee, archiveEmployee, unarchiveEmployee } from '../dataActions.js';
+import { openRdtRecordDialog } from '../rdtRecordDialog.js';
+import { invalidateRdt } from './rdtPage.js';
+import { invalidateRdtHistory } from './rdtHistoryPage.js';
 import {
   TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor,
 } from '../constants.js';
@@ -161,16 +164,40 @@ function renderHistory(history) {
 /**
  * This employee's drug-test log, newest first.
  *
- * Read-only here. Every RDT write happens on the RDT page, where the monthly
- * quota and the eligible pool are in view — a completion marked from a detail
- * page with no sight of either is how a programme quietly drifts off target.
+ * WHAT MAY BE WRITTEN FROM HERE, AND WHAT MAY NOT
+ * -----------------------------------------------
+ * Exactly one thing: recording a test that happened outside the monthly draw.
+ * Everything that touches a *pick* — marking it completed, missed, swapping it,
+ * reverting it — stays on the RDT page, where the month's quota and the eligible
+ * pool are on screen beside it. A pick completed from a page with sight of
+ * neither is how a programme quietly drifts off target, and that reasoning has
+ * not changed.
+ *
+ * An off-cycle test is a different animal. It alters no pick, consumes no quota,
+ * and is inherently about one person — so the person's own file is where an
+ * admin goes looking for it, and sending them to the RDT page to hunt for a name
+ * in a roster picker would be ceremony for its own sake.
  *
  * @param {Array<Object>} history rows from get_employee's `rdt_history`
+ * @param {Object} employee the employee whose file this is
+ * @param {boolean} editable whether the signed-in admin may write
  * @returns {string} HTML
  */
-function renderRdtHistory(history) {
+function renderRdtHistory(history, employee, editable) {
+  const foot = editable
+    ? `<div class="rdt-card-foot">
+         <button type="button" class="btn btn-ghost btn-sm" data-rdt-record>${
+           escapeHtml(t('emp_rdt_record'))
+         }</button>
+       </div>`
+    : '';
+
   if (!history || history.length === 0) {
-    return `<div class="card"><div class="cell-empty">${escapeHtml(t('emp_rdt_history_empty'))}</div></div>`;
+    return `
+      <div class="card">
+        <div class="cell-empty">${escapeHtml(t('emp_rdt_history_empty'))}</div>
+        ${foot}
+      </div>`;
   }
 
   return `
@@ -196,6 +223,7 @@ function renderRdtHistory(history) {
             </tr>`).join('')}
         </tbody>
       </table>
+      ${foot}
     </div>`;
 }
 
@@ -329,7 +357,7 @@ export function renderEmployeeDetailPage(params) {
         </div>` : ''}
 
       <div class="section-head">${escapeHtml(t('emp_section_drug'))}</div>
-      ${renderRdtHistory(s.data.rdt_history)}
+      ${renderRdtHistory(s.data.rdt_history, s.data.employee, editable)}
 
       <div class="section-head">${escapeHtml(t('emp_section_history'))}</div>
       ${renderHistory(s.data.renewal_history)}
@@ -460,6 +488,33 @@ export function bindEmployeeDetailPageEvents(params) {
   root.querySelectorAll('tr[data-equipment-id]').forEach((row) => {
     row.addEventListener('click', () => go('equipment/:id', { id: row.dataset.equipmentId }));
   });
+
+  const recordTest = root.querySelector('[data-rdt-record]');
+  if (recordTest) recordTest.addEventListener('click', () => doRecordTest(employee));
+}
+
+/**
+ * Record an off-cycle drug test for the employee on screen.
+ *
+ * The dialog runs its own submit so a duplicate-date rejection can land beside
+ * the date field; all that is left here is dropping the caches the new row makes
+ * stale — this page's own copy, and the two RDT views that count the same log.
+ *
+ * @param {Object} employee
+ */
+async function doRecordTest(employee) {
+  if (!employee) return;
+
+  const saved = await openRdtRecordDialog({ employee });
+  if (!saved) return;
+
+  invalidate();
+  invalidateRdt();
+  invalidateRdtHistory();
+  delete UI.employeeDashboard;
+
+  toastSuccess(t('emp_rdt_recorded', { name: employee.name }));
+  render();
 }
 
 /** Called by the form page after a save, so the detail view shows fresh data. */

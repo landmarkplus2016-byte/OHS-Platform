@@ -74,6 +74,62 @@ export const RDT_RESULTS = ['pass', 'fail'];
 /** Rows on the RDT history page. The server caps page_size at 500. */
 export const RDT_HISTORY_PAGE_SIZE = 100;
 
+/**
+ * Rows one bulk_import_rdt call accepts, matching RDT_IMPORT_MAX_ROWS on the
+ * server. A larger file is refused rather than split: the all-or-nothing
+ * guarantee is per call, so chunking a file would quietly trade it away — the
+ * third chunk failing would leave the first two already written, which is the
+ * half-imported history the guarantee exists to prevent.
+ */
+export const RDT_IMPORT_MAX_ROWS = 5000;
+
+/**
+ * The columns a drug-test import file may carry, one row per test.
+ *
+ * WHY THIS IS NOT IN js/constants/importSpecs.js
+ * ----------------------------------------------
+ * That file feeds the shared Settings → Data importer, which is built around
+ * entities: every spec there needs a primary key, a duplicate key, and a list
+ * action to compare against. An RdtLog row is an event, not an entity — the same
+ * employee legitimately appears many times and there is nothing to `identify` —
+ * so it has none of those. Bending the shared contract around one append-only
+ * log would make it worse for the two modules already using it.
+ *
+ * Only the column table is reused, through parseWorkbook. The preview and the
+ * write live on the RDT page, which is also where an admin would think to look.
+ */
+export const RDT_IMPORT_SPEC = {
+  columns: [
+    { field: 'national_id', type: 'text', aliases: [
+      'national id', 'national i d', 'nationalid', 'nid', 'natid',
+      'national id number', 'id number', 'national number',
+    ] },
+    { field: 'employee_id', type: 'text', aliases: [
+      'employee id', 'employee code', 'emp id', 'platform id',
+    ] },
+    { field: 'name', type: 'text', aliases: [
+      'name', 'full name', 'employee name',
+    ] },
+    { field: 'test_date', type: 'date', aliases: [
+      'test date', 'date', 'rdt date', 'rdt', 'drug test date', 'date tested',
+      'tested on', 'rdt 1 date', 'rdt 2 date',
+    ] },
+    { field: 'result', type: 'enum', aliases: [
+      'result', 'test result', 'rdt result', 'outcome',
+    ] },
+    { field: 'notes', type: 'text', aliases: ['notes', 'note', 'comment', 'comments', 'remarks'] },
+  ],
+
+  // One sheet, whatever it is called. The fan-out from a per-employee workbook
+  // into per-test rows happens before the file reaches this point.
+  sheets: null,
+
+  // `name` is not identity here — it is carried for the preview only, so the
+  // admin can read who a row is about. A row with a name and no ID cannot be
+  // resolved to an employee and must not pass the parser as though it could.
+  identityColumns: ['national_id', 'employee_id'],
+};
+
 /** Boolean qualification columns, stored as `qual_<key>`. Safety team only. */
 export const QUAL_KEYS = ['nebosh', 'iso_45001', 'osha'];
 

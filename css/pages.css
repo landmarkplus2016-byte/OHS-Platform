@@ -354,6 +354,23 @@
   justify-content: flex-end;
 }
 
+/* ---------- Import preview (inside the import dialog) ---------- */
+.rdt-import-summary {
+  margin-block-start: 14px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rdt-import-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+
 /* ---------- This month ---------- */
 .rdt-empty {
   padding-block: 28px;

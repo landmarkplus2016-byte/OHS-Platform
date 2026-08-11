@@ -222,6 +222,50 @@ export function generateRdtSelection(regenerate) {
 }
 
 /**
+ * `create_rdt_entry` — record a test that happened outside the monthly draw.
+ *
+ * Creates a `completed` row only. The server refuses `selected` (hand-writing a
+ * selection is the hand-picking the random programme exists to prevent) and
+ * `missed` (there has to have been a plan to miss) — so neither is offered here.
+ *
+ * `result` may be blank: a historical test transcribed from a register often has
+ * a date and no recorded outcome, and inventing a `pass` to satisfy a form is
+ * worse than leaving it empty.
+ *
+ * Rejects with `conflict` and `message: "rdt_test_already_recorded"` when that
+ * employee already has a test logged on that date.
+ *
+ * @param {{employee_id: string, test_date: string, result?: string, notes?: string}} entry
+ * @returns {Promise<{entry: Object}>}
+ */
+export function createRdtEntry(entry) {
+  return api.call('create_rdt_entry', entry);
+}
+
+/**
+ * `bulk_import_rdt` — backfill completed tests, one row per test.
+ *
+ * All-or-nothing: one invalid row rejects the whole call with the Sheet
+ * untouched, and the rejection carries `row_errors` naming which rows and why.
+ * Do not chunk a large file to get around the row cap — the guarantee is per
+ * call, so a chunked import can leave half the history written.
+ *
+ * `on_duplicate` decides what happens when a row names an employee and date that
+ * already carry a test: `skip` (the default) makes re-running the same file a
+ * no-op, `overwrite` refreshes that entry's result and notes — for a lab
+ * returning outcomes against dates imported earlier.
+ *
+ * @param {Array<{national_id?: string, employee_id?: string, test_date: string,
+ *                result?: string, notes?: string}>} rows
+ * @param {'skip'|'overwrite'} [onDuplicate]
+ * @returns {Promise<{added: number, updated: number, skipped: number,
+ *                    by_fiscal_year: Object}>}
+ */
+export function bulkImportRdt(rows, onDuplicate) {
+  return api.call('bulk_import_rdt', { rows, on_duplicate: onDuplicate || 'skip' });
+}
+
+/**
  * `update_rdt_entry` — mark completed, mark missed, revert, or correct.
  *
  * Omit `status` to edit test_date / result / notes without changing state.
