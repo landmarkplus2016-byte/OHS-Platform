@@ -32,7 +32,12 @@ const en = {
   cert_ra: 'Risk Assessment',
   cert_fa: 'First Aid',
   cert_ff: 'Fire Fighting',
-  cert_ec: 'Emergency Care',
+  /* The `ec` key predates this label — the certificate was called Emergency
+     Care until it was renamed. Same certificate, same dates, same four Sheet
+     columns; only what it is called changed. Renaming the key would mean
+     migrating cert_ec_expiry / _link / _na / _suspended across every employee
+     to buy nothing but a tidier abbreviation. */
+  cert_ec: 'Electrical',
   cert_mcu: 'Medical Check-up',
   cert_ppe: 'PPE Inspection',
   cert_lifting: 'Lifting',
@@ -335,7 +340,7 @@ const ar = {
   cert_ra: 'تقييم المخاطر',
   cert_fa: 'الإسعافات الأولية',
   cert_ff: 'مكافحة الحريق',
-  cert_ec: 'الرعاية الطارئة',
+  cert_ec: 'السلامة الكهربائية',
   cert_mcu: 'الفحص الطبي',
   cert_ppe: 'فحص مهمات الوقاية',
   cert_lifting: 'الرفع',

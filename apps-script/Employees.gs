@@ -1597,7 +1597,7 @@ function previewBlankCertsNa() {
  *
  * This exists because the roster carries hundreds of certificates that read
  * `Missing` when the truth is that the course does not apply to that employee —
- * a rigger who never needs Emergency Care, a helper who never needs Risk
+ * a rigger who never needs Electrical, a helper who never needs Risk
  * Assessment. `missing` and `na` derive differently on purpose (Section 6.1):
  * missing is an absence to be chased, na is a decision already taken. Ticking
  * them one at a time through the form is the same decision, made a thousand

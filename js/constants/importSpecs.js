@@ -45,9 +45,19 @@ const CERT_ALIASES = {
   ra: ['ra expiry date', 'ra', 'ra expiry', 'risk assessment', 'risk assessment expiry date'],
   fa: ['fa expiry date', 'fa', 'fa expiry', 'first aid', 'first aid expiry date'],
   ff: ['ff expiry date', 'ff', 'ff expiry', 'fire fighting', 'firefighting', 'fire fighting expiry date'],
+  /*
+   * The `ec` certificate is called Electrical now. The old spellings stay:
+   * every workbook already in circulation heads this column "EC Expiry Date"
+   * or "Emergency Care", and an alias table is a list of what a column has
+   * ever been called, not what it is called today. Dropping them would make
+   * the existing Landmark file stop importing the moment it was renamed.
+   */
   ec: [
-    'ec expiry date', 'ec', 'ec expiry', 'emergency coordinator',
-    'emergency coordinator expiry date', 'emergency co ordinator', 'emergency care',
+    'ec expiry date', 'ec', 'ec expiry',
+    'electrical', 'electrical expiry date', 'electrical expiry',
+    'electrical safety', 'electrical safety expiry date',
+    'emergency coordinator', 'emergency coordinator expiry date',
+    'emergency co ordinator', 'emergency care',
   ],
   mcu: [
     'mcu expiry date', 'mcu', 'mcu expiry', 'medical check up', 'medical checkup',
