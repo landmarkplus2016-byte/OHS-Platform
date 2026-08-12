@@ -33,7 +33,14 @@ import { confirmDialog } from '../../../components/modal.js';
 import { getEquipment, unrejectEquipment } from '../dataActions.js';
 import { invalidateEquipmentList } from './listPage.js';
 import { invalidateRejectedEquipment } from './rejectedPage.js';
-import { WAVES, WAVE_RESULT_LABEL_KEYS, waveDateField, waveResultField } from '../constants.js';
+// Circular with wavesPage, which imports invalidateEquipmentDetail from here.
+// Both are hoisted function declarations, so neither is read at module-evaluation
+// time and the cycle resolves — the same shape as the listPage import above.
+import { invalidateEquipmentWaves } from './wavesPage.js';
+import { WAVE_RESULT_LABEL_KEYS, WAVE_ORIGIN_LABEL_KEYS, WAVE_CARD_LIMIT } from '../constants.js';
+import {
+  openRecordWaveDialog, openCorrectWaveDialog, openVoidWaveDialog,
+} from '../waveDialog.js';
 
 /** Page state, keyed by item so returning to a different one refetches. */
 function pageState() {
@@ -125,12 +132,40 @@ function renderIssues(derived) {
     </div>`;
 }
 
-/** The three internal waves. A wave with no date has not run yet. */
-function renderWaves(item) {
-  const recorded = WAVES.filter((wave) => item[waveDateField(wave)] || item[waveResultField(wave)]);
+/**
+ * The internal inspection waves — the newest few, with the full log a tap away.
+ *
+ * Capped at WAVE_CARD_LIMIT because the log is open-ended now: an item inspected
+ * monthly carries thirty rows after two years, and the reason this card sits on
+ * the detail page at all is so the wave that blocked an item is visible next to
+ * the Issues panel naming it. Five rows does that; thirty buries it.
+ *
+ * Voided waves are shown, struck through, with their reason. This is the one
+ * screen where "somebody cancelled this inspection, and here is why" is the
+ * information being sought — every other view hides them.
+ */
+function renderWaves(item, waves, editable) {
+  const list = waves || [];
+  const shown = list.slice(0, WAVE_CARD_LIMIT);
+  const hidden = list.length - shown.length;
 
-  if (recorded.length === 0) {
-    return `<div class="card"><div class="cell-empty">${escapeHtml(t('eqp_no_waves'))}</div></div>`;
+  const actions = `
+    <div class="page-head-actions">
+      ${editable && !item.rejected ? `
+        <button type="button" class="btn btn-primary btn-sm" data-action="record-wave">
+          ${escapeHtml(t('eqp_wave_record'))}
+        </button>` : ''}
+      <button type="button" class="btn btn-ghost btn-sm" data-action="all-waves">
+        ${escapeHtml(hidden > 0 ? t('eqp_wave_view_all', { count: list.length }) : t('eqp_wave_view_log'))}
+      </button>
+    </div>`;
+
+  if (list.length === 0) {
+    return `
+      <div class="card">
+        <div class="cell-empty">${escapeHtml(t('eqp_no_waves'))}</div>
+        ${actions}
+      </div>`;
   }
 
   return `
@@ -141,24 +176,49 @@ function renderWaves(item) {
             <th>${escapeHtml(t('eqp_col_wave'))}</th>
             <th>${escapeHtml(t('eqp_col_date'))}</th>
             <th>${escapeHtml(t('eqp_col_result'))}</th>
+            <th>${escapeHtml(t('eqp_col_comments'))}</th>
+            <th>${escapeHtml(t('eqp_col_recorded_by'))}</th>
+            ${editable ? '<th></th>' : ''}
           </tr>
         </thead>
         <tbody>
-          ${recorded.map((wave) => {
-            const result = item[waveResultField(wave)];
-            const labelKey = WAVE_RESULT_LABEL_KEYS[result];
+          ${shown.map((wave) => {
+            const labelKey = WAVE_RESULT_LABEL_KEYS[wave.result];
+            const originKey = WAVE_ORIGIN_LABEL_KEYS[wave.origin];
 
             return `
-              <tr>
-                <td>${escapeHtml(t('eqp_wave_n', { wave }))}</td>
-                <td>${escapeHtml(fmtDate(item[waveDateField(wave)]))}</td>
+              <tr class="${wave.voided ? 'row-voided' : ''}">
+                <td>${escapeHtml(t('eqp_wave_n', { wave: wave.wave_no }))}</td>
+                <td>${escapeHtml(fmtDate(wave.wave_date))}</td>
                 <td>${labelKey
-                  ? statusBadge(t(labelKey), result === 'pass')
+                  ? statusBadge(t(labelKey), wave.result === 'pass')
                   : `<span class="cell-sub">${escapeHtml(t('eqp_wave_pending'))}</span>`}</td>
+                <td class="cell-sub">
+                  ${escapeHtml(wave.comments || EMPTY_MARK)}
+                  ${wave.voided
+                    ? `<div class="cell-sub">${escapeHtml(t('eqp_wave_voided_note', { reason: wave.void_reason }))}</div>`
+                    : ''}
+                </td>
+                <td class="cell-sub">
+                  ${escapeHtml(wave.recorded_by_name || EMPTY_MARK)}
+                  ${originKey ? `<div class="cell-sub">${escapeHtml(t(originKey))}</div>` : ''}
+                </td>
+                ${editable ? `
+                  <td class="cell-actions">
+                    ${wave.voided ? '' : `
+                      <button type="button" class="btn btn-ghost btn-sm" data-action="correct-wave"
+                              data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_correct'))}</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-action="void-wave"
+                              data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_void'))}</button>`}
+                  </td>` : ''}
               </tr>`;
           }).join('')}
         </tbody>
       </table>
+      ${hidden > 0
+        ? `<div class="cell-sub">${escapeHtml(t('eqp_wave_more', { count: hidden }))}</div>`
+        : ''}
+      ${actions}
     </div>`;
 }
 
@@ -323,7 +383,7 @@ export function renderEquipmentDetailPage(params) {
       </div>
 
       <div class="section-head">${escapeHtml(t('eqp_section_waves'))}</div>
-      ${renderWaves(item)}
+      ${renderWaves(item, s.data.waves, editable)}
 
       <div class="section-head">${escapeHtml(t('eqp_section_assignment'))}</div>
       ${renderAssignment(item, s.data.team_leader)}
@@ -381,6 +441,48 @@ async function doUnreject(equipmentId) {
   }
 }
 
+/**
+ * Runs a wave dialog and refreshes the page if it wrote anything.
+ *
+ * The record and correct dialogs hand back the item's freshly derived block, but
+ * this page redraws from `get_equipment` rather than patching that in: the wave
+ * list, the verdict badge, the issues panel and the third-party card all move
+ * together, and re-reading one item is cheaper than keeping four fragments of a
+ * page in step by hand.
+ *
+ * @param {function(): Promise<Object|null>} open
+ */
+async function runWaveDialog(open) {
+  const s = pageState();
+  if (s.busy) return;
+
+  s.busy = true;
+  try {
+    const saved = await open();
+    if (!saved) return;
+
+    toastSuccess(t('eqp_wave_saved'));
+
+    // A wave can flip the verdict, and the list pages colour their rows by it.
+    invalidateEquipmentList();
+    invalidateEquipmentWaves();
+    invalidate();
+  } catch (err) {
+    console.error('[equipment] wave write failed:', err);
+    toastError(err);
+  } finally {
+    s.busy = false;
+    render();
+  }
+}
+
+/** The wave a row's button refers to, from the loaded page state. */
+function findWave(waveId) {
+  const s = pageState();
+  const waves = (s.data && s.data.waves) || [];
+  return waves.find((wave) => wave.wave_id === waveId) || null;
+}
+
 /* ---------- Events -------------------------------------------------------- */
 
 /**
@@ -414,6 +516,37 @@ export function bindEquipmentDetailPageEvents(params) {
   if (openLeader) {
     openLeader.addEventListener('click', () => go('employee/:id', { id: openLeader.dataset.employeeId }));
   }
+
+  /* ---- Inspection waves ---- */
+
+  const recordWave = root.querySelector('[data-action="record-wave"]');
+  if (recordWave) {
+    recordWave.addEventListener('click', () => runWaveDialog(() => openRecordWaveDialog({
+      equipment_id: equipmentId,
+      label: [item && item.item, item && item.brand, item && item.serial_no]
+        .filter(Boolean).join(' · '),
+    })));
+  }
+
+  // The full log for this item, on the same page the fleet-wide queue uses.
+  const allWaves = root.querySelector('[data-action="all-waves"]');
+  if (allWaves) {
+    allWaves.addEventListener('click', () => go('equipment/waves/:id', { id: equipmentId }));
+  }
+
+  root.querySelectorAll('[data-action="correct-wave"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wave = findWave(btn.dataset.waveId);
+      if (wave) runWaveDialog(() => openCorrectWaveDialog(wave));
+    });
+  });
+
+  root.querySelectorAll('[data-action="void-wave"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wave = findWave(btn.dataset.waveId);
+      if (wave) runWaveDialog(() => openVoidWaveDialog(wave));
+    });
+  });
 }
 
 /** Called by the form and reject pages after a write, so the detail refetches. */

@@ -30,8 +30,17 @@
    ========================================================================== */
 
 const DB_NAME = 'ohsp-officer';
-const DB_VERSION = 1;
+
+/**
+ * 2 adds the `outbox` store — inspection waves recorded with no signal, waiting
+ * to be sent (outbox.js). Bumping the version is what runs onupgradeneeded on a
+ * phone that already holds a v1 database, so an officer who has been using the
+ * app gets the new store without losing the snapshot they are standing on.
+ */
+const DB_VERSION = 2;
+
 const STORE = 'kv';
+const OUTBOX_STORE = 'outbox';
 
 export const KEY_SNAPSHOT = 'snapshot';
 export const KEY_SYNCED_AT = 'synced_at';
@@ -64,9 +73,13 @@ export function openDb() {
 
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
+    // Guarded by name rather than switched on the old version, so the upgrade is
+    // correct whichever version the phone is coming from — including a fresh
+    // install, which jumps straight to the current one.
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if (!db.objectStoreNames.contains(OUTBOX_STORE)) db.createObjectStore(OUTBOX_STORE);
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -130,10 +143,15 @@ export async function cacheSet(key, value) {
 }
 
 /**
- * Empty the store — every key, not just the two we name.
+ * Empty both stores — every key, not just the ones we name.
  *
  * Called on sign-out (Section 7.7): a shared work phone handed to the next
- * officer must carry nothing of the last one.
+ * officer must carry nothing of the last one, and that now includes any wave
+ * they queued.
+ *
+ * The caller is responsible for having dealt with the outbox first. Sign-out
+ * tries to flush it and warns if it cannot (dataActions.officerLogout) — by the
+ * time this runs, discarding is a decision somebody has already taken.
  *
  * @returns {Promise<void>}
  */
@@ -144,8 +162,9 @@ export async function cacheClear() {
   const db = await openDb();
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
+    const tx = db.transaction([STORE, OUTBOX_STORE], 'readwrite');
     tx.objectStore(STORE).clear();
+    tx.objectStore(OUTBOX_STORE).clear();
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);

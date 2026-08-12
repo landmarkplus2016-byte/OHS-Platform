@@ -24,8 +24,10 @@ import { go } from '../../../router.js';
 import { render } from '../../../render.js';
 import { toast, toastSuccess } from '../../../components/toast.js';
 import { getCachedSnapshot } from '../cache.js';
-import { loadOfficerSnapshot } from '../dataActions.js';
+import { loadOfficerSnapshot, loadOfficerOutbox } from '../dataActions.js';
+import { pendingCount } from '../outbox.js';
 import { renderVerdictCardFor } from '../search.js';
+import { openOfficerWaveSheet } from '../waveSheet.js';
 
 /**
  * Build the render/bind pair for one entity kind.
@@ -107,6 +109,46 @@ export function makeVerdictPage(options) {
       });
     }
 
+    // Recording a wave. The button is drawn by the module's card — this page
+    // does not know what an inspection wave is, only that a card can ask for one
+    // to be recorded against the entity it is showing.
+    //
+    // Reaching this at all means the cache is fresh: the stale lockout redirects
+    // every route but sync (staleCheck.js, rule 18), and this is one of them.
+    // That is the intent, not a side effect — an officer working from a snapshot
+    // too old to read a verdict from is also too old to be identifying the item
+    // in their hands.
+    const recordBtn = document.querySelector('[data-action="officer-record-wave"]');
+    if (recordBtn) {
+      let recording = false;
+
+      recordBtn.addEventListener('click', async () => {
+        if (recording) return;
+        recording = true;
+
+        try {
+          const outcome = await openOfficerWaveSheet({
+            equipment_id: recordBtn.dataset.equipmentId || entityId,
+            label: recordBtn.dataset.label || '',
+          });
+          if (!outcome) return;
+
+          // Queued rather than sent: there was no signal. Say so plainly — the
+          // officer needs to know the wave is on the phone and not yet on the
+          // record, so they do not walk away assuming it landed.
+          if (outcome.queued) toast(t('off_wave_queued'), 'warn');
+          else toastSuccess(t('off_wave_saved'));
+
+          await loadOfficerOutbox();
+          render();
+        } catch (err) {
+          console.error('[officer] wave sheet failed for ' + entityId + ':', err);
+        } finally {
+          recording = false;
+        }
+      });
+    }
+
     if (!getCachedSnapshot()) {
       loadOfficerSnapshot()
         .then((snapshot) => {
@@ -114,6 +156,19 @@ export function makeVerdictPage(options) {
         })
         .catch((err) => console.error('[officer] cannot read the cached snapshot:', err));
     }
+
+    // The pending list is drawn into the card, so it has to be in memory before
+    // the draw that shows it.
+    //
+    // Redrawing only on a *change* is what stops this looping: render() re-runs
+    // bind(), so a redraw that fires whenever the queue is non-empty would never
+    // settle on a card with a wave waiting.
+    const drawnWith = pendingCount();
+    loadOfficerOutbox()
+      .then(() => {
+        if (pendingCount() !== drawnWith) render();
+      })
+      .catch((err) => console.error('[officer] cannot read the outbox:', err));
   }
 
   return { render: renderPage, bind: bindPage };

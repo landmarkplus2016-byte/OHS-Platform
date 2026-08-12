@@ -15,7 +15,7 @@
  * numeric columns too; callers coerce with Number() where they need a number.
  */
 
-/** The 13 tabs from CLAUDE.md Section 2. */
+/** The 14 tabs from CLAUDE.md Section 2. */
 var SHEET_NAMES = {
   CONFIG: 'Config',
   USERS: 'Users',
@@ -26,6 +26,7 @@ var SHEET_NAMES = {
   RDT_LOG: 'RdtLog',
   EQUIPMENT: 'Equipment',
   INSPECTION_HISTORY: 'InspectionHistory',
+  INSPECTION_WAVES: 'InspectionWaves',
   FIELD_OPTIONS: 'FieldOptions',
   MODULE_SETTINGS: 'ModuleSettings',
   VEHICLES: 'Vehicles',

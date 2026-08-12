@@ -108,7 +108,8 @@ function handleOfficerSync(session, payload) {
     if (normalizeString(equipmentRow.equipment_id) === '') continue;
     if (normalizeBoolean(equipmentRow.rejected)) continue;
     equipment.push(shapeOfficerEquipment_(
-      equipmentRow, deriveEquipment_(equipmentRow, ctx), ctx.employeesById
+      equipmentRow, deriveEquipment_(equipmentRow, ctx), ctx.employeesById,
+      ctx.wavesByEquipmentId[normalizeString(equipmentRow.equipment_id)]
     ));
   }
   equipment.sort(compareOfficerEquipment_);
@@ -206,15 +207,22 @@ function handleOfficerGetEquipment(session, payload) {
     return errResponse('not_found', 'equipment_not_found');
   }
 
+  // The wave map is the one input here that cannot be narrowed to a key lookup:
+  // equipment_id is not unique on InspectionWaves, so any filter still reads the
+  // tab. Grouping the whole thing costs the same read and keeps one code path.
   var ctx = {
     today: todayIso(),
     thresholds: getComplianceThresholds(),
     moduleSettings: getModuleSettingsMap(),
-    employeesById: officerLeaderMap_(row.team_leader_id)
+    employeesById: officerLeaderMap_(row.team_leader_id),
+    wavesByEquipmentId: wavesByEquipmentId_()
   };
 
   return okResponse({
-    equipment: shapeOfficerEquipment_(row, deriveEquipment_(row, ctx), ctx.employeesById),
+    equipment: shapeOfficerEquipment_(
+      row, deriveEquipment_(row, ctx), ctx.employeesById,
+      ctx.wavesByEquipmentId[equipmentId]
+    ),
     fetched_at: nowIso()
   });
 }
@@ -255,7 +263,8 @@ function officerContext_() {
     thresholds: getComplianceThresholds(),
     moduleSettings: getModuleSettingsMap(),
     employeesById: byId,
-    employeeRows: rows
+    employeeRows: rows,
+    wavesByEquipmentId: wavesByEquipmentId_()
   };
 }
 
@@ -355,12 +364,31 @@ function shapeOfficerEmployee_(row, derived) {
  * a harness and needs to know whose it is before asking anyone to stop using
  * it. It is identity, not admin metadata — Section 7.6 strips the latter.
  *
+ * ---- The waves ----
+ *
+ * Waves arrive as a list rather than as three column pairs, and they are
+ * stripped like everything else here: number, date, result, comment. No
+ * `recorded_by`, matching Section 7.6's rule on `*_by` columns — an officer
+ * reads what the last inspection found, not who signed it.
+ *
+ * The comment *is* included, and that is a deliberate departure from the
+ * equipment `comments` column sitting a few lines above it. That column is admin
+ * notes about an asset. A wave comment is one officer's field observation
+ * written for the next one — "webbing frayed near the D-ring, watch it" is
+ * exactly what the officer holding the harness needs, and withholding it would
+ * make the feature pointless from the second inspection onward.
+ *
+ * Voided waves never reach the phone. They count for nothing, and "this
+ * inspection was cancelled by an admin" is a distinction with no consequence at
+ * a tower.
+ *
  * @param {Object} row      Raw Equipment row.
  * @param {Object} derived  Block from deriveEquipmentDerived.
  * @param {Object<string, Object>} employeesById
+ * @param {Array<Object>=} waves  Non-voided waves for this item, newest first.
  * @return {Object}
  */
-function shapeOfficerEquipment_(row, derived, employeesById) {
+function shapeOfficerEquipment_(row, derived, employeesById, waves) {
   var leaderId = normalizeString(row.team_leader_id);
   var leader = (leaderId !== '' && employeesById) ? employeesById[leaderId] : null;
 
@@ -378,10 +406,16 @@ function shapeOfficerEquipment_(row, derived, employeesById) {
     third_party_inspection_end_date: normalizeIsoDate(row.third_party_inspection_end_date)
   };
 
-  for (var w = 0; w < EQUIPMENT_WAVES.length; w++) {
-    var n = EQUIPMENT_WAVES[w];
-    out['wave_' + n + '_date'] = normalizeIsoDate(row['wave_' + n + '_date']);
-    out['wave_' + n + '_result'] = normalizeString(row['wave_' + n + '_result']).toLowerCase();
+  var list = waves || [];
+  out.waves = [];
+  for (var w = 0; w < list.length; w++) {
+    out.waves.push({
+      wave_id: list[w].wave_id,
+      wave_no: list[w].wave_no,
+      wave_date: list[w].wave_date,
+      result: list[w].result,
+      comments: list[w].comments
+    });
   }
 
   out.derived = derived;

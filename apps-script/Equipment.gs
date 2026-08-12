@@ -79,14 +79,11 @@ var EQUIPMENT_EMPLOYEES_CACHE_ = null;
 function equipmentWritableFields_() {
   if (EQUIPMENT_WRITABLE_CACHE_) return EQUIPMENT_WRITABLE_CACHE_;
 
+  // No wave columns. Waves are rows on the InspectionWaves tab now, written
+  // through record_inspection_wave — never as a field of the item they belong
+  // to, which is what capped them at three and left no room for a comment.
   var fields = ['team_leader_id', 'subcontractor', 'item', 'brand', 'date_of_manufacture',
-    'serial_no', 'third_party_sn', 'third_party_inspection_end_date'];
-
-  for (var w = 0; w < EQUIPMENT_WAVES.length; w++) {
-    fields.push('wave_' + EQUIPMENT_WAVES[w] + '_date');
-    fields.push('wave_' + EQUIPMENT_WAVES[w] + '_result');
-  }
-  fields.push('comments');
+    'serial_no', 'third_party_sn', 'third_party_inspection_end_date', 'comments'];
 
   EQUIPMENT_WRITABLE_CACHE_ = fields;
   return fields;
@@ -238,6 +235,11 @@ function handleGetEquipment(session, payload) {
   return okResponse({
     equipment: shapeEquipment_(row, deriveEquipment_(row, ctx), ctx.employeesById),
     inspection_history: inspectionHistoryFor_(equipmentId),
+
+    // Voided waves included: this is the detail page, where an admin needs to
+    // see that a wave was voided and why. The verdict above it already ignores
+    // them (wavesByEquipmentId_ filters at the source).
+    waves: wavesWithNames_(wavesForEquipment_(equipmentId, true), row),
     team_leader: shapeTeamLeader_(ctx.employeesById[normalizeString(row.team_leader_id)])
   });
 }
@@ -933,25 +935,9 @@ function validateEquipmentInput_(input, ctx) {
     }
   }
 
-  // --- dates and wave results -----------------------------------------------
+  // --- dates ----------------------------------------------------------------
   applyDateField_(values, errors, input, 'date_of_manufacture');
   applyDateField_(values, errors, input, 'third_party_inspection_end_date');
-
-  for (var w = 0; w < EQUIPMENT_WAVES.length; w++) {
-    applyDateField_(values, errors, input, 'wave_' + EQUIPMENT_WAVES[w] + '_date');
-
-    var resultField = 'wave_' + EQUIPMENT_WAVES[w] + '_result';
-    if (!has_(input, resultField)) continue;
-
-    var result = normalizeString(input[resultField]).toLowerCase();
-    if (result === '') {
-      values[resultField] = '';
-    } else if (EQUIPMENT_WAVE_RESULTS.indexOf(result) === -1) {
-      errors[resultField] = 'invalid_value';
-    } else {
-      values[resultField] = result;
-    }
-  }
 
   // --- free text ------------------------------------------------------------
   if (has_(input, 'comments')) values.comments = normalizeString(input.comments);
@@ -1037,25 +1023,28 @@ function applyEquipmentOption_(values, errors, input, field, listKey, ctx) {
  * The per-request derivation inputs, including the Employees join.
  *
  * Every loader behind this is cached, so calling it once per handler costs one
- * read each of Config, ModuleSettings, and Employees for the whole request
- * (Sections 3.6, 6.5).
+ * read each of Config, ModuleSettings, Employees, and InspectionWaves for the
+ * whole request (Sections 3.6, 6.5).
  *
  * @return {{today: string, thresholds: Object, moduleSettings: Object,
- *           employeesById: Object<string, Object>}}
+ *           employeesById: Object<string, Object>,
+ *           wavesByEquipmentId: Object<string, Array<Object>>}}
  */
 function equipmentContext_() {
   return {
     today: todayIso(),
     thresholds: getComplianceThresholds(),
     moduleSettings: getModuleSettingsMap(),
-    employeesById: equipmentEmployeesById_()
+    employeesById: equipmentEmployeesById_(),
+    wavesByEquipmentId: wavesByEquipmentId_()
   };
 }
 
 /** @private deriveEquipmentDerived with the request context already applied. */
 function deriveEquipment_(row, ctx) {
   return deriveEquipmentDerived(
-    row, ctx.today, ctx.thresholds, ctx.moduleSettings, ctx.employeesById
+    row, ctx.today, ctx.thresholds, ctx.moduleSettings,
+    ctx.employeesById, ctx.wavesByEquipmentId
   );
 }
 
@@ -1119,11 +1108,10 @@ function shapeEquipment_(row, derived, employeesById) {
     updated_by: normalizeString(row.updated_by)
   };
 
-  for (var w = 0; w < EQUIPMENT_WAVES.length; w++) {
-    var n = EQUIPMENT_WAVES[w];
-    out['wave_' + n + '_date'] = normalizeIsoDate(row['wave_' + n + '_date']);
-    out['wave_' + n + '_result'] = normalizeString(row['wave_' + n + '_result']).toLowerCase();
-  }
+  /* No wave columns. A list row carries the verdict, which already accounts for
+     the newest wave; the waves themselves come from `get_equipment` for one item
+     or `list_inspection_waves` for many, because an open-ended log does not
+     belong inlined on every row of a 200-item page. */
 
   out.derived = derived;
   return out;

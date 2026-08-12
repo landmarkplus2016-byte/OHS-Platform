@@ -1434,11 +1434,17 @@ function assignedEquipmentFor_(employeeRow, ctx) {
   var rows = readAllRows(SHEET_NAMES.EQUIPMENT);
   var out = [];
 
+  // Read once outside the loop even though most employees carry no equipment:
+  // readInspectionWaves_ caches for the execution, so the cost is one tab read
+  // whether this fires once or fifty times.
+  var wavesByEquipment = wavesByEquipmentId_();
+
   for (var i = 0; i < rows.length; i++) {
     if (normalizeString(rows[i].team_leader_id) !== employeeId) continue;
 
     var derived = deriveEquipmentDerived(
-      rows[i], ctx.today, ctx.thresholds, ctx.moduleSettings, employeesById
+      rows[i], ctx.today, ctx.thresholds, ctx.moduleSettings,
+      employeesById, wavesByEquipment
     );
 
     out.push({

@@ -41,9 +41,7 @@ import {
 } from '../dataActions.js';
 import { invalidateEquipmentDetail } from './detailPage.js';
 import { invalidateEquipmentList } from './listPage.js';
-import {
-  WAVES, WAVE_RESULTS, WAVE_RESULT_LABEL_KEYS, waveDateField, waveResultField, listKeyFor,
-} from '../constants.js';
+import { listKeyFor } from '../constants.js';
 
 /** Server `field_errors` codes → the message shown under the input. */
 const FIELD_ERROR_KEYS = {
@@ -78,19 +76,18 @@ function pageState() {
   return UI.equipmentForm;
 }
 
-/** Every column this form can write (Section 2, Equipment tab). */
+/**
+ * Every column this form can write (Section 2, Equipment tab).
+ *
+ * No wave fields. A wave is an event with its own date, author and comment, not
+ * an attribute of the item — it is recorded from the item's detail page or from
+ * an officer's phone, and the server rejects a wave column sent through
+ * `update_equipment` as an unknown key.
+ */
 function writableFields() {
-  const fields = ['item', 'brand', 'serial_no', 'third_party_sn',
+  return ['item', 'brand', 'serial_no', 'third_party_sn',
     'date_of_manufacture', 'third_party_inspection_end_date',
-    'subcontractor', 'team_leader_id'];
-
-  WAVES.forEach((wave) => {
-    fields.push(waveDateField(wave));
-    fields.push(waveResultField(wave));
-  });
-
-  fields.push('comments');
-  return fields;
+    'subcontractor', 'team_leader_id', 'comments'];
 }
 
 /** The `key` a set of route params describes, so a draw can tell stale state. */
@@ -270,30 +267,6 @@ function teamLeaderInput(s) {
     </div>`;
 }
 
-/** One internal wave: the date it ran and how it went. */
-function waveCard(s, wave) {
-  const dateField = waveDateField(wave);
-  const resultField = waveResultField(wave);
-  const selected = s.values[resultField] || '';
-
-  return `
-    <div class="cert-edit">
-      <div class="cert-edit-title">${escapeHtml(t('eqp_wave_n', { wave }))}</div>
-      ${textInput(s, dateField, 'eqp_field_wave_date', { type: 'date' })}
-      <div class="field">
-        <label for="eqp-f-${escapeHtml(resultField)}">${escapeHtml(t('eqp_field_wave_result'))}</label>
-        <select id="eqp-f-${escapeHtml(resultField)}" data-field="${escapeHtml(resultField)}">
-          <option value="">${escapeHtml(t('eqp_wave_pending'))}</option>
-          ${WAVE_RESULTS.map((result) => `
-            <option value="${escapeHtml(result)}"${result === selected ? ' selected' : ''}>
-              ${escapeHtml(t(WAVE_RESULT_LABEL_KEYS[result]))}
-            </option>`).join('')}
-        </select>
-        ${fieldError(s, resultField)}
-      </div>
-    </div>`;
-}
-
 /**
  * @param {Object} params route params — {} for new, {id} for edit
  * @returns {string} HTML
@@ -359,12 +332,16 @@ export function renderEquipmentFormPage(params) {
         </div>
       </div>
 
-      <div class="section-head">${escapeHtml(t('eqp_section_waves'))}</div>
-      <div class="card">
-        <div class="cert-edit-grid">
-          ${WAVES.map((wave) => waveCard(s, wave)).join('')}
-        </div>
-      </div>
+      ${isCreate ? '' : `
+        <div class="section-head">${escapeHtml(t('eqp_section_waves'))}</div>
+        <div class="card">
+          <div class="cell-empty">${escapeHtml(t('eqp_wave_form_hint'))}</div>
+          <div class="page-head-actions">
+            <button type="button" class="btn btn-ghost btn-sm" data-action="open-waves">
+              ${escapeHtml(t('eqp_wave_view_log'))}
+            </button>
+          </div>
+        </div>`}
 
       <div class="section-head">${escapeHtml(t('eqp_section_notes'))}</div>
       <div class="card">
@@ -495,4 +472,14 @@ export function bindEquipmentFormEvents(params) {
 
   const saveBtn = root.querySelector('[data-action="save"]');
   if (saveBtn) saveBtn.addEventListener('click', save);
+
+  // Waves are not a field of this form. The button leaves it for the log, which
+  // is where they are recorded and corrected.
+  const openWaves = root.querySelector('[data-action="open-waves"]');
+  if (openWaves) {
+    openWaves.addEventListener('click', () => {
+      s.key = null;
+      go('equipment/waves/:id', { id: s.equipmentId });
+    });
+  }
 }

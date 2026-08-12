@@ -1,21 +1,45 @@
 /* ==========================================================================
    equipment/constants.js — the equipment module's own vocabulary.
 
-   Keys here mirror the Sheet's column names exactly (Section 2): the columns
-   are `wave_1_date` and `wave_1_result`, so the wave numbers below are what the
-   form and the detail page concatenate into column names rather than carrying a
-   mapping table.
+   Keys here mirror the Sheet's column names exactly (Section 2).
 
    Nothing in this file derives anything. Which verdict an item is in, and what
    state its third-party inspection is in, come from the server's `derived`
    block (Section 6.3).
    ========================================================================== */
 
-/** The three internal inspection waves, in order (Section 2). */
-export const WAVES = [1, 2, 3];
+/**
+ * Waves are rows on the InspectionWaves tab, not columns on the item.
+ *
+ * There used to be a `WAVES = [1, 2, 3]` here and a pair of helpers that built
+ * `wave_1_date` / `wave_1_result` column names from it. Both are gone: an item
+ * now carries an open-ended `waves` array, numbered by the server, and nothing
+ * on the client concatenates a column name.
+ */
 
 /** The only two results a completed wave can carry. */
 export const WAVE_RESULTS = ['pass', 'fail'];
+
+/**
+ * How many waves the equipment detail card shows before it defers to the full
+ * log.
+ *
+ * Five is enough to see the recent pattern — the run of passes a fail
+ * interrupts — without the card growing without limit on an item inspected
+ * monthly for two years. Everything above that is one tap away on the waves
+ * page.
+ */
+export const WAVE_CARD_LIMIT = 5;
+
+/** Rows per page on the fleet-wide waves page. */
+export const WAVE_PAGE_SIZE = 50;
+
+/** Wave origin → i18n key, for the badge that says who filed it. */
+export const WAVE_ORIGIN_LABEL_KEYS = {
+  officer: 'eqp_wave_origin_officer',
+  admin: 'eqp_wave_origin_admin',
+  migration: 'eqp_wave_origin_migration',
+};
 
 /** wave result → i18n key. An empty result is a wave that has not run yet. */
 export const WAVE_RESULT_LABEL_KEYS = {
@@ -63,16 +87,6 @@ export const BULK_PAGE_SIZE = 200;
  * turn one page load into an unbounded request loop.
  */
 export const MAX_PAGE_WALK = 20;
-
-/** The `wave_N_date` column name for a wave number. */
-export function waveDateField(wave) {
-  return 'wave_' + wave + '_date';
-}
-
-/** The `wave_N_result` column name for a wave number. */
-export function waveResultField(wave) {
-  return 'wave_' + wave + '_result';
-}
 
 /**
  * The FieldOptions list key for a dropdown column.

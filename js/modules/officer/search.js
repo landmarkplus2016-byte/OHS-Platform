@@ -26,6 +26,7 @@
    ========================================================================== */
 
 import { getModules } from '../../router.js';
+import { getPendingWaves } from './outbox.js';
 
 /**
  * How many results the home page will show. A field officer searching a name
@@ -119,6 +120,15 @@ export function resolveEntity(ref, snapshot) {
 /**
  * The verdict page body for an entity, drawn by the module that owns it.
  *
+ * The snapshot handed to the card carries `pending_waves` — whatever this phone
+ * has queued and not yet sent (outbox.js). It is injected here rather than
+ * imported by the card, because rule 12 keeps a domain module out of the officer
+ * module's folder: the officer app owns the queue, and a module's card only
+ * draws what it is given.
+ *
+ * A module with nothing queued sees an empty array, which is what every module
+ * except equipment will always see for now.
+ *
  * @param {string} kind
  * @param {string} entityId
  * @param {Object|null} snapshot
@@ -128,5 +138,9 @@ export function renderVerdictCardFor(kind, entityId, snapshot) {
   const contributor = contributorFor(kind);
   if (!contributor || typeof contributor.renderVerdictCard !== 'function') return null;
 
-  return contributor.renderVerdictCard(entityId, snapshot);
+  // A shallow copy, so the pending list never gets written into the cached
+  // snapshot and persisted to IndexedDB alongside the server's data.
+  const withPending = { ...(snapshot || {}), pending_waves: getPendingWaves() };
+
+  return contributor.renderVerdictCard(entityId, withPending);
 }

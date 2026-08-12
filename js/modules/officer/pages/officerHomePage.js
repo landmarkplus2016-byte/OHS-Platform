@@ -24,12 +24,49 @@ import { t } from '../../../i18n/i18n.js';
 import { escapeHtml, initials } from '../../../utils/format.js';
 import { go } from '../../../router.js';
 import { getCachedSnapshot } from '../cache.js';
-import { loadOfficerSnapshot } from '../dataActions.js';
+import { loadOfficerSnapshot, loadOfficerOutbox, officerFlushOutbox } from '../dataActions.js';
+import { pendingCount, installOutboxAutoFlush } from '../outbox.js';
 import { searchAllEntities, resolveEntity } from '../search.js';
+import { toast, toastSuccess } from '../../../components/toast.js';
 import { render } from '../../../render.js';
 
 /** How many entries the Recent list keeps (Section 7.5). */
 const RECENT_LIMIT = 5;
+
+/**
+ * Don't re-attempt an automatic flush more often than this.
+ *
+ * `bind()` runs on every draw, and a page with a stubborn queue would otherwise
+ * hammer the server once per keystroke in the search box. The officer always has
+ * the Retry button, which ignores the cooldown.
+ */
+const AUTO_FLUSH_COOLDOWN_MS = 30000;
+let lastAutoFlush = 0;
+
+/**
+ * The pending count the current DOM was drawn with, so a redraw only happens
+ * when it actually changed.
+ *
+ * This is not an optimisation. `render()` re-runs `bind()`, so a bind that
+ * redraws unconditionally after an async read never stops.
+ */
+let drawnPendingCount = 0;
+
+/**
+ * Read the outbox into memory and redraw only if the banner would now differ.
+ *
+ * @returns {Promise<void>}
+ */
+function redrawIfPendingChanged() {
+  return loadOfficerOutbox()
+    .then(() => {
+      if (pendingCount() === drawnPendingCount) return;
+
+      drawnPendingCount = pendingCount();
+      render();
+    })
+    .catch((err) => console.error('[officer] cannot read the outbox:', err));
+}
 
 /** The live query, kept on UI so it survives a redraw and dies with the session. */
 function query() {
@@ -120,11 +157,34 @@ function renderResults() {
     <div class="result-list">${recent.map(resultItem).join('')}</div>`;
 }
 
+/**
+ * The unsent-waves banner.
+ *
+ * Shown whenever anything is queued, on the screen the officer passes through
+ * most. A wave sitting on a phone is not on the record, and the officer is the
+ * only person who can do anything about it — so it says how many, and offers the
+ * retry rather than waiting for the next automatic attempt.
+ */
+function renderPendingBanner() {
+  const count = pendingCount();
+  if (count === 0) return '';
+
+  return `
+    <div class="banner banner-warn officer-pending">
+      <span>${escapeHtml(t('off_wave_pending_banner', { count }))}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="retry-uploads">
+        ${escapeHtml(t('off_wave_retry'))}
+      </button>
+    </div>`;
+}
+
 export function renderOfficerHomePage() {
   const q = query();
 
   return `
     <div class="officer-body">
+      ${renderPendingBanner()}
+
       <div class="search-box">
         <span class="ic" aria-hidden="true">🔍</span>
         <input id="off-search" type="search" inputmode="search"
@@ -186,5 +246,44 @@ export function bindOfficerHomePageEvents() {
         if (snapshot) render();
       })
       .catch((err) => console.error('[officer] cannot read the cached snapshot:', err));
+  }
+
+  /* ---- The outbox ---- */
+
+  // Landing on home is the most reliable moment an officer is holding the phone
+  // and might have signal again, so it is where a queued wave gets its chance.
+  installOutboxAutoFlush(() => redrawIfPendingChanged());
+
+  // render() re-runs bind(), so anything here that redraws unconditionally is an
+  // infinite loop. Both the load and the flush redraw only when the count they
+  // are showing actually moved.
+  redrawIfPendingChanged();
+
+  if (pendingCount() > 0 && Date.now() - lastAutoFlush > AUTO_FLUSH_COOLDOWN_MS) {
+    lastAutoFlush = Date.now();
+
+    officerFlushOutbox()
+      .then((result) => {
+        if (result.sent > 0) toastSuccess(t('off_wave_flush_sent', { count: result.sent }));
+        if (result.failed > 0) toast(t('off_wave_flush_failed', { count: result.failed }), 'error');
+        redrawIfPendingChanged();
+      })
+      .catch((err) => console.error('[officer] outbox flush on home failed:', err));
+  }
+
+  const retryBtn = root.querySelector('[data-action="retry-uploads"]');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', async () => {
+      retryBtn.disabled = true;
+      try {
+        const result = await officerFlushOutbox();
+
+        if (result.sent > 0) toastSuccess(t('off_wave_flush_sent', { count: result.sent }));
+        else if (result.offline) toast(t('off_wave_flush_offline'), 'warn');
+        if (result.failed > 0) toast(t('off_wave_flush_failed', { count: result.failed }), 'error');
+      } finally {
+        render();
+      }
+    });
   }
 }

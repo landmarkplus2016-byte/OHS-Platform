@@ -166,6 +166,69 @@ export async function listAssignableEmployees(opts) {
   }));
 }
 
+/* ---------- Inspection waves ---------------------------------------------- */
+
+/**
+ * `list_inspection_waves` — the wave log (Section 3.6).
+ *
+ * One action behind two screens. Pass `equipment_id` for one item's history;
+ * omit it and pass filters for the fleet-wide review queue.
+ *
+ * @param {Object} [params] {equipment_id, month, result, recorded_by, origin,
+ *        include_voided, search, page, page_size}
+ * @returns {Promise<{waves: Array, total_matching: number, page: number, page_size: number}>}
+ */
+export function listInspectionWaves(params) {
+  return api.call('list_inspection_waves', params || {});
+}
+
+/**
+ * `record_inspection_wave` — file a wave against an item.
+ *
+ * Resolves with the wave *and* the item's freshly derived block, so the caller
+ * can repaint the verdict without a second read.
+ *
+ * @param {{equipment_id: string, wave_date: string, result: string, comments?: string}} wave
+ * @returns {Promise<{wave: Object, derived: Object|null}>}
+ */
+export function recordInspectionWave(wave) {
+  return api.call('record_inspection_wave', {
+    equipment_id: wave.equipment_id,
+    wave_date: wave.wave_date,
+    result: wave.result,
+    comments: wave.comments || '',
+  });
+}
+
+/**
+ * `update_inspection_wave` — correct a wave in place.
+ *
+ * Only the date, the result, and the comment can move. A wave filed against the
+ * wrong item is voided and re-filed, never edited across.
+ *
+ * @param {string} waveId
+ * @param {{wave_date?: string, result?: string, comments?: string}} updates
+ * @returns {Promise<{wave: Object, derived: Object|null}>}
+ */
+export function updateInspectionWave(waveId, updates) {
+  return api.call('update_inspection_wave', { wave_id: waveId, updates });
+}
+
+/**
+ * `void_inspection_wave` — stop a wave counting, without deleting it (rule 6).
+ *
+ * The reason is required by the server, not merely encouraged: a wave that
+ * vanishes from the verdict with nothing saying why is the thing voiding exists
+ * to prevent.
+ *
+ * @param {string} waveId
+ * @param {string} reason
+ * @returns {Promise<{wave: Object, derived: Object|null}>}
+ */
+export function voidInspectionWave(waveId, reason) {
+  return api.call('void_inspection_wave', { wave_id: waveId, reason });
+}
+
 /* ---------- Writes -------------------------------------------------------- */
 
 /**

@@ -203,6 +203,12 @@
 /* Actions cell in a table: keep the buttons on one line where there is room. */
 .cell-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* A voided inspection wave. Struck through and dimmed rather than hidden: the
+   row stays on the record (rule 6) and the point of showing it is that somebody
+   can see it was cancelled, and read why. */
+.row-voided td { color: var(--muted); text-decoration: line-through; }
+.row-voided td .cell-sub { text-decoration: none; }
+
 /* A row for a record that is switched off — deactivated user, retired option. */
 .row-inactive td { opacity: .55; }
 
@@ -777,6 +783,75 @@
 .cert-line-date { color: var(--text2); font-size: 12.5px; margin-block-start: 2px; }
 .cert-line-value { color: var(--text2); font-size: 12.5px; text-align: end; }
 .cert-line .cert-days { color: var(--muted); margin-inline-start: 4px; }
+
+/* ---------- Inspection waves on the officer card ----------
+   The comment an officer left for the next one. Wrapped rather than truncated:
+   "webbing frayed near the D-ring" is the whole value of the line, and an
+   ellipsis in the middle of it would be worse than a taller row. */
+.cert-line-note {
+  color: var(--text2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-block-start: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A wave recorded on this phone and not yet on the record. Marked, never
+   coloured like a verdict — rule 13 keeps derivation on the server, and the
+   hero above this row still reflects the last thing the server said. */
+.cert-line-pending {
+  background: var(--plan-bg);
+  border-inline-start: 3px solid var(--warn);
+  padding-inline-start: 8px;
+  margin-inline: -8px;
+  padding-inline-end: 8px;
+}
+.cert-line-pending .cert-line-name { color: var(--plan-tx); font-weight: 600; }
+
+/* The record button under an equipment card. Full width — it is a thumb target
+   at the bottom of a scrolled page, not a toolbar action. */
+.officer-card-actions {
+  padding: 14px 16px 4px;
+}
+.officer-card-actions .btn { width: 100%; }
+
+/* Pass / Fail as two large targets rather than a select. An officer is wearing
+   gloves and holding the item in the other hand. */
+.officer-choice-row { display: flex; gap: 10px; }
+.officer-choice {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-control);
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--card);
+}
+.officer-choice input { accent-color: currentColor; }
+.officer-choice-pass:has(input:checked) {
+  border-color: var(--cleared);
+  background: var(--cleared-bg);
+  color: var(--cleared-dark);
+}
+.officer-choice-fail:has(input:checked) {
+  border-color: var(--blocked);
+  background: var(--blocked-bg);
+  color: var(--blocked-dark);
+}
+
+/* The unsent-waves banner on the officer home screen. */
+.officer-pending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 16px 12px;
+}
 
 /* ---------- Lockout screen (Section 7.4) ----------
    Deliberately the whole viewport with one button on it. There is nothing else

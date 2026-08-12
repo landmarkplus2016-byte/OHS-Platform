@@ -34,6 +34,9 @@ import {
   saveSnapshot, cacheClear, ensureSnapshotLoaded, updateSnapshotEntity,
 } from './cache.js';
 import { refreshStaleState, resetStaleState } from './staleCheck.js';
+import {
+  queueWave, flushOutbox, ensureOutboxLoaded, pendingCount, resetOutbox,
+} from './outbox.js';
 
 /** sessionStorage key holding the officer's restorable session. */
 const SESSION_KEY = 'ohsp_officer_session';
@@ -168,6 +171,16 @@ export async function officerLogin(username, password) {
  * @throws {ApiError}
  */
 export async function officerSync() {
+  // Flush *before* pulling, not after. The officer has signal right now, and a
+  // wave sent first comes back inside the snapshot that follows — so the card
+  // they open next shows it as recorded rather than still pending, with the
+  // server's verdict already applied to it.
+  try {
+    await flushOutbox();
+  } catch (err) {
+    console.warn('[officer] pre-sync flush failed; syncing anyway:', err);
+  }
+
   const snapshot = await api.call('officer_sync', {});
 
   const syncedAt = await saveSnapshot(snapshot);
@@ -209,6 +222,69 @@ export async function officerGetEquipment(equipmentId) {
 }
 
 /**
+ * `officer_record_wave` — file an inspection wave from the field (Section 3.8).
+ *
+ * The one write an officer session performs. It tries the server first and falls
+ * back to the queue, rather than queueing everything and flushing later: an
+ * officer standing in coverage should see the wave land, and a verdict that
+ * changed should change on screen while they are still holding the item.
+ *
+ * Only `network_error` queues. Every other failure is the server having an
+ * opinion — the item was rejected, the date is in the future — and queueing that
+ * would hide a refusal behind a "saved" message and retry it forever.
+ *
+ * @param {{equipment_id: string, wave_date: string, result: string, comments?: string}} wave
+ * @returns {Promise<{queued: boolean, wave: Object|null}>}
+ * @throws {ApiError} for anything the server actively refused
+ */
+export async function officerRecordWave(wave) {
+  const clientId = (self.crypto && self.crypto.randomUUID)
+    ? self.crypto.randomUUID()
+    : 'cid-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+
+  try {
+    const data = await api.call('officer_record_wave', { ...wave, client_id: clientId });
+
+    // The server sent back what the item now derives to, so the card can repaint
+    // without a re-sync. Rule 13 holds: the phone displays a verdict, it never
+    // works one out.
+    if (data.derived) {
+      const snapshot = await ensureSnapshotLoaded();
+      const item = snapshot && (snapshot.equipment || [])
+        .find((row) => row.equipment_id === wave.equipment_id);
+
+      if (item) {
+        item.derived = data.derived;
+        item.waves = [data.wave, ...(item.waves || [])];
+        await updateSnapshotEntity('equipment', 'equipment_id', item);
+      }
+    }
+
+    return { queued: false, wave: data.wave };
+  } catch (err) {
+    if (err && err.code === 'network_error') {
+      await queueWave(wave);
+      return { queued: true, wave: null };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Send anything the outbox is holding. Never rejects — see outbox.flushOutbox.
+ *
+ * @returns {Promise<{sent: number, failed: number, remaining: number, offline: boolean}>}
+ */
+export function officerFlushOutbox() {
+  return flushOutbox();
+}
+
+/** Read the queue into memory. Pages call this from `bind`, then re-render. */
+export function loadOfficerOutbox() {
+  return ensureOutboxLoaded();
+}
+
+/**
  * Sign out (Section 7.7): the session token, the cached snapshot, and the
  * in-memory Recent list all go.
  *
@@ -220,9 +296,42 @@ export async function officerGetEquipment(equipmentId) {
  * The server call is best-effort — a phone with no signal must still be able to
  * sign out locally, and the session row expires on its own anyway (Section 4.1).
  *
- * @returns {Promise<void>}
+ * ---- The outbox guard ----
+ *
+ * Sign-out wipes the device, and that now includes any wave the officer recorded
+ * but could not send. So it tries to flush first, and if anything is still
+ * queued afterwards it asks rather than deciding: an inspection somebody
+ * performed and wrote down is not acceptable collateral for tidying up a shared
+ * phone.
+ *
+ * `confirmDiscard` is supplied by the caller instead of being imported, so this
+ * file keeps its one job — talking to the server — and the sign-out button owns
+ * the dialog. A caller that passes nothing gets the safe reading: refuse.
+ *
+ * @param {{confirmDiscard?: function(number): Promise<boolean>}} [opts]
+ * @returns {Promise<boolean>} false when the officer backed out
  */
-export async function officerLogout() {
+export async function officerLogout(opts) {
+  // Best-effort: if there is signal, this empties the queue and the question
+  // below never gets asked.
+  try {
+    await flushOutbox();
+  } catch (err) {
+    console.warn('[officer] pre-logout flush failed:', err);
+  }
+
+  const stranded = pendingCount();
+  if (stranded > 0) {
+    const confirmDiscard = opts && opts.confirmDiscard;
+    const proceed = confirmDiscard ? await confirmDiscard(stranded) : false;
+
+    if (!proceed) {
+      console.warn('[officer] sign-out cancelled with ' + stranded + ' wave(s) unsent');
+      return false;
+    }
+    console.warn('[officer] signing out and discarding ' + stranded + ' unsent wave(s)');
+  }
+
   try {
     await api.call('logout', {});
   } catch (err) {
@@ -237,9 +346,11 @@ export async function officerLogout() {
     console.error('[officer] could not clear the offline cache:', err);
   }
 
+  resetOutbox();
   resetStaleState();
   clearSession(); // also empties UI, which holds the Recent list
   go('check');
+  return true;
 }
 
 /**

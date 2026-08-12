@@ -65,7 +65,13 @@ var APPLICABLE_CERTS_SAFETY = APPLICABLE_CERTS_FIELD.concat(['ppe', 'lifting', '
 var DEFAULT_BLOCKER_CERTS = ['wah_practical', 'wah_theoretical', 'mcu'];
 var DEFAULT_WARNING_CERTS = ['fa', 'ff', 'ra', 'ec'];
 
-/** Equipment wave columns, in order. */
+/**
+ * The three retired `wave_N_*` column pairs on the Equipment tab.
+ *
+ * Waves live on the InspectionWaves tab now. This survives for exactly one
+ * caller — migrateWavesToLog(), which reads those columns to copy them across —
+ * and should go with them when the columns are eventually deleted by hand.
+ */
 var EQUIPMENT_WAVES = [1, 2, 3];
 
 // ---------------------------------------------------------------------------
@@ -350,14 +356,29 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
  * Equipment uses its own urgent threshold when ModuleSettings carries
  * `equipment.urgent_days`; otherwise it falls back to the global value.
  *
+ * Internal inspection waves arrive in `wavesByEquipmentId` rather than being read
+ * off the row. They live on their own tab (InspectionWaves.gs) because three
+ * fixed column pairs could not hold a comment, an author, or a fourth
+ * inspection. Callers group the tab once per request and pass the map, the same
+ * way `employeesById` is threaded through for the team leader join.
+ *
+ * An absent map means no waves, not an error: it is what every item looks like
+ * before the migration has run, and the verdict falls back to the third-party
+ * date alone — exactly the behaviour of an item that has never been inspected
+ * internally.
+ *
  * @param {Object} equipmentRow    Raw Equipment row.
  * @param {*} today
  * @param {{urgent_days: number, soon_days: number}} thresholds
  * @param {Object} moduleSettings
  * @param {Object<string, Object>=} employeesById  employee_id → Employees row.
+ * @param {Object<string, Array<Object>>=} wavesByEquipmentId  equipment_id →
+ *     non-voided waves, newest first.
  * @return {Object} {third_party_state, verdict, blockers, warnings}
  */
-function deriveEquipmentDerived(equipmentRow, today, thresholds, moduleSettings, employeesById) {
+function deriveEquipmentDerived(
+  equipmentRow, today, thresholds, moduleSettings, employeesById, wavesByEquipmentId
+) {
   var row = equipmentRow || {};
   var refDate = resolveToday_(today);
   var limits = normalizeThresholds_(thresholds);
@@ -386,7 +407,10 @@ function deriveEquipmentDerived(equipmentRow, today, thresholds, moduleSettings,
     }));
   }
 
-  var latestWave = findLatestCompletedWave_(row);
+  var equipmentId = normalizeString(row.equipment_id);
+  var itemWaves = (wavesByEquipmentId && wavesByEquipmentId[equipmentId]) || [];
+
+  var latestWave = findLatestCompletedWave_(itemWaves);
   if (latestWave && latestWave.result === 'fail') {
     blockers.push(reason_('wave_failed', 'reason_wave_failed', {
       wave: latestWave.wave,
@@ -427,25 +451,35 @@ function deriveEquipmentDerived(equipmentRow, today, thresholds, moduleSettings,
 
 /**
  * @private
- * The most recent completed wave — a wave with both a date and a result.
+ * The most recent completed wave — one with both a date and a result.
  *
- * Section 6.3 defines "most recent" by latest date; ties and unparseable dates
- * fall back to the highest wave number. With waves recorded in chronological
- * order the two rules agree.
+ * Section 6.3 defines "most recent" by latest date, ties broken by the highest
+ * wave number. Unchanged by the move to a log; only the source is different.
  *
+ * The caller has already dropped voided waves (wavesByEquipmentId_ in
+ * InspectionWaves.gs filters them at the source), so everything reaching here
+ * counts. Doing it there rather than here means no derivation path can forget.
+ *
+ * The list arrives newest-first, but this does not assume it — a scan costs
+ * nothing on a handful of waves and the answer stays right if a caller ever
+ * hands over an unsorted array.
+ *
+ * @param {Array<Object>} waves  Non-voided waves for one item.
  * @return {{wave: number, date: string, result: string}|null}
  */
-function findLatestCompletedWave_(row) {
+function findLatestCompletedWave_(waves) {
   var best = null;
+  if (!waves || !waves.length) return null;
 
-  for (var i = 0; i < EQUIPMENT_WAVES.length; i++) {
-    var n = EQUIPMENT_WAVES[i];
-    var date = normalizeIsoDate(row['wave_' + n + '_date']);
-    var result = normalizeString(row['wave_' + n + '_result']).toLowerCase();
+  for (var i = 0; i < waves.length; i++) {
+    var date = normalizeIsoDate(waves[i].wave_date);
+    var result = normalizeString(waves[i].result).toLowerCase();
     if (date === '' || result === '') continue;
 
-    var candidate = { wave: n, date: date, result: result };
-    if (!best || candidate.date > best.date || (candidate.date === best.date && candidate.wave > best.wave)) {
+    var waveNo = Number(waves[i].wave_no) || 0;
+    var candidate = { wave: waveNo, date: date, result: result };
+    if (!best || candidate.date > best.date ||
+        (candidate.date === best.date && candidate.wave > best.wave)) {
       best = candidate;
     }
   }
@@ -730,19 +764,50 @@ function testDerivation() {
   check_(results, '8. third-party missing → warning', e8.verdict === VERDICTS.WARNING, e8.verdict);
 
   // --- 9. Equipment: latest wave failed ------------------------------------
+  // Waves now arrive from the log rather than off the row (InspectionWaves.gs).
+  // The rule is unchanged: newest completed wave decides, and a fail blocks.
   var e9 = deriveEquipmentDerived(testEquipment_({
-    third_party_inspection_end_date: testDateOffset_(200),
-    wave_1_date: testDateOffset_(-60), wave_1_result: 'pass',
-    wave_2_date: testDateOffset_(-10), wave_2_result: 'fail'
-  }), today, thresholds, settings, {});
+    third_party_inspection_end_date: testDateOffset_(200)
+  }), today, thresholds, settings, {}, testWaves_([
+    { wave_no: 1, wave_date: testDateOffset_(-60), result: 'pass' },
+    { wave_no: 2, wave_date: testDateOffset_(-10), result: 'fail' }
+  ]));
   check_(results, '9. latest wave failed → blocked', e9.verdict === VERDICTS.BLOCKED, e9.verdict);
+
+  // --- 9b. An older fail does not outrank a newer pass ---------------------
+  var e9b = deriveEquipmentDerived(testEquipment_({
+    third_party_inspection_end_date: testDateOffset_(200)
+  }), today, thresholds, settings, {}, testWaves_([
+    { wave_no: 1, wave_date: testDateOffset_(-60), result: 'fail' },
+    { wave_no: 2, wave_date: testDateOffset_(-10), result: 'pass' }
+  ]));
+  check_(results, '9b. remediated fail → cleared', e9b.verdict === VERDICTS.CLEARED, e9b.verdict);
+
+  // --- 9c. A wave with no result cannot decide anything --------------------
+  var e9c = deriveEquipmentDerived(testEquipment_({
+    third_party_inspection_end_date: testDateOffset_(200)
+  }), today, thresholds, settings, {}, testWaves_([
+    { wave_no: 1, wave_date: testDateOffset_(-60), result: 'fail' },
+    { wave_no: 2, wave_date: testDateOffset_(-1), result: '' }
+  ]));
+  check_(results, '9c. incomplete newest wave → older fail still blocks',
+    e9c.verdict === VERDICTS.BLOCKED, e9c.verdict);
+
+  // --- 9d. An item with no waves at all ------------------------------------
+  // What every item looks like before the migration has run. The third-party
+  // date alone decides, exactly as it did before waves existed.
+  var e9d = deriveEquipmentDerived(testEquipment_({
+    third_party_inspection_end_date: testDateOffset_(200)
+  }), today, thresholds, settings, {}, {});
+  check_(results, '9d. no waves → cleared', e9d.verdict === VERDICTS.CLEARED, e9d.verdict);
 
   // --- 10. Equipment: wave passed, inspection urgent -----------------------
   var e10 = deriveEquipmentDerived(testEquipment_({
-    third_party_inspection_end_date: testDateOffset_(20),
-    wave_1_date: testDateOffset_(-60), wave_1_result: 'pass',
-    wave_2_date: testDateOffset_(-10), wave_2_result: 'pass'
-  }), today, thresholds, settings, {});
+    third_party_inspection_end_date: testDateOffset_(20)
+  }), today, thresholds, settings, {}, testWaves_([
+    { wave_no: 1, wave_date: testDateOffset_(-60), result: 'pass' },
+    { wave_no: 2, wave_date: testDateOffset_(-10), result: 'pass' }
+  ]));
   check_(results, '10. inspection in 20 days → warning', e10.verdict === VERDICTS.WARNING, e10.verdict);
 
   // --- 11. Equipment: archived owner ---------------------------------------
@@ -803,6 +868,18 @@ function testEquipment_(overrides) {
     rejected: 'FALSE'
   };
   return testApplyOverrides_(row, overrides);
+}
+
+/**
+ * @private
+ * A {equipment_id → waves} map for the test item, as wavesByEquipmentId_ would
+ * build it. Voided waves are filtered at the source there, so anything passed
+ * here counts.
+ */
+function testWaves_(waves) {
+  var map = {};
+  map['LM-EQP-TEST'] = waves || [];
+  return map;
 }
 
 /** @private */

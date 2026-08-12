@@ -95,9 +95,9 @@ These are the rules that everything downstream depends on. Never break one witho
 
 ### Officer app
 
-16. **Officer app is read-only in v1** — no writes to Sheets from officer sessions. Feedback happens outside the app (WhatsApp, phone, etc.). API and permission model designed so officer writes can be added later without a rebuild.
+16. **Officers write inspection waves, and nothing else.** This is the single exception to what was a blanket read-only rule, and it is scoped as narrowly as it can be: one action (`officer_record_wave`), one tab (`InspectionWaves`), append only. An officer session cannot modify or delete any record, cannot touch the Equipment row, and every row it writes carries `recorded_by` from the session. All other feedback still happens outside the app (WhatsApp, phone). A submitted wave is frozen to the officer — only an admin corrects or voids it.
 17. **Officer app is cache-first for verdict lookups** — the officer taps an entity, the app shows the cached verdict instantly with no server call. A manual "Refresh" button on the verdict page lets the officer force a fresh fetch when they want confirmation.
-18. **Fail-closed on stale cache** — if the officer's cache is older than `max_stale_hours` (default 72, configurable), lock the app until re-sync succeeds. No override, no supervisor bypass. Officers who work at remote sites without signal must sync before leaving.
+18. **Fail-closed on stale cache** — if the officer's cache is older than `max_stale_hours` (default 72, configurable), lock the app until re-sync succeeds. No override, no supervisor bypass. Officers who work at remote sites without signal must sync before leaving. **Recording a wave is behind the same gate**: an officer working from a snapshot too old to read a verdict from is also too old to be identifying the item in their hands. The lockout redirects every route but sync, and the record button lives on a verdict route.
 19. **Officers never see users, passwords, comments, or audit history** — Apps Script strips these fields before returning any snapshot to an officer session.
 
 ### Governance
@@ -113,8 +113,8 @@ These are the rules that everything downstream depends on. Never break one witho
 Things this platform intentionally does NOT do, and shouldn't drift into:
 
 - **Real-time collaboration.** Two admins editing the same record simultaneously results in last-write-wins with no merge. Concurrency handling is left for Supabase.
-- **Offline admin editing.** Admins need connectivity. The platform doesn't queue admin writes. Officers get offline read-only cache, admins don't.
-- **Officer writes in v1.** Officers report issues via WhatsApp or phone. Door left open: API and permission model designed so this can be added later without a rebuild.
+- **Offline admin editing.** Admins need connectivity. The platform doesn't queue admin writes — admins have desks. The one write queue that exists is the officer's inspection-wave outbox (Section 7.8), and it stays that narrow: one action, one row type, no updates, no deletes.
+- **Officer writes beyond the inspection wave.** An officer records waves and nothing else. No editing employees, no editing equipment, no correcting their own submitted waves. Anything else they need to report still goes by WhatsApp or phone.
 - **Automated notifications.** No email/SMS/push for expiring certs. Admins check the dashboard.
 - **File uploads.** Certificate PDFs and equipment inspection PDFs are stored as URL strings pointing to Google Drive. The platform never uploads, downloads, or stores the files themselves.
 - **Multi-tenancy.** This is Landmark-only. SaaS multi-tenancy waits for the Supabase rebuild.
@@ -133,7 +133,7 @@ This is the foundation. Every tab, every column, every key. Once locked, the App
 3. **Compliance state is never stored.** Derived at read time from dates + Config thresholds.
 4. **Deletion is deactivation.** No row is ever removed. Employees archive, equipment gets rejected, users deactivate. Historical records live forever.
 
-## The tabs (13 total)
+## The tabs (14 total)
 
 ### System tabs (3)
 
@@ -147,10 +147,11 @@ This is the foundation. Every tab, every column, every key. Once locked, the App
 **`RenewalHistory`** — append-only log of certificate renewals per employee.
 **`RdtLog`** — one row per random-drug-test event: who was selected, when, and what happened.
 
-### Equipment module tabs (2)
+### Equipment module tabs (3)
 
 **`Equipment`** — the equipment records.
 **`InspectionHistory`** — append-only log of third-party inspection changes per equipment item.
+**`InspectionWaves`** — append-only log of internal inspection waves: one row per inspection, carrying its date, result, comment and author.
 
 ### Shared module tabs (3)
 
@@ -387,12 +388,7 @@ One row per random-drug-test event. An employee may have many rows per fiscal ye
 | `serial_no` | text | Required, searchable |
 | `third_party_sn` | text | Required, searchable |
 | `third_party_inspection_end_date` | date | Primary compliance date |
-| `wave_1_date` | date | |
-| `wave_1_result` | text | `pass` \| `fail` \| empty |
-| `wave_2_date` | date | |
-| `wave_2_result` | text | |
-| `wave_3_date` | date | |
-| `wave_3_result` | text | |
+| ~~`wave_1_date`~~ … ~~`wave_3_result`~~ | | **Retired.** See below |
 | `comments` | text | Admin-only, stripped from officer snapshots |
 | `rejected` | boolean | Terminated equivalent |
 | `rejection_date` | date | |
@@ -409,6 +405,10 @@ It borrows the employees' `subcontractors` FieldOptions list rather than getting
 
 **Adding this column to an existing Sheet:** run `addEquipmentSubcontractorColumn()` once from the Apps Script editor. It is idempotent. Nothing is backfilled — blank means "not recorded", and guessing that every existing row is in-house would be inventing ownership. Until it has run the platform still works: an absent column reads as `''` and every item behaves exactly as before, simply with no owner on file.
 
+**The six retired wave columns.** `wave_1_date` / `wave_1_result` through `wave_3_*` are no longer read or written by anything except the one-off migration. Waves moved to the `InspectionWaves` tab, the same move drug testing made to `RdtLog` and for the same reason: three fixed slots cannot hold a comment, an author, or a fourth inspection, and once officers record waves from the field all three are required.
+
+The columns are left on the tab as dead history rather than deleted, so a migration nobody can check afterwards is not the only record of what they held. Deleting them is manual, optional, and should wait until the log has been running long enough to trust.
+
 ### `InspectionHistory`
 
 Append-only. One row per third-party inspection date change.
@@ -421,6 +421,37 @@ Append-only. One row per third-party inspection date change.
 | `new_expiry` | date | |
 | `renewed_at` | ISO datetime | |
 | `renewed_by` | user_id | |
+
+### `InspectionWaves`
+
+Append-only. One row per internal inspection wave, recorded by an admin at a desk or by an officer at a tower.
+
+| Column | Type | Purpose |
+|---|---|---|
+| `wave_id` | text | Primary key (e.g. `IW-000001`) |
+| `equipment_id` | text | FK to Equipment |
+| `wave_no` | integer | Sequential per item — 1, 2, 3, 4… no ceiling |
+| `wave_date` | date | ISO date the inspection happened |
+| `result` | text | `pass` \| `fail` |
+| `comments` | text | Free text, ≤500 chars |
+| `origin` | text | `officer` \| `admin` \| `migration` — how the row came to exist |
+| `client_id` | text | Idempotency key from the officer's outbox. Blank on admin rows |
+| `voided` | boolean | Admin correction. A voided wave stays in history and counts for nothing |
+| `voided_at` / `voided_by` / `void_reason` | | Server-set on void; the reason is required |
+| `recorded_at` / `recorded_by` | | Server-set from the clock and the session |
+| `updated_at` / `updated_by` | | Server-set |
+
+**Rules:**
+
+- **Never deleted** (rule 6). `RdtLog` is the platform's one documented exception and this tab is not it. A wave is a record that somebody inspected a piece of safety equipment and wrote down what they found; deleting that is destroying evidence, whatever the reason. A wave recorded in error is *voided*: the row survives, the verdict stops reading it, and the reason sits on the record beside who decided.
+- `wave_no` counts voided waves too. Wave 4 being void does not make the next one wave 4 again — the numbers record how many inspections were filed against the item, not how many currently count.
+- **`client_id` is what makes the officer's offline outbox safe.** The dangerous failure is not "the request failed" but "the request succeeded and the answer never arrived", which on a phone at the edge of coverage is routine. The entry is still queued, gets sent again, and without the key a second inspection appears against the same item on the same day that nobody would ever catch. The server refuses a `client_id` it already holds and returns the row it has, which makes a flush repeatable by construction.
+- `origin` records how a row came to exist. Nothing filters on it — every origin drives the verdict alike — and it exists so "did an officer or an admin file this" can be answered later without a second migration. Same reasoning as `RdtLog.origin`.
+- An officer's failed wave blocks the item exactly as an admin's does. There is no author special case in Section 6.3: a failed wave is a failed wave, and the officer who finds a frayed harness takes it out of service on the spot.
+
+**Creating the tab and migrating:** run `setupInspectionWavesTab()` once from the Apps Script editor, then `previewWaveMigration()` to read the counts in the execution log, then `migrateWavesToLog()` to write. The migration copies every non-empty `wave_1/2/3` slot across as `origin = migration`, dates `recorded_at` from the wave's own date, and leaves `recorded_by` blank — nothing on the Equipment row ever recorded who filed a wave, and stamping whoever runs the migration would put a name against inspections they never performed. It is idempotent and does not clear the source columns.
+
+Until `setupInspectionWavesTab()` has run the platform still works: a missing tab reads as "no item has any waves", the verdict falls back to the third-party date alone, and nobody sees a broken page. Same deliberate degradation as `addEmployeeCertFlagColumns()`.
 
 ### `FieldOptions`
 
@@ -1250,7 +1281,7 @@ The two flag columns fail the check whatever the date holds. `na` means the empl
 
 The pool is recomputed at the moment of every selection. It is never frozen at the start of the fiscal year — hires crossing the grace period mid-year join it, and archived or resigned employees drop out.
 
-## 3.6 Equipment actions (8)
+## 3.6 Equipment actions (12)
 
 Same permission model as employees but keyed to the `equipment` module.
 
@@ -1366,7 +1397,62 @@ Same permission model as employees but keyed to the `equipment` module.
 
 ### `bulk_import_equipment`
 
-Same shape and semantics as `bulk_import_employees`.
+Same shape and semantics as `bulk_import_employees`. It does **not** accept `wave_N_*` keys — they are retired columns, and a workbook carrying them imports its items while ignoring those columns rather than failing.
+
+### `list_inspection_waves`
+
+The internal wave log. One action behind two screens: an item's history when `equipment_id` is set, and the fleet-wide review queue when it is not.
+
+**Permission:** `view equipment`.
+
+**Payload:**
+```json
+{
+  "equipment_id": "LM-EQP-0001",
+  "month": "2026-08",
+  "result": "fail",
+  "recorded_by": "USR003",
+  "origin": "officer",
+  "include_voided": false,
+  "search": "harness",
+  "page": 1,
+  "page_size": 50
+}
+```
+
+All fields optional. Sorted by `wave_date` descending, ties broken by `wave_no` — the same ordering Section 6.3 uses to pick the deciding wave, so the list an admin reads and the wave the verdict chose agree by construction. `page_size` capped at 500. Voided waves are hidden unless asked for.
+
+Every entry carries `item`, `brand`, `serial_no`, `subcontractor` and `recorded_by_name` joined server-side, so neither screen makes a second call to render a table.
+
+### `record_inspection_wave`
+
+**Permission:** `edit equipment`.
+
+**Payload:** `{ "equipment_id": "...", "wave_date": "2026-08-11", "result": "pass", "comments": "" }`
+
+**Validation:** the item must exist and not be rejected (`not_found` otherwise); `wave_date` ISO and not in the future; `result` is `pass` or `fail`; `comments` ≤ 500.
+
+**Server behavior:** under a script lock, `wave_no` is the item's highest plus one and `wave_id` comes from the highest `IW-######`. `origin = admin`.
+
+**Success `data`:** `{ "wave": {...}, "derived": {...} }` — the item's freshly derived block rides along so the caller never has to follow a write with a read to find out what it changed.
+
+### `update_inspection_wave`
+
+Corrects a wave in place. This is the path an officer does not have: their wave is frozen the moment it reaches the server, and if it is wrong an admin fixes it here.
+
+**Permission:** `edit equipment`.
+
+**Payload:** `{ "wave_id": "IW-000042", "updates": { "wave_date": "...", "result": "...", "comments": "..." } }`
+
+`equipment_id` and `wave_no` cannot move. A wave filed against the wrong item is not one to be edited across — it is voided, and a fresh one filed, so both facts survive. A voided wave returns `conflict`.
+
+### `void_inspection_wave`
+
+**Permission:** `edit equipment`.
+
+**Payload:** `{ "wave_id": "IW-000042", "reason": "recorded against the wrong item" }`
+
+`reason` is **required**. A voided inspection with nothing saying why is an inspection that disappeared from the record, which is the outcome voiding-instead-of-deleting exists to prevent. Idempotent: voiding an already-voided wave returns it unchanged rather than re-stamping who did it.
 
 ## 3.7 FieldOptions and ModuleSettings actions (4)
 
@@ -1425,9 +1511,11 @@ Full replacement of the list. Server-side: soft-delete missing values (`active =
 }
 ```
 
-## 3.8 Officer actions (3)
+## 3.8 Officer actions (4)
 
 Officer sessions use the same `login` action as admins — role is determined server-side from `Users.role`. The Sessions row records the role; officer-only actions check it. Officers cannot call any admin action; admin actions check `role !== 'officer'` at the top or check specific permissions that officers never have.
+
+Three of the four are reads. The fourth, `officer_record_wave`, is the only write an officer session can perform anywhere in the platform.
 
 ### `officer_sync`
 
@@ -1470,6 +1558,39 @@ Live single-employee lookup, used only when the officer taps the "Refresh" butto
 ### `officer_get_equipment`
 
 Same shape for equipment. Returns `not_found` if rejected.
+
+### `officer_record_wave`
+
+The officer files an internal inspection wave from the field. The end of the blanket read-only guarantee, and the whole of what replaces it.
+
+**Token required:** yes.
+**Permission:** officer role. `requireOfficer_` refuses even a super admin, who has `record_inspection_wave` instead.
+
+**Payload:**
+```json
+{
+  "equipment_id": "LM-EQP-0001",
+  "wave_date": "2026-08-11",
+  "result": "fail",
+  "comments": "Webbing frayed near the D-ring.",
+  "client_id": "9f2c…"
+}
+```
+
+**`client_id` is required here and blank for admins.** An admin submits from a form that either succeeded or visibly did not. An officer submits into a queue that retries on their behalf, and a retry with no idempotency key is a duplicate inspection.
+
+**Server behavior:**
+1. `requireOfficer_`
+2. Under a script lock: if `client_id` is already on the tab, return that row and write nothing
+3. The item must exist and not be rejected → else `not_found`, which the app handles by telling the officer to re-sync
+4. Same validation as `record_inspection_wave`
+5. `origin = officer`, `recorded_by` / `recorded_at` from the session and the clock
+
+**Success `data`:** `{ "wave": {...}, "derived": {...} }` — the derived block so the phone can repaint the verdict on the spot without a full re-sync, and without deriving anything itself (rule 13).
+
+**What this action cannot do**, and what the narrowed guarantee in Section 7.2 rests on: it appends one row to one tab. No path in it modifies an entity, deletes anything, or touches the Equipment row.
+
+It is deliberately a separate action rather than a permission branch inside `record_inspection_wave`. Officers get a different API surface, not a filtered view of the admin one — so the officer write path has exactly one entry point to audit, permanently.
 
 ## 3.9 Cross-cutting rules
 
@@ -1814,7 +1935,9 @@ Equipment verdict follows the same three-value structure (`cleared` / `warning` 
 
 - `rejected === true`
 - `third_party_inspection_end_date` is set AND < today (expired)
-- The most recent completed wave has `result === 'fail'`. "Most recent completed wave" = the wave with the latest non-empty `wave_N_date` where `wave_N_result` is set.
+- The most recent completed wave has `result === 'fail'`. "Most recent completed wave" = the non-voided `InspectionWaves` row for this item with the latest `wave_date` and a `result` set; ties break on the highest `wave_no`.
+
+**The wave rule is unchanged; only its source moved.** Waves used to be three column pairs on the equipment row and are now rows on their own tab. Two consequences worth stating: voided waves are filtered out before derivation ever sees them, and **an officer's failed wave blocks exactly as an admin's does** — there is no author special case, and none should be added. A failed wave is a failed wave.
 
 ### Warnings (present if no blockers → `warning`)
 
@@ -1872,9 +1995,13 @@ The Apps Script has a single `Compliance.gs` file that exposes:
 
 - `deriveCertState(dateStr, today, thresholds)` → one of `missing` / `expired` / `urgent` / `soon` / `valid`. Date only — it knows nothing about the flag columns, which is what lets equipment reuse it for `third_party_inspection_end_date`. `na` and `suspended` are applied on top by `deriveEmployeeDerived`.
 - `deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings)` → the employee derived block
-- `deriveEquipmentDerived(equipmentRow, today, thresholds, moduleSettings, employeesById)` → the equipment derived block
+- `deriveEquipmentDerived(equipmentRow, today, thresholds, moduleSettings, employeesById, wavesByEquipmentId)` → the equipment derived block
 
-Every `list_*` and `get_*` action calls the relevant function once per row before returning. Thresholds and moduleSettings are loaded once per request and reused. This is O(rows) but each derivation is a handful of comparisons — fine for lists up to a few thousand employees.
+`wavesByEquipmentId` is `{equipment_id → non-voided waves, newest first}`, built once per request by `wavesByEquipmentId_()` in `InspectionWaves.gs` and threaded through exactly the way `employeesById` already is. An absent map means no waves — which is what every item looks like before the migration has run — and the verdict falls back to the third-party date alone.
+
+The waves are deliberately **not** denormalised onto the equipment row as a `latest_wave_result` column. That would spare one tab read and create a second source of truth, the exact failure the RDT section warns about: two sources that disagree fail silently.
+
+Every `list_*` and `get_*` action calls the relevant function once per row before returning. Thresholds, moduleSettings and the wave map are loaded once per request and reused. This is O(rows) but each derivation is a handful of comparisons — fine for lists up to a few thousand employees.
 
 ## 6.6 Why derive server-side
 
@@ -1896,10 +2023,10 @@ The mobile PWA the field officers use at tower sites. Same URL as the admin app,
 ## 7.1 High-level behavior
 
 - Same GitHub Pages URL as the admin app. Officer sees a mobile shell; admin sees a desktop shell. The role determines the shell, not the URL.
-- Read-only in v1. No writes to Sheets from an officer session under any circumstance.
+- Read-only **except for recording an inspection wave** (Section 3.8). That one write is append-only, gated behind a fresh cache, and queued locally when there is no signal (Section 7.8).
 - Cache-first for verdict lookups (Q7 answer). The officer taps an entity, sees the cached verdict instantly, no network call. A manual "Refresh" button on the verdict page fetches fresh from server.
 - Fail-closed lockout when cache is stale beyond `max_stale_hours` (default 72). No override, no supervisor bypass (Q8 answer).
-- Officers never see users, passwords, comments, renewal history, inspection history, or file links. All stripped server-side.
+- Officers never see users, passwords, equipment comments, renewal history, inspection history, or file links. All stripped server-side. **Wave comments are the exception** and a deliberate one — see Section 7.6.
 
 ## 7.2 Session model
 
@@ -1908,16 +2035,22 @@ Officers log in the same way admins do (`login` action). Their session obeys the
 - **Cached data survives session expiry.** The IndexedDB snapshot (`ohsp-officer` DB, `snapshot` key) is independent of the session token. If the session expires while the officer is offline, the verdict card still works from cache. Only the Refresh button requires an active session.
 - **Session token persists across app open/close** as long as it's not expired — stored in `sessionStorage` for officer apps only. Officers keep their phone in their pocket between lookups and shouldn't have to log in constantly. On explicit sign-out, `sessionStorage` is cleared.
 
-(This is a deliberate exception to the "token in memory only" rule from Section 4.5. Justified by the mobile-worker use case and mitigated by the read-only nature of officer sessions — a stolen phone with a valid token can only read data, never modify it.)
+(This is a deliberate exception to the "token in memory only" rule from Section 4.5, justified by the mobile-worker use case.)
+
+**The mitigation has narrowed, and the honest version is this.** It used to be "a stolen phone with a valid token can only read data, never modify it", and that is no longer wholly true. What the token can now do is append inspection-wave rows. What it still cannot do is modify or delete any record, touch the Equipment row, reach any employee or user data, or write through any other action — `officer_record_wave` is the entire write surface, and every row it produces carries the officer's `user_id` in `recorded_by`, so anything filed under a stolen token is attributable and correctable by an admin. The worst case moved from "reads a roster" to "reads a roster and files false inspections that an admin can see and void". That is a real widening, accepted deliberately, and it is the reason the write surface must stay this narrow.
 
 ## 7.3 Cache model
 
-Two things live in IndexedDB (database `ohsp-officer`, store `kv`):
+The IndexedDB database `ohsp-officer` (version 2) holds two stores.
+
+Store `kv`:
 
 | Key | Value |
 |---|---|
 | `snapshot` | The full stripped snapshot from `officer_sync` |
 | `synced_at` | ISO timestamp of the last successful sync |
+
+Store `outbox` — inspection waves recorded with no signal, keyed by `client_id`. See Section 7.8.
 
 The Apps Script URL lives in `localStorage` as `ohsp_script_url` (same as admin) — it's a device-level config, not a per-user piece of data.
 
@@ -1970,13 +2103,18 @@ The Apps Script `officer_sync` handler strips these before returning:
 - **The entire `users` list** — officers don't need to know who else has an account
 - **All `_link` fields on certificates and equipment** — file URLs are irrelevant at a tower site
 - **`comments` field on equipment** — admin notes not intended for officers
+- **`recorded_by` on every inspection wave** — same rule as every other `*_by` column. An officer reads what the last inspection found, not who signed it
 - **All history tabs** — RenewalHistory, InspectionHistory, RdtLog not returned. Officers never see any RDT data at all: not the log, not the settings, not a "last tested" date. RDT is HR compliance paperwork, and it has no bearing on whether someone may work today.
 - **`created_by`, `updated_by`, `archived_by`, `rejected_by`** — audit trail hidden from officers
 - **All ModuleSettings that aren't display-relevant** — verdict is pre-derived, so officers don't need to see the rules
 
 What officers DO see:
-- All non-archived employees with their identity fields, cert dates (no links), qualification flags, drug test dates, and the `derived` block
-- All non-rejected equipment with identity fields, serial numbers, inspection dates (no links, no comments), waves, and the `derived` block
+- All non-archived employees with their identity fields, cert dates (no links), qualification flags, and the `derived` block
+- All non-rejected equipment with identity fields, serial numbers, inspection dates (no links, no equipment comments), its non-voided inspection waves, and the `derived` block
+
+**Wave comments are shown, and that is a deliberate departure from the equipment `comments` column.** That column is admin notes about an asset. A wave comment is one officer's field observation written for the next one — "webbing frayed near the D-ring, watch it" is exactly what the officer holding the harness needs, and withholding it would make the whole feature pointless from the second inspection onward.
+
+Voided waves never reach the phone. They count for nothing, and "an admin cancelled this inspection" is a distinction with no consequence at a tower.
 - Field options for displaying dropdowns
 - Thresholds (so date states are internally consistent if a rare re-render happens)
 
@@ -1984,12 +2122,34 @@ What officers DO see:
 
 Explicit sign-out clears:
 - `sessionStorage` (the session token)
-- IndexedDB `ohsp-officer` (snapshot + synced_at)
+- IndexedDB `ohsp-officer` — both stores, snapshot and outbox
 - In-memory Recent list
 
 The officer must fully re-authenticate and re-sync to use the app again. This mirrors how a shared work phone would be handed over — sign out fully wipes the last officer's presence.
 
-Involuntary sign-out (session expired, or `unauthenticated` from any action) does NOT clear the cache. The verdict card continues to work from cache until stale. Only sign-out and manual "Clear data" (future feature, not v1) wipe the cache.
+**The outbox guard.** Because sign-out now erases unsent inspections as well, it flushes first, and if anything is still queued afterwards it asks rather than deciding. The dialog names the count and requires explicit confirmation. An inspection somebody performed and wrote down is not acceptable collateral for tidying up a shared phone.
+
+Involuntary sign-out (session expired, or `unauthenticated` from any action) does NOT clear the cache or the outbox. The verdict card continues to work from cache until stale, and queued waves survive to be flushed after the next sign-in.
+
+## 7.8 The outbox
+
+An officer records a wave at a tower, and a tower is where there is no signal. A submission that could only be made online would be unusable in exactly the place the app exists for.
+
+So `officerRecordWave` tries the server first and falls back to the queue. Only `network_error` queues — every other failure is the server having an opinion, and queueing a refusal would hide it behind a "saved" message and retry it forever.
+
+**Flush rules**, each of which earns its place:
+
+- **Serial, with a gap between sends.** Section 3.9 rate-limits a session to 60 actions a minute; a backlog fired at once would trip it.
+- **`network_error` stops the flush and keeps everything.** There is still no signal; the queue is doing its job.
+- **`validation_failed` / `not_found` / `forbidden` drops the entry and surfaces it.** These fail identically forever, and a queue that retries an impossible write is a queue that hides it.
+- **`unauthenticated` stops the flush and keeps everything.** `api.js` has already routed to the sign-in card; the queue survives and flushes after the next sign-in.
+- **A `server_error` is retried up to 8 times**, then dropped and reported, so a persistent fault cannot wedge the queue permanently.
+
+**Triggers:** the officer home screen on mount (at most once every 30 seconds), the browser `online` event, immediately before every sync, and an explicit Retry button on the home screen's pending banner.
+
+**A queued wave never changes the verdict on screen.** Rule 13 keeps compliance derivation on the server, and until the wave reaches it the verdict displayed is still the last one the server calculated. The card shows the queued wave marked "waiting to upload" and says so in words. The phone reports what it did; the server decides what it means.
+
+**`navigator.onLine` is not trusted as a gate.** It reports whether the device has a network, not whether Apps Script is reachable, and at a tower those differ often enough that believing it would strand waves. The `online` event is a hint to try again; the attempt is the only real test.
 
 ---
 
@@ -2095,6 +2255,7 @@ EMPLOYEES
 EQUIPMENT
   Active Equipment
   Rejected Equipment
+  Inspection Waves     → #/equipment/waves, one item's log at #/equipment/waves/:id
 
 SYSTEM
   Export
@@ -2131,6 +2292,8 @@ ohs-platform/
 │   ├── Employees.gs                 # employee actions
 │   ├── Rdt.gs                       # RDT selection algorithm + the six RDT actions
 │   ├── Equipment.gs                 # equipment actions
+│   ├── InspectionWaves.gs           # the wave log: 4 admin actions, officer_record_wave,
+│   │                                # tab setup and the wave_1/2/3 migration
 │   ├── FieldOptions.gs              # field options + module settings actions
 │   ├── Officer.gs                   # officer sync + entity fetches
 │   ├── Compliance.gs                # deriveCertState, deriveEmployeeDerived, deriveEquipmentDerived
@@ -2164,8 +2327,11 @@ ohs-platform/
 │   │
 │   ├── modules/
 │   │   ├── employees/               # Employee module (see Section 5.1)
-│   │   ├── equipment/               # Equipment module
-│   │   └── officer/                 # Officer app module (search router, sync page, staleness check)
+│   │   ├── equipment/               # Equipment module. Adds waveDialog.js (record /
+│   │   │                            # correct / void) and pages/wavesPage.js (the log,
+│   │   │                            # fleet-wide and scoped to one item)
+│   │   └── officer/                 # Officer app module (search router, sync page,
+│   │                                # staleness check, outbox.js, waveSheet.js)
 │   │
 │   ├── shell/
 │   │   ├── sidebar.js               # Renders sidebar from registered manifests + permissions
@@ -2297,7 +2463,7 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never send a plain-text password over the network. Always hash with SHA-256 in the browser first.
 - Never store the session token in `localStorage`. Admin: memory only. Officer: `sessionStorage` (mobile exception).
 - Never store cached snapshot in `localStorage`. Officer snapshots live in IndexedDB (`ohsp-officer`).
-- Never hard-delete a row from any tab. Employees archive, equipment gets rejected, users deactivate.
+- Never hard-delete a row from any tab. Employees archive, equipment gets rejected, users deactivate, inspection waves are voided. `RdtLog` is the sole documented exception.
 - Never bypass the server-side permission check. Frontend permission gates are for UX; the server is the security gate.
 - Never trust `updated_at`, `updated_by`, or any audit field from the client payload. Always set from the session server-side. The one documented exception is `archived` on a `bulk_import_employees` **create** (Section 3.5) — and even there, `archived_at` and `archived_by` still come from the clock and the session.
 - Never let two modules share files inside `js/modules/`. Shared code lives in `js/utils/` or `js/components/`.
@@ -2305,8 +2471,14 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never hardcode a hex color outside `css/tokens.css`.
 - Never use `margin-left`, `padding-right`, or any physical CSS property. Always logical.
 - Never hardcode a visible string in JS. Always `t('key')`.
-- Never show a verdict from a stale officer cache (>72h). Fail-closed lockout, no override.
-- Never let an officer session write to Sheets in v1. Read-only, period.
+- Never show a verdict from a stale officer cache (>72h). Fail-closed lockout, no override. The same lockout gates recording a wave.
+- Never widen the officer write surface beyond `officer_record_wave`. It appends one row to one tab. An officer session must never modify a record, delete anything, touch the Equipment row, or gain a second write action without confirming with Khaled — the sessionStorage token exception in Section 7.2 rests on exactly this being true.
+- Never let an officer correct or delete a wave they have submitted. Corrections are an admin act, through `update_inspection_wave` or `void_inspection_wave`.
+- Never let a queued wave change a verdict on the phone. The server derives; the client displays (rule 13). A wave in the outbox is shown as pending and nothing else.
+- Never submit a wave from the officer app without a `client_id`. A retry with no idempotency key writes a phantom second inspection that nobody will ever catch.
+- Never queue an admin write. The outbox exists for one action from one role, because towers have no signal and desks do.
+- Never re-introduce `wave_N_date` / `wave_N_result` columns on Equipment. `InspectionWaves` is the sole source of truth. Three fixed slots cannot hold a comment, an author, a fourth inspection, or a void — which is exactly what the officer flow, the review queue and the audit trail each need.
+- Never treat an officer-filed wave differently from an admin-filed one in the verdict. A failed wave blocks, whoever filed it.
 - Never sort the RDT eligible pool by anything but a random shuffle before slicing to the monthly quota. No "least recently tested first", no alphabetical, no seeding the RNG — the randomness is the point of the programme.
 - Never freeze the RDT eligible pool at the start of the fiscal year. Recompute it at every selection.
 - Never select an employee with an expired or missing MCU for RDT, including as a swap replacement.

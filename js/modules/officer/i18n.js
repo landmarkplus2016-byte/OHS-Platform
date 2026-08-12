@@ -69,6 +69,41 @@ const en = {
   off_days_left: '{days}d left',
   off_days_ago: '{days}d ago',
 
+  /* ---------- Recording an inspection wave ----------
+     The one thing an officer can write (Section 3.8). The wording leans on
+     "recorded" rather than "saved" throughout: a wave sitting in the outbox has
+     been recorded by the officer and not yet saved by the server, and the
+     difference is the whole reason the queue is visible at all. */
+  off_wave_record: 'Record inspection',
+  off_wave_record_title: 'Record an inspection',
+  off_wave_submit: 'Record it',
+  off_wave_field_date: 'Date',
+  off_wave_field_result: 'Result',
+  off_wave_field_comments: 'What did you find?',
+  off_wave_comments_hint: 'Condition, damage, anything the next inspection should know.',
+  off_wave_verdict_note: 'The verdict above updates once this reaches the server.',
+
+  off_wave_saved: 'Inspection recorded.',
+  off_wave_queued: 'Saved on this phone — it will upload when you have signal.',
+  off_wave_none: 'No inspection recorded yet',
+  off_wave_pending_label: 'Waiting to upload',
+  off_wave_pending_note: '{count} inspection(s) on this phone are not on the record yet.',
+  off_wave_pending_banner: '{count} inspection(s) waiting to upload.',
+  off_wave_retry: 'Retry',
+  off_wave_flush_sent: '{count} inspection(s) uploaded.',
+  off_wave_flush_failed: '{count} inspection(s) could not be uploaded and were discarded.',
+  off_wave_flush_offline: 'Still no connection — they are safe on this phone.',
+
+  off_wave_err_date: 'Enter the date of the inspection.',
+  off_wave_err_future: 'An inspection cannot be dated in the future.',
+  off_wave_err_result: 'Choose pass or fail.',
+  off_wave_err_comments_long: 'That is too long.',
+  off_wave_err_item_gone: 'This item is no longer active. Sync to update your data.',
+
+  off_signout_pending_title: 'Unsent inspections',
+  off_signout_pending_message: '{count} inspection(s) on this phone have not reached the server. Signing out erases them. Get signal and try again, or sign out and lose them.',
+  off_signout_discard: 'Sign out anyway',
+
   /* ---------- Result kinds ---------- */
   off_kind_employee: 'Employee',
   off_kind_equipment: 'Equipment',
@@ -123,6 +158,37 @@ const ar = {
   off_na: 'غير متاح',
   off_days_left: 'باقي {days} يوم',
   off_days_ago: 'منذ {days} يوم',
+
+  /* ---------- تسجيل موجة فحص ---------- */
+  off_wave_record: 'تسجيل فحص',
+  off_wave_record_title: 'تسجيل فحص',
+  off_wave_submit: 'تسجيل',
+  off_wave_field_date: 'التاريخ',
+  off_wave_field_result: 'النتيجة',
+  off_wave_field_comments: 'ماذا رصدت؟',
+  off_wave_comments_hint: 'الحالة، أي تلف، وأي شيء يجب أن يعرفه الفحص التالي.',
+  off_wave_verdict_note: 'يتحدث الحكم أعلاه بمجرد وصول هذا الفحص إلى الخادم.',
+
+  off_wave_saved: 'تم تسجيل الفحص.',
+  off_wave_queued: 'محفوظ على هذا الهاتف — سيُرفع عند توفر الشبكة.',
+  off_wave_none: 'لم يُسجَّل أي فحص بعد',
+  off_wave_pending_label: 'في انتظار الرفع',
+  off_wave_pending_note: '{count} فحص على هذا الهاتف لم يُسجَّل بعد في النظام.',
+  off_wave_pending_banner: '{count} فحص في انتظار الرفع.',
+  off_wave_retry: 'إعادة المحاولة',
+  off_wave_flush_sent: 'تم رفع {count} فحص.',
+  off_wave_flush_failed: 'تعذّر رفع {count} فحص وتم استبعادها.',
+  off_wave_flush_offline: 'لا يزال الاتصال منقطعاً — الفحوصات محفوظة على هذا الهاتف.',
+
+  off_wave_err_date: 'أدخل تاريخ الفحص.',
+  off_wave_err_future: 'لا يمكن أن يكون تاريخ الفحص في المستقبل.',
+  off_wave_err_result: 'اختر ناجح أو راسب.',
+  off_wave_err_comments_long: 'النص طويل أكثر من اللازم.',
+  off_wave_err_item_gone: 'هذا الصنف لم يعد نشطاً. قم بالمزامنة لتحديث بياناتك.',
+
+  off_signout_pending_title: 'فحوصات لم تُرفع',
+  off_signout_pending_message: '{count} فحص على هذا الهاتف لم يصل إلى الخادم. تسجيل الخروج سيمحوها. أعد المحاولة عند توفر الشبكة، أو سجّل الخروج وستفقدها.',
+  off_signout_discard: 'تسجيل الخروج على أي حال',
 
   /* ---------- Result kinds ---------- */
   off_kind_employee: 'عامل',

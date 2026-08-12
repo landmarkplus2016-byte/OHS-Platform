@@ -24,6 +24,7 @@ import { renderRejectedEquipmentPage, bindRejectedEquipmentPageEvents } from './
 import { renderEquipmentDetailPage, bindEquipmentDetailPageEvents } from './pages/detailPage.js';
 import { renderEquipmentFormPage, bindEquipmentFormEvents } from './pages/formPage.js';
 import { renderEquipmentRejectPage, bindEquipmentRejectPageEvents } from './pages/rejectFormPage.js';
+import { renderEquipmentWavesPage, bindEquipmentWavesPageEvents } from './pages/wavesPage.js';
 import {
   renderEquipmentKpis, renderEquipmentCharts, bindEquipmentDashboard,
 } from './dashboard.js';
@@ -40,6 +41,14 @@ export const manifest = {
     { path: 'equipment',          page: renderEquipmentListPage,     bind: bindEquipmentListPageEvents },
     { path: 'equipment/rejected', page: renderRejectedEquipmentPage, bind: bindRejectedEquipmentPageEvents },
 
+    // The fleet-wide inspection wave log, and the same page scoped to one item.
+    // 'equipment/waves' is a two-segment literal like 'equipment/rejected', so
+    // it wins over 'equipment/:id' by the same rule described below;
+    // 'equipment/waves/:id' has one ':' segment against 'equipment/:id/edit''s
+    // one, but they differ in their literal segment so they never collide.
+    { path: 'equipment/waves',     page: renderEquipmentWavesPage, bind: bindEquipmentWavesPageEvents },
+    { path: 'equipment/waves/:id', page: renderEquipmentWavesPage, bind: bindEquipmentWavesPageEvents },
+
     // Detail and form routes have no sidebar entry, so the topbar falls back to
     // the module's display name. 'equipment/new' and 'equipment/rejected' are
     // two-segment literals competing with 'equipment/:id'; the router resolves
@@ -54,6 +63,11 @@ export const manifest = {
   sidebar: [
     { labelKey: 'nav_equipment_active',   route: 'equipment',          icon: '▣' },
     { labelKey: 'nav_equipment_rejected', route: 'equipment/rejected', icon: '✕' },
+
+    // Only the fleet-wide route gets a sidebar entry. The scoped one is reached
+    // from an item's card, and a sidebar link that needed an id could not be
+    // built without one.
+    { labelKey: 'nav_equipment_waves',    route: 'equipment/waves',    icon: '◷' },
   ],
 
   /**

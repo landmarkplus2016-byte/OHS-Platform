@@ -160,6 +160,23 @@ var AUTHENTICATED_ACTIONS = {
     return handleListEquipmentStats(session, payload);
   },
 
+  // --- Internal inspection waves (Section 3.6, InspectionWaves.gs) ----------
+  // Part of the equipment module: every handler gates on `equipment` view or
+  // edit. The officer's counterpart is further down with the other officer
+  // actions, gated on the role instead.
+  'list_inspection_waves': function (session, payload) {
+    return handleListInspectionWaves(session, payload);
+  },
+  'record_inspection_wave': function (session, payload) {
+    return handleRecordInspectionWave(session, payload);
+  },
+  'update_inspection_wave': function (session, payload) {
+    return handleUpdateInspectionWave(session, payload);
+  },
+  'void_inspection_wave': function (session, payload) {
+    return handleVoidInspectionWave(session, payload);
+  },
+
   // --- Field options (Section 3.7) -----------------------------------------
   'list_field_options': function (session, payload) {
     return handleListFieldOptions(session, payload);
@@ -175,7 +192,7 @@ var AUTHENTICATED_ACTIONS = {
   },
 
   // --- Officer app (Section 3.8) -------------------------------------------
-  // Officer role only. These are the stripped, read-only counterparts of the
+  // Officer role only. The first three are the stripped counterparts of the
   // admin reads; the gate is inside each handler (requireOfficer_).
   'officer_sync': function (session, payload) {
     return handleOfficerSync(session, payload);
@@ -185,6 +202,14 @@ var AUTHENTICATED_ACTIONS = {
   },
   'officer_get_equipment': function (session, payload) {
     return handleOfficerGetEquipment(session, payload);
+  },
+
+  // The one write an officer session can perform. Everything else on this list
+  // is a read, and this appends one row to one tab — it cannot modify an
+  // entity, cannot delete, and cannot reach the Equipment row. It lives in
+  // InspectionWaves.gs beside the tab it writes.
+  'officer_record_wave': function (session, payload) {
+    return handleOfficerRecordWave(session, payload);
   }
 };
 

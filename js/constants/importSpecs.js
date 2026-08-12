@@ -156,12 +156,18 @@ const EQUIPMENT_COLUMNS = [
     'owner', 'owning company', 'sub company', 'contractor',
   ] },
 
-  { field: 'wave_1_date', type: 'date', aliases: ['wave 1 date', 'wave 1', 'w 1 date', 'first wave date'] },
-  { field: 'wave_1_result', type: 'enum', aliases: ['wave 1 result', 'w 1 result', 'first wave result'] },
-  { field: 'wave_2_date', type: 'date', aliases: ['wave 2 date', 'wave 2', 'w 2 date', 'second wave date'] },
-  { field: 'wave_2_result', type: 'enum', aliases: ['wave 2 result', 'w 2 result', 'second wave result'] },
-  { field: 'wave_3_date', type: 'date', aliases: ['wave 3 date', 'wave 3', 'w 3 date', 'third wave date'] },
-  { field: 'wave_3_result', type: 'enum', aliases: ['wave 3 result', 'w 3 result', 'third wave result'] },
+  /*
+   * No wave columns. Waves are rows on the InspectionWaves tab now, and
+   * `bulk_import_equipment` rejects a `wave_N_*` key as unknown — so mapping
+   * them here would turn a workbook that carries them into a failed import
+   * rather than a partial one.
+   *
+   * A file with wave columns still imports: unmapped columns are ignored, and
+   * the item arrives with its identity and its third-party date. The waves
+   * themselves are a separate concern — the one-off migration carried the
+   * existing ones across (migrateWavesToLog in InspectionWaves.gs), and new ones
+   * are recorded rather than imported.
+   */
 
   { field: 'comments', type: 'text', aliases: ['comments', 'comment', 'notes', 'remarks'] },
 ];

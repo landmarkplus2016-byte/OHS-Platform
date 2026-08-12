@@ -25,6 +25,7 @@ import { CURRENT_USER, CONFIG } from '../state.js';
 import { t, setLanguage, getLanguage } from '../i18n/i18n.js';
 import { escapeHtml, fmtDateTime } from '../utils/format.js';
 import { go } from '../router.js';
+import { confirmDialog } from '../components/modal.js';
 import { officerLogout } from '../modules/officer/dataActions.js';
 import { getStaleState, staleAgeDays, isNearlyStale } from '../modules/officer/staleCheck.js';
 
@@ -134,11 +135,30 @@ export function bindOfficerShellEvents() {
       // Recent list. Deliberately harsher than an involuntary logout, which
       // leaves the cache alone — this is the "handing the shared phone over"
       // action, and nothing of this officer may survive it.
+      //
+      // The one thing that survives is a wave the officer recorded and could
+      // not send. officerLogout tries to flush first and asks before discarding
+      // anything left — an inspection somebody performed is not collateral for
+      // handing a phone over.
       signOutBtn.disabled = true;
-      officerLogout().catch((err) => {
-        signOutBtn.disabled = false;
-        console.error('[officer] sign-out failed:', err);
-      });
+      officerLogout({
+        confirmDiscard: async (count) => {
+          const answer = await confirmDialog({
+            title: t('off_signout_pending_title'),
+            message: t('off_signout_pending_message', { count }),
+            confirmLabel: t('off_signout_discard'),
+            danger: true,
+          });
+          return answer !== null;
+        },
+      })
+        .then((signedOut) => {
+          if (!signedOut) signOutBtn.disabled = false;
+        })
+        .catch((err) => {
+          signOutBtn.disabled = false;
+          console.error('[officer] sign-out failed:', err);
+        });
     });
   }
 }

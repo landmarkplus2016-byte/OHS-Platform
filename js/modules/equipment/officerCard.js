@@ -20,7 +20,7 @@ import {
   renderVerdictHero, renderIssues, renderStateLine, renderPanel,
   renderEntityNotFound, identityTag, daysHint,
 } from '../../components/verdictCard.js';
-import { WAVES, WAVE_RESULT_LABEL_KEYS, waveDateField, waveResultField } from './constants.js';
+import { WAVE_RESULT_LABEL_KEYS } from './constants.js';
 
 /** Equipment in the snapshot, or an empty list before the first sync. */
 function inventory(snapshot) {
@@ -143,32 +143,78 @@ function renderInspection(equipment) {
 }
 
 /**
- * The three internal waves.
+ * One recorded wave: when it ran, how it went, and what the officer wrote.
  *
  * Waves have no derived state of their own — only the most recent completed one
- * feeds the verdict (Section 6.3) — so each row shows its date and its result
- * verbatim. A wave that has not run yet renders as an em dash rather than being
- * hidden, because "wave 3 has not happened" is information at a site check.
+ * feeds the verdict (Section 6.3) — so each row shows its date and result
+ * verbatim.
+ *
+ * The comment is shown. It is the one thing on this card written by another
+ * officer for this one, and "webbing frayed near the D-ring, watch it" is worth
+ * more at a tower than any date on the page.
  */
-function renderWaves(equipment) {
-  const lines = WAVES.map((wave) => {
-    const date = equipment[waveDateField(wave)];
-    const result = equipment[waveResultField(wave)];
-    const resultKey = WAVE_RESULT_LABEL_KEYS[result];
+function waveLine(wave, pending) {
+  const resultKey = WAVE_RESULT_LABEL_KEYS[wave.result];
+  const label = pending
+    ? t('off_wave_pending_label')
+    : `${t('eqp_col_wave')} ${wave.wave_no}`;
 
-    return `
-      <div class="cert-line">
-        <div class="cert-line-main">
-          <div class="cert-line-name">${escapeHtml(t('eqp_col_wave'))} ${wave}</div>
-          <div class="cert-line-date">${date ? escapeHtml(fmtDate(date)) + ' ' + daysHint(date) : EMPTY_MARK}</div>
+  return `
+    <div class="cert-line${pending ? ' cert-line-pending' : ''}">
+      <div class="cert-line-main">
+        <div class="cert-line-name">${escapeHtml(label)}</div>
+        <div class="cert-line-date">
+          ${wave.wave_date ? escapeHtml(fmtDate(wave.wave_date)) + ' ' + daysHint(wave.wave_date) : EMPTY_MARK}
         </div>
-        ${result
-          ? `<span class="cert-state ${result === 'fail' ? 'cs-expired' : 'cs-valid'}">${escapeHtml(resultKey ? t(resultKey) : result)}</span>`
-          : `<span class="cert-state cs-missing">${escapeHtml(t('off_na'))}</span>`}
-      </div>`;
-  }).join('');
+        ${wave.comments
+          ? `<div class="cert-line-note">${escapeHtml(wave.comments)}</div>`
+          : ''}
+      </div>
+      ${wave.result
+        ? `<span class="cert-state ${wave.result === 'fail' ? 'cs-expired' : 'cs-valid'}">${
+            escapeHtml(resultKey ? t(resultKey) : wave.result)
+          }</span>`
+        : `<span class="cert-state cs-missing">${escapeHtml(t('off_na'))}</span>`}
+    </div>`;
+}
 
-  return renderPanel(t('eqp_col_wave'), lines);
+/**
+ * The internal inspection waves, newest first, with anything still queued on
+ * this phone shown above them.
+ *
+ * `snapshot.pending_waves` is put there by the officer module before it calls
+ * this card (see officer/search.js). It is not read from the outbox directly:
+ * rule 12 keeps this module out of another module's folder, and the officer app
+ * is the thing that owns the queue — this card only draws what it is handed.
+ *
+ * A queued wave is deliberately *not* allowed to change the hero or the issues
+ * list. Rule 13 puts compliance derivation on the server, and until this wave
+ * reaches it the verdict on screen is still the last one the server calculated.
+ * Saying so plainly is more honest than a colour the phone invented.
+ */
+function renderWaves(equipment, pending) {
+  const recorded = Array.isArray(equipment.waves) ? equipment.waves : [];
+  const queued = pending || [];
+
+  if (recorded.length === 0 && queued.length === 0) {
+    return renderPanel(
+      t('eqp_col_wave'),
+      `<div class="cert-line"><div class="cert-line-main">
+        <div class="cert-line-name">${escapeHtml(t('off_wave_none'))}</div>
+      </div></div>`
+    );
+  }
+
+  const lines = [
+    ...queued.map((wave) => waveLine(wave, true)),
+    ...recorded.map((wave) => waveLine(wave, false)),
+  ].join('');
+
+  const note = queued.length
+    ? `<div class="cert-line-note">${escapeHtml(t('off_wave_pending_note', { count: queued.length }))}</div>`
+    : '';
+
+  return renderPanel(t('eqp_col_wave'), lines + note);
 }
 
 /**
@@ -187,11 +233,22 @@ export function renderEquipmentVerdictCard(equipmentId, snapshot) {
 
   const derived = equipment.derived || {};
 
+  // Waves queued on this phone for this item, handed over by the officer app.
+  const pending = ((snapshot && snapshot.pending_waves) || [])
+    .filter((wave) => wave.equipment_id === equipmentId);
+
   return `
     ${renderVerdictHero({ verdict: derived.verdict })}
     ${renderIdentity(equipment)}
     ${renderIssues(derived)}
     ${renderInspection(equipment)}
-    ${renderWaves(equipment)}
+    ${renderWaves(equipment, pending)}
+
+    <div class="officer-card-actions">
+      <button type="button" class="btn btn-primary btn-lg" data-action="officer-record-wave"
+              data-equipment-id="${escapeHtml(equipment.equipment_id)}">
+        ${escapeHtml(t('off_wave_record'))}
+      </button>
+    </div>
     <div class="officer-tail"></div>`;
 }
