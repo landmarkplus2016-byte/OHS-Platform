@@ -12,6 +12,10 @@ export const en = {
   company_name: 'Landmark',
   app_sub: 'Occupational Health & Safety',
 
+  // The year is passed in, never written into the string — a hardcoded one is
+  // wrong from the first of January and nobody notices for months.
+  copyright: '{company} © {year}',
+
   /* ---------- Login ---------- */
   sign_in: 'Sign in',
   signing_in: 'Signing in…',

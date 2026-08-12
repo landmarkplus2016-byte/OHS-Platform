@@ -77,6 +77,11 @@ export function renderLoginPage(config) {
         <div id="login-err" class="err"></div>
 
         <button type="button" class="btn btn-primary btn-block" data-action="signin">${t('sign_in')}</button>
+
+        <div class="login-legal">${t('copyright', {
+    company: companyName,
+    year: new Date().getFullYear(),
+  })}</div>
       </div>
     </div>`;
 }

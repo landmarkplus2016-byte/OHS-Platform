@@ -70,6 +70,16 @@
 }
 
 /* One-shot banner after an involuntary logout (session expired / superseded). */
+/* The copyright line under the sign-in button. `--muted` rather than `--text2`
+   because it is a footer, not content — legible, and the last thing the eye
+   reaches. */
+.login-legal {
+  margin-block-start: 20px;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: center;
+}
+
 .login-notice {
   background: var(--warn-bg);
   color: var(--warn-dark);

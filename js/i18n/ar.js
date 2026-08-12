@@ -10,6 +10,7 @@ export const ar = {
   app_name: 'منصة السلامة والصحة المهنية',
   company_name: 'لاندمارك',
   app_sub: 'السلامة والصحة المهنية',
+  copyright: '{company} © {year}',
 
   /* ---------- Login ---------- */
   sign_in: 'دخول',
