@@ -290,6 +290,17 @@ function handleListInspectionHistory(session, payload) {
  * measure of what left the inventory, so excluding rejected items would make it
  * permanently zero.
  *
+ * `by_subcontractor` answers the question the KPI row cannot: whose gear is out
+ * of compliance. It counts blocked and warning items separately per owning
+ * company, because the two are different conversations — blocked is "this
+ * cannot be used today", warning is "sort this out this month".
+ *
+ * Items with no owner recorded come back as `no_subcontractor` rather than
+ * under a made-up label. That column was added after the tab was in use and
+ * nothing was backfilled (Section 2), so the blank bucket is a real and
+ * currently large one; dropping it the way the employee twin does would
+ * understate the fleet. Naming it is the frontend's job (rule 14).
+ *
  * @param {Object} session  Context from validateSession().
  * @param {Object} payload  None.
  * @return {GoogleAppsScript.Content.TextOutput}
@@ -316,7 +327,9 @@ function handleListEquipmentStats(session, payload) {
   };
 
   var byVerdict = { cleared: 0, warning: 0, blocked: 0 };
-  var byItem = {};   // item type → active items expiring within urgent_days
+  var byItem = {};           // item type → active items expiring within urgent_days
+  var bySubcontractor = {};  // owning company → {blocked, warning}
+  var noSubcontractor = { blocked: 0, warning: 0, count: 0 };
 
   // The newest updated_at across the whole tab, rejected rows included — the
   // settings Data tab reports it as this module's health, and a rejection is
@@ -342,6 +355,21 @@ function handleListEquipmentStats(session, payload) {
 
     if (byVerdict[derived.verdict] !== undefined) byVerdict[derived.verdict]++;
 
+    if (derived.verdict === 'blocked' || derived.verdict === 'warning') {
+      var owner = normalizeString(row.subcontractor);
+      var bucket;
+
+      if (owner === '') {
+        bucket = noSubcontractor;
+      } else {
+        if (!bySubcontractor[owner]) bySubcontractor[owner] = { blocked: 0, warning: 0, count: 0 };
+        bucket = bySubcontractor[owner];
+      }
+
+      bucket[derived.verdict]++;
+      bucket.count++;
+    }
+
     if (derived.third_party_state === CERT_STATES.EXPIRED) {
       totals.inspections_expired++;
     } else if (derived.third_party_state === CERT_STATES.URGENT) {
@@ -361,8 +389,45 @@ function handleListEquipmentStats(session, payload) {
     totals: totals,
     last_updated_at: lastUpdatedAt,
     by_verdict: byVerdict,
-    by_item: countMapToList_(byItem, 'item')
+    by_item: countMapToList_(byItem, 'item'),
+    by_subcontractor: subcontractorTally_(bySubcontractor),
+    no_subcontractor: noSubcontractor
   });
+}
+
+/**
+ * Turn the {owner → {blocked, warning, count}} tally into a ranked list.
+ *
+ * countMapToList_() cannot be reused here: it tallies plain numbers, and this
+ * one carries the blocked/warning split that the whole card exists to show.
+ * Ranked by total then alphabetically, the same order and for the same reason —
+ * a stable list so two reads of an unchanged tab draw identical bars.
+ *
+ * @private
+ * @param {Object} tally
+ * @return {Array<{subcontractor: string, blocked: number, warning: number, count: number}>}
+ */
+function subcontractorTally_(tally) {
+  var out = [];
+
+  for (var name in tally) {
+    if (!Object.prototype.hasOwnProperty.call(tally, name)) continue;
+    if (!tally[name].count) continue;
+
+    out.push({
+      subcontractor: name,
+      blocked: tally[name].blocked,
+      warning: tally[name].warning,
+      count: tally[name].count
+    });
+  }
+
+  out.sort(function (a, b) {
+    if (a.count !== b.count) return b.count - a.count;
+    return a.subcontractor < b.subcontractor ? -1 : (a.subcontractor > b.subcontractor ? 1 : 0);
+  });
+
+  return out;
 }
 
 // ---------------------------------------------------------------------------

@@ -189,6 +189,31 @@
   transition: inline-size 0.2s ease;
 }
 
+/* A divided bar: the stack is the whole fill, the segments share it out.
+   No radius on the segments — only the stack is rounded, so a two-colour bar
+   still reads as one pill rather than two beads. */
+.bar-stack {
+  display: flex;
+  block-size: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  transition: inline-size 0.2s ease;
+}
+.bar-seg {
+  block-size: 100%;
+  min-inline-size: 2px;
+}
+
+/* The legend above a stacked bar chart. Horizontal because it labels colours
+   rather than reporting values — the numbers are on the bars. */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-block-end: 14px;
+  font-size: 12px;
+}
+
 /* ---------- Donut ---------- */
 .donut-wrap {
   display: flex;

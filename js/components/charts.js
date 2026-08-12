@@ -87,6 +87,68 @@ export function barChart(rows, options) {
 }
 
 /**
+ * A horizontal bar list where each bar is divided into segments — same row
+ * anatomy as barChart(), but the track carries a breakdown instead of one
+ * colour.
+ *
+ * This exists rather than a second donut because the question it answers is
+ * "compare these categories, and within each one, what is the split" — two
+ * facts per row. A donut can only carry the second.
+ *
+ * Segments are laid out with flex and sized in percent of the row's own total,
+ * so the divided bar still reads as one length against the longest row, and it
+ * flips in Arabic for free (Section 8.2) exactly as barChart() does.
+ *
+ * A caller that wants a legend renders one itself — the shape of a legend
+ * depends on whether the segments mean the same thing on every row, and here
+ * they do, so one legend serves the whole chart rather than one per row.
+ *
+ * @param {Array<{label: string, value: number,
+ *                segments: Array<{value: number, colorToken?: string, label?: string}>}>} rows
+ *        `value` is the row total and drives the ranking against `max`;
+ *        `segments` divide it. A caller passing segments that do not sum to
+ *        `value` gets a short bar, not an error — the total is the caller's
+ *        fact to state.
+ * @param {{emptyKey?: string, limit?: number}} [options]
+ * @returns {string} HTML
+ */
+export function stackedBarChart(rows, options) {
+  const opts = options || {};
+  const all = Array.isArray(rows) ? rows.filter((r) => r && r.value > 0) : [];
+
+  if (all.length === 0) {
+    return `<div class="chart-empty">${escapeHtml(t(opts.emptyKey || 'no_results'))}</div>`;
+  }
+
+  const visible = opts.limit ? all.slice(0, opts.limit) : all;
+  const max = Math.max(...visible.map((r) => r.value));
+
+  return `<div class="bar-chart">${visible.map((row) => {
+    const segments = (Array.isArray(row.segments) ? row.segments : [])
+      .filter((seg) => seg && seg.value > 0);
+
+    return `
+    <div class="bar-row">
+      <div class="bar-head">
+        <span class="bar-label">${escapeHtml(row.label)}</span>
+        <span class="bar-value">${escapeHtml(String(row.value))}</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-stack"
+             style="inline-size: ${Math.max(2, Math.round((row.value / max) * 100))}%">
+          ${segments.map((seg) => `
+            <span class="bar-seg"
+                  style="flex: ${seg.value};
+                         background: ${colorVar(seg.colorToken)}"
+                  ${seg.label ? `title="${escapeHtml(`${seg.label}: ${seg.value}`)}"` : ''}></span>`
+    ).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/**
  * A donut with a centred total and a legend beside it.
  *
  * Segments are drawn as pie wedges and a hole is punched with a `--card`

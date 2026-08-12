@@ -845,7 +845,7 @@ Each module implements its dashboard functions:
 2. js/modules/equipment/dashboard.js:
    - renderEquipmentKpis() → 4 KPI cards:
      Total Active, Inspections Expired, Expiring ≤30 days, Rejected This Month
-   - renderEquipmentCharts() → SVG charts for item types + state donut
+   - renderEquipmentCharts() → bars for item types + non-compliant by subcontractor
    - Backend: `list_equipment_stats`
 
 Update manifest.js in each module to reference these dashboard functions.

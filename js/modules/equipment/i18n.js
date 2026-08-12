@@ -214,9 +214,9 @@ const en = {
 
   eqp_dash_chart_by_item: 'Inspections Expiring in Next {days} Days by Item Type',
   eqp_dash_no_expiries: 'No inspection ends in this window.',
-  eqp_dash_chart_verdict: 'Equipment Compliance',
-  eqp_dash_donut_center: 'items',
-  eqp_dash_donut_empty: 'No active equipment to assess.',
+  eqp_dash_chart_by_sub: 'Non-Compliant Equipment by Subcontractor',
+  eqp_dash_sub_unrecorded: 'No owner recorded',
+  eqp_dash_no_non_compliant: 'Every active item is cleared.',
 };
 
 const ar = {
@@ -405,9 +405,9 @@ const ar = {
 
   eqp_dash_chart_by_item: 'الفحوصات المنتهية خلال {days} يومًا حسب نوع الصنف',
   eqp_dash_no_expiries: 'لا ينتهي أي فحص خلال هذه المدة.',
-  eqp_dash_chart_verdict: 'التزام المعدات',
-  eqp_dash_donut_center: 'صنف',
-  eqp_dash_donut_empty: 'لا توجد معدات نشطة للتقييم.',
+  eqp_dash_chart_by_sub: 'المعدات غير الملتزمة حسب مقاول الباطن',
+  eqp_dash_sub_unrecorded: 'المالك غير مسجل',
+  eqp_dash_no_non_compliant: 'جميع المعدات النشطة مطابقة.',
 };
 
 registerModuleDict('equipment', { en, ar });

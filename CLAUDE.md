@@ -1843,7 +1843,11 @@ Super admin sees the full stack: employee KPIs + employee charts, then equipment
 
 **Equipment dashboard composition:**
 - **KPIs** (row of 4): Total Active Equipment, Inspections Expired, Expiring in ≤30 days, Rejected This Month.
-- **Charts** (row of 2): Inspections Expiring in Next 30 Days by Item Type, Equipment Compliance donut.
+- **Charts** (row of 2):
+  - *Inspections Expiring in Next 30 Days by Item Type* — horizontal bars.
+  - *Non-Compliant Equipment by Subcontractor* — stacked horizontal bars, one row per owning company, each bar split blocked (red) / warning (amber), ranked worst first. Items with no `subcontractor` on file come back from the server as a separate `no_subcontractor` bucket and render as a final row labelled by the frontend — that column was added after the tab was in use and never backfilled, so the blank bucket is real and dropping it would understate the fleet. It sits last whatever its size: it is a gap in the data, not a company. Cleared items are excluded on purpose — this is the call list, not a census.
+
+  This chart replaced an *Equipment Compliance* donut, which drew the three verdict counts. Every one of them was already in the KPI row directly above it (blocked = inspections expired, warning = urgent + missing, cleared = the remainder), so it restated four numbers as a circle and added nothing. Ownership is the question the KPI row cannot answer, and the one the `subcontractor` column exists for. Do not reinstate the donut.
 
 ## 5.6 The officer app and modules
 

@@ -18,19 +18,17 @@ import { UI } from '../../state.js';
 import { render } from '../../render.js';
 import { t } from '../../i18n/i18n.js';
 import { escapeHtml } from '../../utils/format.js';
-import { barChart, donutChart } from '../../components/charts.js';
+import { barChart, stackedBarChart } from '../../components/charts.js';
 import { listEquipmentStats } from './dataActions.js';
-import { VERDICTS } from './constants.js';
 
 /** Bars are ranked, so a long tail past this adds height without adding signal. */
 const MAX_BARS = 8;
 
-/** verdict → the token its donut segment and legend dot are coloured with. */
-const VERDICT_COLOR_TOKENS = {
-  blocked: '--blocked',
-  warning: '--warn',
-  cleared: '--cleared',
-};
+/** The two verdicts the ownership chart splits on, worst first. */
+const NON_COMPLIANT = [
+  { verdict: 'blocked', colorToken: '--blocked' },
+  { verdict: 'warning', colorToken: '--warn' },
+];
 
 /** Parked on UI so it survives a redraw and is wiped by clearSession(). */
 function dashState() {
@@ -169,26 +167,81 @@ function renderByItemCard(s, urgentDays) {
 }
 
 /**
- * The compliance donut: active items split by verdict.
+ * One chart row: the server's `by_subcontractor` list plus the unowned bucket,
+ * as stacked-bar rows.
  *
- * Worst first, so blocked leads the legend — the same order the list page's
- * verdict filter uses (constants.js VERDICTS).
+ * The unowned bucket goes last whatever its size. It is not a company competing
+ * for position in the ranking — it is a gap in the data, and reading it as the
+ * biggest offender would be wrong.
+ *
+ * Which is also why the ranked list is trimmed here rather than by the chart's
+ * own `limit`: that slices the head of the array, and the bucket appended after
+ * it would be the first row dropped the moment there are eight companies.
  */
-function renderVerdictCard(s) {
-  const body = s.status === 'ready'
-    ? donutChart(
-      VERDICTS.map((verdict) => ({
-        label: t('verdict_' + verdict),
-        value: (s.data.by_verdict && s.data.by_verdict[verdict]) || 0,
-        colorToken: VERDICT_COLOR_TOKENS[verdict],
+function subcontractorRows(data) {
+  const unownedShown = data.no_subcontractor && data.no_subcontractor.count > 0;
+  const room = unownedShown ? MAX_BARS - 1 : MAX_BARS;
+
+  const rows = (data.by_subcontractor || []).slice(0, room).map((row) => ({
+    label: row.subcontractor,
+    value: row.count,
+    segments: NON_COMPLIANT.map((seg) => ({
+      value: row[seg.verdict] || 0,
+      colorToken: seg.colorToken,
+      label: t('verdict_' + seg.verdict),
+    })),
+  }));
+
+  if (unownedShown) {
+    const unowned = data.no_subcontractor;
+    rows.push({
+      label: t('eqp_dash_sub_unrecorded'),
+      value: unowned.count,
+      segments: NON_COMPLIANT.map((seg) => ({
+        value: unowned[seg.verdict] || 0,
+        colorToken: seg.colorToken,
+        label: t('verdict_' + seg.verdict),
       })),
-      { centerLabelKey: 'eqp_dash_donut_center', emptyKey: 'eqp_dash_donut_empty' }
-    )
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * "Non-compliant equipment by subcontractor" — who owns the gear that is
+ * blocked or expiring, ranked worst first.
+ *
+ * This card replaced a verdict donut, which drew the same three numbers the KPI
+ * row above already carries: blocked was the expired count, warning was urgent
+ * plus missing, cleared was the remainder. Restating them in a circle told the
+ * admin nothing new. Ownership is the fact the KPI row genuinely cannot reach,
+ * and it is the one the `subcontractor` column was added to answer (Section 2).
+ *
+ * Cleared items are deliberately absent. A company with 200 compliant slings and
+ * 3 expired ones is not a smaller problem than one with 3 items, all expired —
+ * this chart is the call list, not a census.
+ */
+function renderBySubcontractorCard(s) {
+  const body = s.status === 'ready'
+    ? stackedBarChart(subcontractorRows(s.data), { emptyKey: 'eqp_dash_no_non_compliant' })
     : chartState(s);
+
+  const legend = s.status === 'ready'
+    ? `<div class="chart-legend">${NON_COMPLIANT.map((seg) => `
+        <span class="legend-row">
+          <span class="legend-dot" style="background: var(${seg.colorToken})"></span>
+          <span class="legend-label">${escapeHtml(t('verdict_' + seg.verdict))}</span>
+          <b class="legend-value">${escapeHtml(String(
+      (s.data.by_verdict && s.data.by_verdict[seg.verdict]) || 0
+    ))}</b>
+        </span>`).join('')}</div>`
+    : '';
 
   return `
     <div class="card">
-      <h3>${escapeHtml(t('eqp_dash_chart_verdict'))}</h3>
+      <h3>${escapeHtml(t('eqp_dash_chart_by_sub'))}</h3>
+      ${legend}
       ${body}
     </div>`;
 }
@@ -205,7 +258,7 @@ export function renderEquipmentCharts() {
   return `
     <div class="chart-row chart-row-2">
       ${renderByItemCard(s, urgentDays)}
-      ${renderVerdictCard(s)}
+      ${renderBySubcontractorCard(s)}
     </div>`;
 }
 

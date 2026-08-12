@@ -107,6 +107,7 @@ export function listInspectionHistory(equipmentId) {
  * numbers.
  *
  * @returns {Promise<{totals: Object, by_verdict: Object, by_item: Array,
+ *                    by_subcontractor: Array, no_subcontractor: Object,
  *                    thresholds: Object}>}
  */
 export function listEquipmentStats() {
