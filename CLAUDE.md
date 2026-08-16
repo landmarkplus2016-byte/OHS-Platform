@@ -59,8 +59,8 @@ GitHub Pages serves the repo directly — no build/deploy script, no `gh-pages` 
 
 | Role | Device | Navigation | Key permissions |
 |---|---|---|---|
-| Super admin | Desktop | Left sidebar, grouped | Everything: user management, all modules, all settings, all reports |
-| Module admin | Desktop | Left sidebar, filtered by permissions | Full edit access to owned modules only. Dashboard visible in full. No user management. No view access to non-owned modules. |
+| Super admin | Desktop | Left sidebar, grouped (bottom ribbon on a phone — Section 8.5) | Everything: user management, all modules, all settings, all reports |
+| Module admin | Desktop | Left sidebar, filtered by permissions (bottom ribbon on a phone) | Full edit access to owned modules only. Dashboard visible in full. No user management. No view access to non-owned modules. |
 | Officer | Mobile PWA | Bottom shell | Read-only verdict lookup across all modules (employees, equipment, future). No write access anywhere. |
 | Developer (Khaled) | — | Google Sheet + Apps Script editor | Only person with direct Sheet and Script access. Never uses the Sheet as a manual interface for data entry — everything goes through the platform. |
 
@@ -2270,6 +2270,14 @@ SYSTEM
 - Sidebar filters items by user's view permissions; entire groups hidden when the user has no view access to any item in them
 - Future modules (cars-tracking, ladders, etc.) insert as their own groups between EQUIPMENT and SYSTEM
 
+**Below 900px the sidebar is replaced by a bottom navigation ribbon** (`js/shell/mobileNav.js`). Admins still work on desktop — this is the same app on a phone, not a second one — but the sidebar is a 230px column, and on a narrow screen it used to fold to the *top* of the page, so an admin opening the platform on a phone scrolled past a full screen of links before reaching the dashboard. The ribbon is fixed to the bottom instead: the page starts at the top of the viewport and every destination stays one tap away.
+
+It shows exactly the destinations the sidebar shows, in the same order, from the same function — `visibleNavItems()` in `sidebar.js`, permission filtering included. There is no second list of pages to maintain, so a module that adds a page gets it in both navs or neither.
+
+Eleven destinations do not fit across a phone, so the strip scrolls horizontally and the active tab is scrolled into view on navigation (once per route change, not once per redraw — a live-filter page redraws on every keystroke). The sidebar footer — theme, language, user chip, sign out — has nowhere to live in a strip of tabs, so it sits behind a trailing **More** button that opens it as a navy sheet, painted to match so `.userchip` / `.lang-toggle` / `.side-signout` are reused with the colours they were written for.
+
+**Both navs are rendered on every draw and CSS displays one.** Which shell applies is a question about the viewport, and the viewport changes without a redraw — a rotated phone, a resized window — so deciding it in JS would leave an admin with no navigation at all until they next navigated.
+
 ## 8.6 Officer shell
 
 Same as OHS-DB's officer mobile shell. Navy header, sync strip, phone-frame body. No sidebar, no admin actions. Verdict card design ported directly.
@@ -2338,7 +2346,9 @@ ohs-platform/
 │   │                                # staleness check, outbox.js, waveSheet.js)
 │   │
 │   ├── shell/
-│   │   ├── sidebar.js               # Renders sidebar from registered manifests + permissions
+│   │   ├── sidebar.js               # Renders sidebar from registered manifests + permissions.
+│   │   │                            # Owns visibleNavItems() — the one list of destinations
+│   │   ├── mobileNav.js             # Bottom nav ribbon + "More" sheet, admin shell under 900px
 │   │   ├── topbar.js                # Renders topbar (admin shell only)
 │   │   ├── loginPage.js             # Login + change-password screens
 │   │   ├── dashboardPage.js         # Aggregates module dashboard contributions

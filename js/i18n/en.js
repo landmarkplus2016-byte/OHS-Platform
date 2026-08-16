@@ -9,7 +9,7 @@
 export const en = {
   /* ---------- Branding ---------- */
   app_name: 'OHS Platform',
-  company_name: 'Landmark',
+  company_name: 'Landmark-Plus',
   app_sub: 'Occupational Health & Safety',
 
   // The year is passed in, never written into the string — a hardcoded one is
@@ -96,6 +96,12 @@ export const en = {
   nav_dashboard: 'Dashboard',
   nav_export: 'Export',
   nav_settings: 'Settings',
+
+  // The mobile bottom ribbon (js/shell/mobileNav.js). `nav_more` is the tab
+  // holding the sidebar footer; `nav_menu` labels the ribbon for screen readers.
+  nav_more: 'More',
+  nav_menu: 'Navigation',
+  close: 'Close',
 
   /* ---------- Certificate states (Section 6.1) ----------
      Shared: components/badge.js renders these for every module. There is no

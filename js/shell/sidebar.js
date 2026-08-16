@@ -32,6 +32,53 @@ const SYSTEM_ITEMS = [
   { labelKey: 'nav_settings', route: 'settings', icon: '⚙', superAdminOnly: true },
 ];
 
+/** The shell's own first item, above every module group. */
+const DASHBOARD_ITEM = { labelKey: 'nav_dashboard', route: 'dashboard', icon: '◇' };
+
+/**
+ * The modules that contribute nav items to this user, in manifest order.
+ *
+ * A module needs a group, at least one sidebar item, and view permission. Split
+ * out because the mobile bottom bar asks the same question (visibleNavItems),
+ * and two copies of this predicate would drift the first time it changed.
+ *
+ * @param {Array<Object>} modules
+ * @returns {Array<Object>}
+ */
+function visibleModules(modules) {
+  if (!hasAnyViewPermission()) return [];
+
+  return (modules || []).filter((manifest) => (
+    manifest.group && manifest.sidebar && manifest.sidebar.length > 0 && canView(manifest.name)
+  ));
+}
+
+/** The SYSTEM items this user may see. */
+function visibleSystemItems() {
+  return SYSTEM_ITEMS.filter((item) => !item.superAdminOnly || isSuperAdmin());
+}
+
+/**
+ * Every destination this user may reach, flattened into sidebar order:
+ * Dashboard, then each module group's items, then SYSTEM.
+ *
+ * Exported for mobileNav.js, which shows exactly these destinations in exactly
+ * this order — the bottom bar is the same navigation in a different shape, not a
+ * second, hand-maintained list of pages.
+ *
+ * @param {Array<Object>} modules registered manifests
+ * @returns {Array<Object>} {labelKey, route, icon}
+ */
+export function visibleNavItems(modules) {
+  const items = [DASHBOARD_ITEM];
+
+  visibleModules(modules).forEach((manifest) => {
+    items.push(...manifest.sidebar);
+  });
+
+  return items.concat(visibleSystemItems());
+}
+
 /**
  * One nav link.
  *
@@ -81,10 +128,7 @@ function moduleGroups(modules, activeRoute) {
   // Insertion order is manifest order, which is the order main.js listed them.
   const groups = new Map();
 
-  modules.forEach((manifest) => {
-    if (!manifest.group || !manifest.sidebar || manifest.sidebar.length === 0) return;
-    if (!canView(manifest.name)) return;
-
+  visibleModules(modules).forEach((manifest) => {
     if (!groups.has(manifest.group)) groups.set(manifest.group, []);
     groups.get(manifest.group).push(...manifest.sidebar);
   });
@@ -107,9 +151,9 @@ export function renderSidebar(modules) {
   const activeRoute = ROUTE;
 
   // A module admin with nothing granted yet gets Dashboard and SYSTEM only.
-  const groupsHtml = hasAnyViewPermission() ? moduleGroups(modules || [], activeRoute) : '';
+  const groupsHtml = moduleGroups(modules, activeRoute);
 
-  const systemItems = SYSTEM_ITEMS.filter((item) => !item.superAdminOnly || isSuperAdmin());
+  const systemItems = visibleSystemItems();
 
   return `
     <aside class="sidebar">
@@ -120,7 +164,7 @@ export function renderSidebar(modules) {
       </div>
 
       <nav class="nav">
-        ${navItem({ labelKey: 'nav_dashboard', route: 'dashboard', icon: '◇' }, activeRoute)}
+        ${navItem(DASHBOARD_ITEM, activeRoute)}
         ${groupsHtml}
         ${navGroup('group_system', systemItems, activeRoute)}
       </nav>

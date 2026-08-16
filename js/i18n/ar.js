@@ -8,7 +8,7 @@
 export const ar = {
   /* ---------- Branding ---------- */
   app_name: 'منصة السلامة والصحة المهنية',
-  company_name: 'لاندمارك',
+  company_name: 'لاندمارك بلس',
   app_sub: 'السلامة والصحة المهنية',
   copyright: '{company} © {year}',
 
@@ -89,6 +89,9 @@ export const ar = {
   nav_dashboard: 'لوحة المعلومات',
   nav_export: 'التصدير',
   nav_settings: 'الإعدادات',
+  nav_more: 'المزيد',
+  nav_menu: 'التنقل',
+  close: 'إغلاق',
 
   /* ---------- Certificate states (Section 6.1) ---------- */
   state_suspended: 'موقوفة',

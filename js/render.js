@@ -19,6 +19,7 @@ import { CONFIG, CURRENT_USER, ROUTE, ROUTE_PARAMS } from './state.js';
 import { renderLoginPage, bindLoginPageEvents } from './shell/loginPage.js';
 import { renderChangePasswordPage, bindChangePasswordEvents } from './shell/changePasswordPage.js';
 import { renderSidebar, bindSidebarEvents } from './shell/sidebar.js';
+import { renderMobileNav, bindMobileNavEvents } from './shell/mobileNav.js';
 import { renderTopbar } from './shell/topbar.js';
 import { renderDashboardPage, bindDashboardPageEvents } from './shell/dashboardPage.js';
 import { renderSettingsPage, bindSettingsPageEvents } from './shell/settingsPage.js';
@@ -252,6 +253,10 @@ export function render() {
   }
 
   // ---- Admin shell --------------------------------------------------------
+  // Both navs are always drawn; CSS shows one of them (layout.css). Which one is
+  // a question about the viewport, and the viewport can change without a redraw —
+  // a rotated phone, a resized window — so deciding it here in JS would leave an
+  // admin with no navigation at all until they next navigated.
   app.innerHTML = `
     <div class="app">
       ${renderSidebar(getModules())}
@@ -259,9 +264,11 @@ export function render() {
         ${renderTopbar(pageTitle(entry))}
         <div class="content">${renderPageBody(entry)}</div>
       </div>
+      ${renderMobileNav(getModules())}
     </div>`;
 
   bindSidebarEvents();
+  bindMobileNavEvents();
   bindPage(entry);
   hoistPageActions(app);
   restoreFocus(focusSnapshot);

@@ -41,7 +41,7 @@ var NUMERIC_CONFIG_KEYS = [
 /** Fallbacks used when a Config row is missing or unreadable. */
 var CONFIG_DEFAULTS = {
   app_name: 'OHS Platform',
-  company_name: 'Landmark',
+  company_name: 'Landmark-Plus',
   primary_language: 'en',
   session_expiry_hours: 8,
   max_stale_hours: 72,

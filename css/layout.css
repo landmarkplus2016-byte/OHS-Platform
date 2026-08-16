@@ -207,24 +207,135 @@
   align-items: center;
 }
 
-/* ---------- Narrow screens ----------
-   Admins work on desktop (Section 1), so this is a graceful-degradation rule
-   rather than a mobile layout: the sidebar stops being sticky-full-height and
-   scrolls with the page instead of eating the viewport. */
+/* ==========================================================================
+   Mobile admin shell — bottom navigation ribbon (js/shell/mobileNav.js)
+
+   Admins still work on desktop (Section 1); this is the same app on a phone,
+   not a second one. The sidebar and the ribbon are both in the DOM on every
+   draw and exactly one of them is displayed, so rotating a phone or resizing a
+   window swaps navigation without a redraw.
+
+   Below the breakpoint the sidebar goes away entirely rather than folding to
+   the top of the page: a full-height column of links above the content is the
+   thing that made the phone unusable — the dashboard began a screen and a half
+   down. The ribbon is fixed to the bottom instead, so the page starts at the
+   top of the viewport and every destination stays one tap away.
+   ========================================================================== */
+
+.mobile-nav { display: none; }
+
 @media (max-width: 900px) {
-  .app {
-    flex-direction: column;
-  }
-  .sidebar {
-    width: 100%;
-    height: auto;
-    position: static;
-    border-inline-end: none;
-    border-block-end: 1px solid var(--navy-border);
-  }
-  .content {
-    padding: 18px;
-  }
+  .sidebar { display: none; }
+  .mobile-nav { display: block; }
+
+  .content { padding: 16px; }
+
+  /* Clear the fixed ribbon, plus the home-indicator strip on iOS, so the last
+     row of a table is never trapped behind it. */
+  .main { padding-block-end: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
+  /* The topbar is sticky and the ribbon is fixed; the page between them is what
+     scrolls, so its own padding is all the room the title needs. */
+  .topbar { padding: 12px 16px; }
+}
+
+.mobile-nav {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 20;
+  background: var(--navy);
+  border-block-start: 1px solid var(--navy-border);
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+}
+
+/* Horizontal scroll, no scrollbar: eleven destinations do not fit across a
+   phone, and shrinking them until they do makes every one of them unreadable.
+   The active tab is scrolled into view on navigation (mobileNav.js). */
+.mnav-scroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.mnav-scroll::-webkit-scrollbar { display: none; }
+
+.mnav-link {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 74px;
+  min-height: 58px;   /* a touch target, not a mouse target */
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  /* The active marker sits on the block-start edge here, not the inline-start
+     one — the strip runs across the screen, so a leading-edge bar would mark
+     the tab beside the one selected. */
+  border-block-start: 3px solid transparent;
+  color: var(--navy-text);
+  text-decoration: none;
+  font-size: 10.5px;
+}
+.mnav-link .ic {
+  font-size: 17px;
+  line-height: 1;
+  opacity: .85;
+}
+.mnav-link .lbl {
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mnav-link.active {
+  background: rgba(255, 255, 255, .08);
+  border-block-start-color: var(--primary);
+  color: var(--navy-text-strong);
+}
+.mnav-link.active .ic { opacity: 1; }
+
+/* ---------- The "More" sheet ----------
+   Theme, language, who is signed in, and sign out — the sidebar footer, which
+   has nowhere to live in a strip of tabs. Painted navy like the strip above it,
+   which is what lets .userchip / .lang-toggle / .side-signout be reused with
+   the colours they were written for. */
+.mnav-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--overlay);
+  display: flex;
+  align-items: flex-end;
+}
+.mnav-sheet[hidden] { display: none; }
+
+.mnav-sheet-panel {
+  position: relative;
+  width: 100%;
+  background: var(--navy);
+  color: var(--navy-text);
+  border-start-start-radius: 16px;
+  border-start-end-radius: 16px;
+  padding: 20px 22px calc(20px + env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--shadow-md);
+}
+.mnav-sheet-panel .swatches { margin-block: 16px; }
+.mnav-sheet-panel .lang-toggle { margin-block-end: 4px; }
+
+.mnav-sheet-close {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-end: 10px;
+  min-width: 40px;
+  min-height: 40px;
+  background: transparent;
+  border: none;
+  color: var(--navy-muted);
+  font-size: 15px;
 }
 
 /* ==========================================================================
