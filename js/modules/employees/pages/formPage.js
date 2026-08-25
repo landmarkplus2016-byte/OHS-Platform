@@ -26,10 +26,15 @@ import { t } from '../../../i18n/i18n.js';
 import { escapeHtml } from '../../../utils/format.js';
 import { toastSuccess, toastError } from '../../../components/toast.js';
 import { teamBadge } from '../../../components/badge.js';
-import { createEmployee, updateEmployee, getEmployee, loadFieldOptions } from '../dataActions.js';
+import { confirmDialog } from '../../../components/modal.js';
+import {
+  createEmployee, updateEmployee, getEmployee, loadFieldOptions,
+  archiveEmployee, loadArchiveStatuses,
+} from '../dataActions.js';
 import { invalidateEmployeeDetail } from './detailPage.js';
 import {
   TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor, listKeyFor,
+  isArchiveStatus,
 } from '../constants.js';
 
 /**
@@ -396,6 +401,58 @@ function changedValues(s) {
   return changes;
 }
 
+/**
+ * After a save that set a terminal employment status, offer to archive.
+ *
+ * `employment_status` and `archived` answer different questions — why someone
+ * left, and whether the platform still lists them — and nothing derives one
+ * from the other. Left to itself that produced people marked Resigned who were
+ * still on the Field Team list and absent from Resigned & Terminated, because
+ * only `archived` moves a record between those two pages.
+ *
+ * The offer comes *after* the save rather than before it so neither answer is
+ * ambiguous: the status is already stored, Escape declines the archive alone,
+ * and there is no reading of this dialog under which work is lost. Archiving
+ * stays an explicit act with a reason and an author, which is what
+ * `archived_by` / `archived_at` are for — a dropdown quietly stamping them
+ * would be worse than the drift it fixes.
+ *
+ * Never throws: the save it follows has already succeeded and been reported, so
+ * a failure here is reported on its own terms rather than turned into a
+ * validation error against a form that was fine.
+ *
+ * @param {string} employeeId
+ * @param {string|undefined} nextStatus  absent when the status did not change
+ */
+async function offerArchive(employeeId, nextStatus) {
+  if (!nextStatus) return;
+
+  try {
+    const statuses = await loadArchiveStatuses();
+    if (!isArchiveStatus(nextStatus, statuses)) return;
+
+    const answer = await confirmDialog({
+      title: t('emp_archive_on_status_title'),
+      message: t('emp_archive_on_status_message', { status: nextStatus }),
+      confirmLabel: t('emp_archive'),
+      cancelLabel: t('emp_archive_on_status_decline'),
+      danger: true,
+      input: { label: t('emp_archive_reason'), placeholder: t('emp_archive_reason_ph') },
+    });
+    if (!answer) return;
+
+    // The status is already on the row from the save, so it is not resent here.
+    await archiveEmployee(employeeId, answer.value);
+    toastSuccess(t('emp_archived_ok'));
+
+    delete UI.employeeList;
+    invalidateEmployeeDetail();
+  } catch (err) {
+    console.error('[employees] archive after status change failed:', err);
+    toastError(err);
+  }
+}
+
 async function save() {
   const s = pageState();
   if (s.busy) return;
@@ -435,6 +492,10 @@ async function save() {
 
     s.key = null;   // so re-entering the form reloads rather than reusing this
     s.busy = false;
+
+    // `payload` carries employment_status only when it changed, so editing an
+    // unrelated field on someone already marked Resigned does not nag.
+    await offerArchive(data.employee.employee_id, payload.employment_status);
 
     go('employee/:id', { id: data.employee.employee_id });
   } catch (err) {

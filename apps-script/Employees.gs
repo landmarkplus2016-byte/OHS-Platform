@@ -64,6 +64,56 @@ var EMPLOYEE_OPTION_FIELDS = {
 var EMPLOYEE_AUTO_ADD_FIELDS = ['title', 'contractor', 'subcontractor'];
 
 /**
+ * Fallback for `employees.archive_statuses` when ModuleSettings has no row.
+ *
+ * These are the employment statuses that mean the person has left, as opposed
+ * to merely not being available: 'Suspended' is deliberately absent, because a
+ * suspended employee is still employed and belongs on the team list.
+ */
+var DEFAULT_ARCHIVE_STATUSES = ['Resigned', 'Terminated'];
+
+/**
+ * The employment statuses that go hand in hand with archiving (Section 3.5).
+ *
+ * `employment_status` and `archived` answer different questions — *why* someone
+ * left and *whether* the platform still lists them — and nothing derives one
+ * from the other, which is exactly how they came to disagree. This list is what
+ * lets the two write paths keep each other honest: archiving asks for a status,
+ * and setting one of these statuses offers to archive.
+ *
+ * A ModuleSettings row rather than a constant because the values come from the
+ * `employment_status` FieldOptions list, which the super admin can rename.
+ *
+ * @param {Object=} moduleSettings  Defaults to a fresh read.
+ * @return {Array<string>}
+ */
+function employeeArchiveStatuses_(moduleSettings) {
+  return parseCsvList_(
+    readModuleSetting_(moduleSettings || getModuleSettingsMap(), 'employees', 'archive_statuses'),
+    DEFAULT_ARCHIVE_STATUSES
+  );
+}
+
+/**
+ * True when `status` is one of the archive statuses, compared case-insensitively
+ * so a ModuleSettings row typed as 'resigned' still matches the option 'Resigned'.
+ *
+ * @param {string} status
+ * @param {Object=} moduleSettings
+ * @return {boolean}
+ */
+function isArchiveStatus_(status, moduleSettings) {
+  var needle = normalizeString(status).toLowerCase();
+  if (needle === '') return false;
+
+  var list = employeeArchiveStatuses_(moduleSettings);
+  for (var i = 0; i < list.length; i++) {
+    if (normalizeString(list[i]).toLowerCase() === needle) return true;
+  }
+  return false;
+}
+
+/**
  * Columns the server owns. Accepted in a payload and ignored, rather than
  * rejected as unknown — an honest client that echoes back a full employee
  * object should not be punished for it (Section 3.9).
@@ -563,15 +613,26 @@ function handleUpdateEmployee(session, payload) {
  * Section 2 has no note column, and inventing one is a schema change that goes
  * through Khaled.
  *
+ * `employment_status` is accepted and *is* stored. Archiving used to leave the
+ * status alone, which let a record land in Resigned & Terminated still labelled
+ * Active — invisible from that page, since it renders `worst_state` rather than
+ * the status, and awkward to correct afterwards because an archived row rejects
+ * every update. Writing it here is the only moment both facts are in hand.
+ *
+ * It must be one of `employees.archive_statuses`. A status that does not mean
+ * the person has left is refused rather than stored, because accepting
+ * 'Suspended' here would recreate the same contradiction wearing a different
+ * word.
+ *
  * @param {Object} session
- * @param {Object} payload  {employee_id, reason?}
+ * @param {Object} payload  {employee_id, reason?, employment_status?}
  * @return {GoogleAppsScript.Content.TextOutput}
  */
 function handleArchiveEmployee(session, payload) {
   var denied = requireModuleEdit(session, 'employees');
   if (denied) return denied;
 
-  var unknown = collectUnknownKeys_(payload, ['employee_id', 'reason']);
+  var unknown = collectUnknownKeys_(payload, ['employee_id', 'reason', 'employment_status']);
   if (hasKeys_(unknown)) {
     return errResponse('validation_failed', 'unknown_payload_fields', unknown);
   }
@@ -579,6 +640,22 @@ function handleArchiveEmployee(session, payload) {
   var employeeId = normalizeString(payload && payload.employee_id);
   if (employeeId === '') {
     return errResponse('validation_failed', 'invalid_payload', { employee_id: 'required' });
+  }
+
+  // The status is validated before the row is read: an unknown option is a bad
+  // request whether or not the employee exists.
+  var status = normalizeString(payload && payload.employment_status);
+  if (status !== '') {
+    var canonical = resolveFieldOption('employment_status', status);
+    if (canonical === null) {
+      return errResponse('validation_failed', 'invalid_payload',
+        { employment_status: 'unknown_option' });
+    }
+    if (!isArchiveStatus_(canonical)) {
+      return errResponse('validation_failed', 'status_not_terminal',
+        { employment_status: 'not_terminal' });
+    }
+    status = canonical;
   }
 
   var current = readRowByKey(SHEET_NAMES.EMPLOYEES, 'employee_id', employeeId);
@@ -590,6 +667,9 @@ function handleArchiveEmployee(session, payload) {
   }
 
   // Already archived — return the row as-is rather than re-stamping who did it.
+  // The status is not applied on this path either: an archived row is read-only
+  // (Section 3.5), and letting a repeat archive relabel one would be an edit
+  // through a door that is supposed to be shut.
   if (normalizeBoolean(current.archived)) {
     return okResponse({
       employee: shapeEmployee_(current, deriveEmployee_(current, employeeContext_()))
@@ -597,13 +677,16 @@ function handleArchiveEmployee(session, payload) {
   }
 
   var stampedAt = nowIso();
-  var merged = updateRowByKey(SHEET_NAMES.EMPLOYEES, 'employee_id', employeeId, {
+  var fields = {
     archived: 'TRUE',
     archived_at: stampedAt,
     archived_by: session.user.user_id,
     updated_at: stampedAt,
     updated_by: session.user.user_id
-  });
+  };
+  if (status !== '') fields.employment_status = status;
+
+  var merged = updateRowByKey(SHEET_NAMES.EMPLOYEES, 'employee_id', employeeId, fields);
 
   return okResponse({
     employee: shapeEmployee_(merged, deriveEmployee_(merged, employeeContext_()))
@@ -1909,4 +1992,109 @@ function revertBlankCertsNa() {
     (missing ? ', ' + missing + ' recorded employees no longer on the tab' : ''));
 
   return { reverted: reverted, employees: Object.keys(seen).length, missing: missing };
+}
+
+// ---------------------------------------------------------------------------
+// Audit: employment_status vs archived
+// ---------------------------------------------------------------------------
+
+/**
+ * Lists every employee whose `employment_status` and `archived` flag disagree,
+ * and writes nothing.
+ *
+ * The two columns are independent by design, and until the coupling in
+ * Section 3.5 existed nothing stopped them drifting apart. Both directions are
+ * invisible from the lists that matter:
+ *
+ *   - **left_not_archived** — status says Resigned or Terminated, but the row is
+ *     still on the Field or Safety team list and absent from Resigned &
+ *     Terminated. The verdict already blocks them, so nobody is cleared to work
+ *     who should not be; the roster is simply wrong.
+ *   - **archived_not_left** — the row is filed under Resigned & Terminated but
+ *     still labelled Active. That page renders the certificate roll-up rather
+ *     than the status, so this cannot be seen from it at all.
+ *
+ * Preview only, with no `apply` counterpart, and that is deliberate. The fix
+ * differs per record and is a human judgement: the first group is either "archive
+ * them" or "the status was set too early and should go back", and only somebody
+ * who knows whether the person's last day has passed can say which. A script
+ * guessing would either bury employees who still work here or resurrect ones who
+ * do not — and archiving stamps `archived_by`, which should never carry a name
+ * that made no decision.
+ *
+ * Run it from the Apps Script editor and read the execution log.
+ *
+ * @return {{left_not_archived: Array<Object>, archived_not_left: Array<Object>,
+ *     scanned: number, archive_statuses: Array<string>}}
+ */
+function previewStatusArchiveDrift() {
+  var rows = readAllRows(SHEET_NAMES.EMPLOYEES);
+  var statuses = employeeArchiveStatuses_();
+
+  // Lowercased once rather than re-parsing the setting per row.
+  var terminal = {};
+  for (var s = 0; s < statuses.length; s++) {
+    terminal[normalizeString(statuses[s]).toLowerCase()] = true;
+  }
+
+  var leftNotArchived = [];
+  var archivedNotLeft = [];
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var employeeId = normalizeString(row.employee_id);
+    if (employeeId === '') continue;
+
+    var status = normalizeString(row.employment_status);
+    var archived = normalizeBoolean(row.archived);
+    var hasLeft = terminal[status.toLowerCase()] === true;
+
+    if (hasLeft === archived) continue;
+
+    var entry = {
+      employee_id: employeeId,
+      name: normalizeString(row.name),
+      national_id: normalizeString(row.national_id),
+      team: normalizeString(row.team),
+      employment_status: status,
+      archived: archived
+    };
+
+    if (hasLeft) leftNotArchived.push(entry);
+    else archivedNotLeft.push(entry);
+  }
+
+  console.log('previewStatusArchiveDrift: scanned ' + rows.length + ' employees against [' +
+    statuses.join(', ') + ']');
+
+  console.log('  left but not archived: ' + leftNotArchived.length +
+    ' (on a team list, should probably be archived)');
+  logDriftRows_(leftNotArchived);
+
+  console.log('  archived but not marked as left: ' + archivedNotLeft.length +
+    ' (in Resigned & Terminated, status says otherwise)');
+  logDriftRows_(archivedNotLeft);
+
+  return {
+    left_not_archived: leftNotArchived,
+    archived_not_left: archivedNotLeft,
+    scanned: rows.length,
+    archive_statuses: statuses
+  };
+}
+
+/** @private One log line per drifted row, capped so a bad tab cannot flood the log. */
+function logDriftRows_(entries) {
+  var limit = Math.min(entries.length, 100);
+
+  for (var i = 0; i < limit; i++) {
+    var e = entries[i];
+    console.log('    ' + e.employee_id + '  ' + e.name +
+      '  [' + e.team + ']  status=' + (e.employment_status || '(blank)') +
+      '  archived=' + e.archived);
+  }
+
+  if (entries.length > limit) {
+    console.log('    … and ' + (entries.length - limit) + ' more');
+  }
 }

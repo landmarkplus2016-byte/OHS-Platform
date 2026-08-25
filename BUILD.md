@@ -642,7 +642,7 @@ js/modules/employees/manifest.js with real page functions.
 1. js/modules/employees/dataActions.js:
    Wrappers around api.call for every employee action:
    - listEmployees(params), getEmployee(id), createEmployee(data),
-     updateEmployee(id, updates), archiveEmployee(id, reason),
+     updateEmployee(id, updates), archiveEmployee(id, reason, employmentStatus),
      unarchiveEmployee(id), listRenewalHistory(params),
      bulkImportEmployees(rows, opts), listRdtEligible(team), recordRdtWave(ids, wave, date),
      listFieldOptions()

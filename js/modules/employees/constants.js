@@ -57,6 +57,37 @@ export const LIST_FIELD_KEYS = {
 };
 
 /**
+ * Fallback for `employees.archive_statuses`, matching DEFAULT_ARCHIVE_STATUSES
+ * in Employees.gs. Used only when ModuleSettings has no row — the server owns
+ * the answer and validates against its own copy, so a drift between the two
+ * makes the UI offer a status the server then refuses, never the reverse.
+ *
+ * 'Suspended' is deliberately absent from both: a suspended employee is still
+ * employed and belongs on the team list.
+ */
+export const DEFAULT_ARCHIVE_STATUSES = ['Resigned', 'Terminated'];
+
+/**
+ * True when a status means the person has left, and so should travel with
+ * `archived` (Section 3.5).
+ *
+ * Compared case-insensitively for the same reason the server does it: the
+ * ModuleSettings row is typed by hand and 'resigned' should still match the
+ * FieldOptions value 'Resigned'.
+ *
+ * @param {string} status
+ * @param {Array<string>} [statuses] defaults to DEFAULT_ARCHIVE_STATUSES
+ * @returns {boolean}
+ */
+export function isArchiveStatus(status, statuses) {
+  const needle = String(status || '').trim().toLowerCase();
+  if (!needle) return false;
+
+  return (statuses || DEFAULT_ARCHIVE_STATUSES)
+    .some((s) => String(s).trim().toLowerCase() === needle);
+}
+
+/**
  * The three states an RdtLog row moves between (Section 2).
  *
  * `selected` is a plan, `completed` is a fact, `missed` is a recorded failure

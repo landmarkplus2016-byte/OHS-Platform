@@ -10,6 +10,7 @@
    ========================================================================== */
 
 import { api } from '../../api.js';
+import { DEFAULT_ARCHIVE_STATUSES } from './constants.js';
 
 /* ---------- Reads --------------------------------------------------------- */
 
@@ -167,13 +168,20 @@ export function updateEmployee(employeeId, updates) {
 /**
  * `archive_employee` — the soft delete. Idempotent.
  *
+ * `employmentStatus` is written onto the row alongside the archive flags, so a
+ * record cannot land in Resigned & Terminated still labelled Active. It must be
+ * one of `employees.archive_statuses`; the server refuses anything else, and
+ * ignores it entirely when the employee is already archived.
+ *
  * @param {string} employeeId
  * @param {string} [reason]
+ * @param {string} [employmentStatus]
  * @returns {Promise<{employee: Object}>}
  */
-export function archiveEmployee(employeeId, reason) {
+export function archiveEmployee(employeeId, reason, employmentStatus) {
   const payload = { employee_id: employeeId };
   if (reason) payload.reason = reason;
+  if (employmentStatus) payload.employment_status = employmentStatus;
 
   return api.call('archive_employee', payload);
 }
@@ -353,4 +361,44 @@ export function loadFieldOptions(opts) {
       });
   }
   return optionsPromise;
+}
+
+/** Cached the same way and for the same reason as the field options. */
+let archiveStatusesPromise = null;
+
+/**
+ * The employment statuses that travel with archiving (Section 3.5), read from
+ * `employees.archive_statuses`.
+ *
+ * Falls back to DEFAULT_ARCHIVE_STATUSES when ModuleSettings has no row, which
+ * is the same fallback the server applies — an absent row is the normal state,
+ * not a missing migration.
+ *
+ * Never rejects. A settings read failing is not a reason to block an archive:
+ * the server validates the status it is sent whatever this returned, so the
+ * worst case is a dropdown offering the defaults and the server agreeing.
+ *
+ * @param {{force?: boolean}} [opts]
+ * @returns {Promise<Array<string>>}
+ */
+export function loadArchiveStatuses(opts) {
+  if (!archiveStatusesPromise || (opts && opts.force)) {
+    archiveStatusesPromise = listModuleSettings('employees')
+      .then((data) => {
+        const raw = data && data.settings && data.settings.employees
+          && data.settings.employees.archive_statuses;
+
+        const parsed = String(raw || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        return parsed.length ? parsed : DEFAULT_ARCHIVE_STATUSES.slice();
+      })
+      .catch((err) => {
+        console.warn('[employees] archive statuses read failed, using defaults:', err);
+        return DEFAULT_ARCHIVE_STATUSES.slice();
+      });
+  }
+  return archiveStatusesPromise;
 }

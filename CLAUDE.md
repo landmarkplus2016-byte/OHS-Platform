@@ -519,8 +519,19 @@ Per-module config that would otherwise clutter Config.
 
 - (`employees`, `blocker_certs`, `wah_practical,wah_theoretical,mcu`)
 - (`employees`, `warning_certs`, `fa,ff,ra,ec`)
+- (`employees`, `archive_statuses`, `Resigned,Terminated`)
 - (`equipment`, `blocker_condition`, `third_party_expired_or_latest_wave_failed`)
 - (`equipment`, `wave_fiscal_year_start_month`, `4`)
+
+**`employees.archive_statuses`** names the employment statuses that mean the person has *left*, as opposed to merely being unavailable. It defaults to `Resigned,Terminated` when the row is absent, so no migration is needed to get the behaviour.
+
+`employment_status` and `archived` answer different questions — *why* someone left, and *whether* the platform still lists them — and nothing derives one from the other. That independence is correct and stays, but left unguarded it produced records marked `Resigned` still sitting on the Field Team list, and records archived into Resigned & Terminated still labelled `Active`. Neither is visible from a list: the team pages don't show `archived`, and the resigned page renders `worst_state` rather than the status. This row is what lets the two write paths keep each other honest — `archive_employee` asks for a status from this list, and setting one of these statuses offers to archive (Section 3.5).
+
+`Suspended` is deliberately not in the default. A suspended employee is still employed and belongs on the team list; they are already `blocked` at every site check by the verdict rule in Section 6.2, which is the whole of what suspension should do.
+
+**Finding records that already drifted:** run `previewStatusArchiveDrift()` from the Apps Script editor and read the execution log. It reports both directions — statuses that say the person left on rows still sitting on a team list, and archived rows still labelled `Active` — and writes nothing.
+
+There is no `apply` counterpart on purpose. The fix differs per record and is a judgement only somebody who knows the roster can make: a `Resigned` row that is not archived is either "archive them" or "the status was set before their last day", and a script guessing would either bury employees who still work here or resurrect ones who do not. Archiving also stamps `archived_by`, which must never carry the name of whoever happened to run a migration.
 
 **`equipment.wave_fiscal_year_start_month`** decides which quarter a wave date falls in, and so which slot it fills (Section 2). It defaults to `4` when the row is absent — April, matching `employees.rdt_fiscal_year_start_month`. The two are deliberately separate rows rather than one global: they happen to agree today, and nothing says a change to the drug-testing year should silently renumber every inspection wave.
 
@@ -1063,9 +1074,17 @@ The frontend never re-derives what the server has already derived. Compliance de
 
 **Permission:** `edit employees`.
 
-**Payload:** `{ "employee_id": "...", "reason": "terminated" }` (reason optional, stored in a note).
+**Payload:** `{ "employee_id": "...", "reason": "terminated", "employment_status": "Resigned" }` (reason optional, logged not stored; `employment_status` optional but written).
 
 **Server behavior:** set `archived = TRUE`, `archived_at`, `archived_by`. Does NOT delete assigned equipment — equipment records their `team_leader_id` verbatim and the equipment list will flag "owner archived" as a non-blocking warning.
+
+**`employment_status` is validated against `employees.archive_statuses`** and written onto the row alongside the archive flags. A status that is not on that list is refused with `field_errors: {employment_status: "not_terminal"}` rather than stored — accepting `Suspended` here would recreate the same contradiction wearing a different word. An unknown option is `{employment_status: "unknown_option"}`.
+
+This is the only moment both facts are in hand, which is why it is written here. An already-archived employee is the documented exception: the handler returns the row untouched, status included, because an archived row is read-only everywhere else and letting a repeat archive relabel one would be an edit through a door that is supposed to be shut. Correcting an archived record's status still means unarchive → edit → archive.
+
+**The reverse coupling lives in the frontend**, and deliberately as an offer rather than a rule. When a save sets an employment status on that list, `formPage.js` asks whether to archive too — *after* the save has succeeded, so Escape declines the archive alone and no reading of the dialog loses work. Declining is a legitimate answer: an employee whose resignation is filed but whose last day has not come is exactly that record. What the platform must not do is let the state be reached without anybody being asked.
+
+Archiving stays an explicit act with a reason and an author. A dropdown quietly stamping `archived_by` would be worse than the drift it fixes, which is why neither direction is automatic.
 
 ### `unarchive_employee`
 
@@ -2587,6 +2606,8 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never create an RdtLog row with status `selected` outside the random draw. `generate_rdt_selection` and `swap_rdt_selection` are the only two writers of that state, and both shuffle. A hand-written selection is hand-picking, which turns a testing programme into a targeting one — no audit trail undoes that. Recording a test that already happened is a different act and goes through `create_rdt_entry`, which writes `completed` and refuses everything else.
 - Never re-introduce flat RDT date columns on Employees. RdtLog is the sole source of truth. A single date column cannot hold a second test, a status, a result, or a fiscal year — which is exactly what the 120% programme, the Feb/Mar repeat phase, and the coverage count each need.
 - Never maintain drug-test records in the legacy workbook once they have been imported. Two sources that disagree fail silently: a test typed into the spreadsheet is invisible to the next draw, and one recorded in the platform is missing from the spreadsheet. After the backfill those columns are frozen history.
+- Never derive `archived` from `employment_status`, or the reverse. They answer different questions and both are real: the status is why someone left, `archived` is whether the platform still lists them. The coupling is a prompt on one side and a required field on the other (Section 3.5) — never an assignment, because an assignment would either archive people who have not left yet or stamp `archived_by` against a decision nobody made.
+- Never archive an employee without recording an employment status from `employees.archive_statuses`. A record in Resigned & Terminated still labelled `Active` cannot be spotted from that page — it renders the certificate roll-up, not the status — and cannot be corrected in place, because an archived row rejects every update.
 - Never let a module admin call user-management actions. Super admin only, enforced server-side.
 - Never allow demoting or deactivating the last super admin. Server-side check on every user mutation.
 - Never render an unpaginated list. All list_* actions have server-side paging; frontend respects `page_size`.

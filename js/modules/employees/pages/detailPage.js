@@ -22,8 +22,10 @@ import {
   rdtStatusBadge, rdtResultBadge,
 } from '../../../components/badge.js';
 import { toastSuccess, toastError, toast } from '../../../components/toast.js';
-import { confirmDialog } from '../../../components/modal.js';
-import { getEmployee, archiveEmployee, unarchiveEmployee } from '../dataActions.js';
+import { confirmDialog, formDialog } from '../../../components/modal.js';
+import {
+  getEmployee, archiveEmployee, unarchiveEmployee, loadArchiveStatuses,
+} from '../dataActions.js';
 import { openRdtRecordDialog } from '../rdtRecordDialog.js';
 import { invalidateRdt } from './rdtPage.js';
 import { invalidateRdtHistory } from './rdtHistoryPage.js';
@@ -392,35 +394,85 @@ function openCertificate(url) {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
+/**
+ * Archive, asking for the employment status that goes with it.
+ *
+ * The status is required rather than optional because leaving it out is how the
+ * two fields came to disagree: `archived` decides which list someone appears
+ * in, `employment_status` records why they left, and nothing derives one from
+ * the other. Archiving without asking had been landing records in Resigned &
+ * Terminated still labelled Active — invisible on that page, which renders the
+ * certificate roll-up rather than the status, and awkward to fix afterwards
+ * because an archived row rejects every update.
+ *
+ * A formDialog rather than a confirmDialog: there are two fields now, and the
+ * server can still refuse the status, which has to be readable next to the
+ * select rather than in a toast over a dialog that has already closed.
+ */
 async function doArchive(employeeId) {
   const s = pageState();
   if (s.busy) return;
 
-  const answer = await confirmDialog({
+  const statuses = await loadArchiveStatuses();
+
+  await formDialog({
     title: t('emp_archive_title'),
-    message: t('emp_archive_message'),
     confirmLabel: t('emp_archive'),
     danger: true,
-    input: { label: t('emp_archive_reason'), placeholder: t('emp_archive_reason_ph') },
+    bodyHtml: `
+      <p class="modal-intro">${escapeHtml(t('emp_archive_message'))}</p>
+      <div class="field">
+        <label for="archive-status">${escapeHtml(t('emp_archive_status'))}</label>
+        <select id="archive-status">
+          ${statuses.map((status) => `
+            <option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label for="archive-reason">${escapeHtml(t('emp_archive_reason'))}</label>
+        <input id="archive-reason" type="text" autocomplete="off"
+               placeholder="${escapeHtml(t('emp_archive_reason_ph'))}">
+      </div>`,
+
+    submit: async (root, setError) => {
+      const status = root.querySelector('#archive-status').value;
+      const reason = root.querySelector('#archive-reason').value.trim();
+
+      try {
+        await archiveEmployee(employeeId, reason, status);
+      } catch (err) {
+        console.error('[employees] archive failed:', err);
+        setError(archiveErrorMessage(err));
+        return false;
+      }
+
+      toastSuccess(t('emp_archived_ok'));
+
+      // The team lists no longer contain this employee — drop their cached
+      // pages so they refetch rather than showing a row that is gone.
+      delete UI.employeeList;
+      invalidate();
+      return true;
+    },
   });
-  if (!answer) return;
 
-  s.busy = true;
-  try {
-    await archiveEmployee(employeeId, answer.value);
-    toastSuccess(t('emp_archived_ok'));
+  render();
+}
 
-    // The team lists no longer contain this employee — drop their cached pages
-    // so they refetch rather than showing a row that is gone.
-    delete UI.employeeList;
-    invalidate();
-  } catch (err) {
-    console.error('[employees] archive failed:', err);
-    toastError(err);
-  } finally {
-    s.busy = false;
-    render();
-  }
+/**
+ * A server rejection turned into a line the admin can act on.
+ *
+ * `not_terminal` is the one worth naming: it means the dropdown offered a status
+ * the `employees.archive_statuses` row does not consider a departure, so the two
+ * have drifted and retrying will not help.
+ */
+function archiveErrorMessage(err) {
+  const fieldErrors = (err && err.field_errors) || {};
+
+  if (fieldErrors.employment_status === 'not_terminal') return t('emp_err_status_not_terminal');
+  if (fieldErrors.employment_status === 'unknown_option') return t('emp_err_unknown_option');
+
+  return t(err && err.code === 'not_found' ? 'err_not_found' : 'err_server_error');
 }
 
 async function doUnarchive(employeeId) {

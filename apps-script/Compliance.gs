@@ -99,7 +99,7 @@ function getComplianceThresholds() {
  * @return {Array<string>}
  */
 function getBlockerCerts(moduleSettings) {
-  return parseCertList_(
+  return parseCsvList_(
     readModuleSetting_(moduleSettings, 'employees', 'blocker_certs'),
     DEFAULT_BLOCKER_CERTS
   );
@@ -113,7 +113,7 @@ function getBlockerCerts(moduleSettings) {
  * @return {Array<string>}
  */
 function getWarningCerts(moduleSettings) {
-  return parseCertList_(
+  return parseCsvList_(
     readModuleSetting_(moduleSettings, 'employees', 'warning_certs'),
     DEFAULT_WARNING_CERTS
   );
@@ -699,8 +699,15 @@ function readModuleSetting_(moduleSettings, module, settingKey) {
   return flat === undefined ? '' : normalizeString(flat);
 }
 
-/** @private Comma-separated cert list → trimmed array, or the default. */
-function parseCertList_(raw, fallback) {
+/**
+ * @private Comma-separated ModuleSettings value → trimmed array, or the default.
+ *
+ * Generic rather than cert-specific: the same one-row-holds-a-list shape backs
+ * `employees.blocker_certs`, `employees.warning_certs` and
+ * `employees.archive_statuses`, and three parsers would drift apart the first
+ * time one of them learned to cope with a trailing comma.
+ */
+function parseCsvList_(raw, fallback) {
   var value = normalizeString(raw);
   if (value === '') return fallback.slice();
 

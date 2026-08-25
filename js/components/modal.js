@@ -142,6 +142,7 @@ export function confirmDialog(options) {
  * @param {string} [options.confirmLabel]
  * @param {string} [options.cancelLabel]
  * @param {boolean} [options.wide]          for forms a 460px card cannot hold
+ * @param {boolean} [options.danger]        styles the confirm button as destructive
  * @param {function(Element): void} [options.bind]
  *        runs once the form is in the DOM — wire dependent fields here
  * @param {function(Element, function(string): void): Promise<boolean>} options.submit
@@ -166,7 +167,7 @@ export function formDialog(options) {
           <button type="button" class="btn btn-ghost" data-modal="cancel">
             ${escapeHtml(opts.cancelLabel || t('cancel'))}
           </button>
-          <button type="button" class="btn btn-primary" data-modal="confirm">
+          <button type="button" class="btn ${opts.danger ? 'btn-danger' : 'btn-primary'}" data-modal="confirm">
             ${escapeHtml(opts.confirmLabel || t('save'))}
           </button>
         </div>
