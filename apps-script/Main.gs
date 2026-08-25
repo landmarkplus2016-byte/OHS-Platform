@@ -177,6 +177,15 @@ var AUTHENTICATED_ACTIONS = {
     return handleVoidInspectionWave(session, payload);
   },
 
+  // The review queue. An officer's wave lands pending and waits for one of
+  // these two; an admin's is approved as it is written.
+  'approve_inspection_wave': function (session, payload) {
+    return handleApproveInspectionWave(session, payload);
+  },
+  'reject_inspection_wave': function (session, payload) {
+    return handleRejectInspectionWave(session, payload);
+  },
+
   // --- Field options (Section 3.7) -----------------------------------------
   'list_field_options': function (session, payload) {
     return handleListFieldOptions(session, payload);

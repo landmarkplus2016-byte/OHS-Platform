@@ -147,9 +147,31 @@ const en = {
   eqp_waves_empty: 'No inspection waves match these filters.',
   eqp_wave_filter_month: 'Month',
   eqp_wave_filter_origin: 'Recorded by',
+  eqp_wave_filter_status: 'Review',
   eqp_wave_show_voided: 'Include voided',
   eqp_wave_n_entries: '{count} wave(s)',
   eqp_wave_export: 'Export',
+
+  // --- Review (Section 6.3) ------------------------------------------------
+  eqp_col_status: 'Review',
+  eqp_wave_off_cycle: 'Off-cycle',
+  eqp_wave_status_pending: 'Awaiting review',
+  eqp_wave_status_approved: 'Approved',
+  eqp_wave_status_rejected: 'Rejected',
+  eqp_wave_status_voided: 'Voided',
+
+  eqp_wave_approve: 'Approve',
+  eqp_wave_approve_title: 'Approve wave {wave}?',
+  eqp_wave_approve_confirm: 'Approve it',
+  eqp_wave_approve_pass_message: 'The pass starts counting and the item can be cleared for use.',
+  eqp_wave_approve_fail_message: 'The item stays blocked, now on a confirmed failed inspection.',
+
+  eqp_wave_reject: 'Reject',
+  eqp_wave_reject_title: 'Reject wave {wave}?',
+  eqp_wave_reject_message: 'The inspection stays on the record and stops counting toward the verdict. The quarter’s wave opens up again for a re-inspection.',
+  eqp_wave_reject_confirm: 'Reject it',
+  eqp_wave_reject_reason: 'Why is it being rejected?',
+  eqp_wave_reject_reason_hint: 'e.g. finding could not be confirmed on site',
   eqp_rejected_banner: 'This item is rejected and is blocked at every site check.',
   eqp_days_left: '{days}d left',
   eqp_days_ago: '{days}d ago',
@@ -201,6 +223,8 @@ const en = {
   reason_third_party_expiring: 'Third-party inspection ends in {days} days',
   reason_third_party_missing: 'No third-party inspection recorded',
   reason_wave_failed: 'Wave {wave} failed on {date}',
+  reason_wave_pending_fail: 'An officer reported a failed inspection on {date}, awaiting review',
+  reason_wave_pending_review: 'An inspection from {date} is waiting to be approved',
   reason_owner_archived: 'Assigned to {name}, who is archived — needs reassignment',
 
   /* ---------- Dashboard (Section 5.5) ---------- */
@@ -341,9 +365,31 @@ const ar = {
   eqp_waves_empty: 'لا توجد موجات فحص تطابق هذه المرشحات.',
   eqp_wave_filter_month: 'الشهر',
   eqp_wave_filter_origin: 'سجّلها',
+  eqp_wave_filter_status: 'المراجعة',
   eqp_wave_show_voided: 'إظهار الملغاة',
   eqp_wave_n_entries: '{count} موجة',
   eqp_wave_export: 'تصدير',
+
+  // --- Review (Section 6.3) ------------------------------------------------
+  eqp_col_status: 'المراجعة',
+  eqp_wave_off_cycle: 'خارج الدورة',
+  eqp_wave_status_pending: 'بانتظار المراجعة',
+  eqp_wave_status_approved: 'معتمدة',
+  eqp_wave_status_rejected: 'مرفوضة',
+  eqp_wave_status_voided: 'ملغاة',
+
+  eqp_wave_approve: 'اعتماد',
+  eqp_wave_approve_title: 'اعتماد الموجة {wave}؟',
+  eqp_wave_approve_confirm: 'اعتمادها',
+  eqp_wave_approve_pass_message: 'يبدأ احتساب النجاح ويمكن اعتماد الصنف للاستخدام.',
+  eqp_wave_approve_fail_message: 'يظل الصنف محظوراً، والآن استناداً إلى فحص راسب مؤكَّد.',
+
+  eqp_wave_reject: 'رفض',
+  eqp_wave_reject_title: 'رفض الموجة {wave}؟',
+  eqp_wave_reject_message: 'يبقى الفحص في السجل ويتوقف احتسابه في الحكم، وتُفتح موجة الربع من جديد لإعادة الفحص.',
+  eqp_wave_reject_confirm: 'رفضها',
+  eqp_wave_reject_reason: 'ما سبب الرفض؟',
+  eqp_wave_reject_reason_hint: 'مثال: تعذّر تأكيد الملاحظة في الموقع',
   eqp_view_team_leader: 'فتح ملف الموظف',
   eqp_rejected_banner: 'هذه المعدة مرفوضة وممنوعة في كل فحص ميداني.',
   eqp_days_left: 'باقي {days} يوم',
@@ -392,6 +438,8 @@ const ar = {
   reason_third_party_expiring: 'ينتهي فحص الجهة الخارجية خلال {days} يوم',
   reason_third_party_missing: 'لا يوجد فحص جهة خارجية مسجل',
   reason_wave_failed: 'رسبت الموجة {wave} بتاريخ {date}',
+  reason_wave_pending_fail: 'أبلغ مسؤول السلامة عن فحص راسب بتاريخ {date}، بانتظار المراجعة',
+  reason_wave_pending_review: 'فحص بتاريخ {date} بانتظار الاعتماد',
   reason_owner_archived: 'مخصصة لـ {name} وهو مؤرشف — تحتاج إعادة تخصيص',
 
   /* ---------- Dashboard (Section 5.5) ---------- */

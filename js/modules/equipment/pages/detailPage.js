@@ -37,9 +37,13 @@ import { invalidateRejectedEquipment } from './rejectedPage.js';
 // Both are hoisted function declarations, so neither is read at module-evaluation
 // time and the cycle resolves — the same shape as the listPage import above.
 import { invalidateEquipmentWaves } from './wavesPage.js';
-import { WAVE_RESULT_LABEL_KEYS, WAVE_ORIGIN_LABEL_KEYS, WAVE_CARD_LIMIT } from '../constants.js';
+import {
+  WAVE_RESULT_LABEL_KEYS, WAVE_ORIGIN_LABEL_KEYS, WAVE_CARD_LIMIT, WAVE_SLOT_OFF_CYCLE,
+} from '../constants.js';
+import { waveApprovalBadge } from '../waveBadge.js';
 import {
   openRecordWaveDialog, openCorrectWaveDialog, openVoidWaveDialog,
+  openApproveWaveDialog, openRejectWaveDialog,
 } from '../waveDialog.js';
 
 /** Page state, keyed by item so returning to a different one refetches. */
@@ -176,6 +180,7 @@ function renderWaves(item, waves, editable) {
             <th>${escapeHtml(t('eqp_col_wave'))}</th>
             <th>${escapeHtml(t('eqp_col_date'))}</th>
             <th>${escapeHtml(t('eqp_col_result'))}</th>
+            <th>${escapeHtml(t('eqp_col_status'))}</th>
             <th>${escapeHtml(t('eqp_col_comments'))}</th>
             <th>${escapeHtml(t('eqp_col_recorded_by'))}</th>
             ${editable ? '<th></th>' : ''}
@@ -186,13 +191,25 @@ function renderWaves(item, waves, editable) {
             const labelKey = WAVE_RESULT_LABEL_KEYS[wave.result];
             const originKey = WAVE_ORIGIN_LABEL_KEYS[wave.origin];
 
+            // Wave 0 is an inspection recorded in the third-party quarter: it
+            // drives the verdict but fills no slot, so it is named not numbered.
+            const slotLabel = String(wave.wave_no) === WAVE_SLOT_OFF_CYCLE
+              ? t('eqp_wave_off_cycle')
+              : t('eqp_wave_n', { wave: wave.wave_no });
+
+            const reviewable = editable && !wave.voided && wave.approval_status === 'pending';
+
             return `
-              <tr class="${wave.voided ? 'row-voided' : ''}">
-                <td>${escapeHtml(t('eqp_wave_n', { wave: wave.wave_no }))}</td>
+              <tr class="${wave.voided || wave.approval_status === 'rejected' ? 'row-voided' : ''}">
+                <td>
+                  ${escapeHtml(slotLabel)}
+                  ${wave.fiscal_year ? `<div class="cell-sub">${escapeHtml(wave.fiscal_year)}</div>` : ''}
+                </td>
                 <td>${escapeHtml(fmtDate(wave.wave_date))}</td>
                 <td>${labelKey
                   ? statusBadge(t(labelKey), wave.result === 'pass')
                   : `<span class="cell-sub">${escapeHtml(t('eqp_wave_pending'))}</span>`}</td>
+                <td>${waveApprovalBadge(wave)}</td>
                 <td class="cell-sub">
                   ${escapeHtml(wave.comments || EMPTY_MARK)}
                   ${wave.voided
@@ -205,6 +222,11 @@ function renderWaves(item, waves, editable) {
                 </td>
                 ${editable ? `
                   <td class="cell-actions">
+                    ${reviewable ? `
+                      <button type="button" class="btn btn-primary btn-sm" data-action="approve-wave"
+                              data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_approve'))}</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-action="reject-wave"
+                              data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_reject'))}</button>` : ''}
                     ${wave.voided ? '' : `
                       <button type="button" class="btn btn-ghost btn-sm" data-action="correct-wave"
                               data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_correct'))}</button>
@@ -545,6 +567,20 @@ export function bindEquipmentDetailPageEvents(params) {
     btn.addEventListener('click', () => {
       const wave = findWave(btn.dataset.waveId);
       if (wave) runWaveDialog(() => openVoidWaveDialog(wave));
+    });
+  });
+
+  root.querySelectorAll('[data-action="approve-wave"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wave = findWave(btn.dataset.waveId);
+      if (wave) runWaveDialog(() => openApproveWaveDialog(wave));
+    });
+  });
+
+  root.querySelectorAll('[data-action="reject-wave"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wave = findWave(btn.dataset.waveId);
+      if (wave) runWaveDialog(() => openRejectWaveDialog(wave));
     });
   });
 }

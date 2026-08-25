@@ -145,22 +145,42 @@ function renderInspection(equipment) {
 /**
  * One recorded wave: when it ran, how it went, and what the officer wrote.
  *
- * Waves have no derived state of their own — only the most recent completed one
- * feeds the verdict (Section 6.3) — so each row shows its date and result
+ * Waves have no derived state of their own — only the most recent *approved*
+ * one feeds the verdict (Section 6.3) — so each row shows its date and result
  * verbatim.
  *
  * The comment is shown. It is the one thing on this card written by another
  * officer for this one, and "webbing frayed near the D-ring, watch it" is worth
  * more at a tower than any date on the page.
+ *
+ * `stage` distinguishes three things that all look like "not settled yet" and
+ * are not the same, and an officer needs to be able to tell them apart:
+ *
+ *   'queued'   still on this phone, never sent (the outbox)
+ *   'awaiting' with the server, waiting for an admin to review it
+ *   'settled'  approved, and counting
+ *
+ * Only the third has moved the verdict. Saying which is which is the honest
+ * version of a card that would otherwise imply an officer's pass had cleared an
+ * item the moment they tapped Record.
  */
-function waveLine(wave, pending) {
+function waveLine(wave, stage) {
   const resultKey = WAVE_RESULT_LABEL_KEYS[wave.result];
-  const label = pending
-    ? t('off_wave_pending_label')
+
+  // Wave 0 is an inspection recorded in the third-party quarter: it counts, but
+  // it fills no slot, so "Wave 0" would be a number that means nothing.
+  const slot = String(wave.wave_no) === '0'
+    ? t('off_wave_off_cycle')
     : `${t('eqp_col_wave')} ${wave.wave_no}`;
 
+  let label = slot;
+  if (stage === 'queued') label = t('off_wave_pending_label');
+  else if (stage === 'awaiting') label = `${slot} · ${t('off_wave_awaiting_label')}`;
+
+  const unsettled = stage !== 'settled';
+
   return `
-    <div class="cert-line${pending ? ' cert-line-pending' : ''}">
+    <div class="cert-line${unsettled ? ' cert-line-pending' : ''}">
       <div class="cert-line-main">
         <div class="cert-line-name">${escapeHtml(label)}</div>
         <div class="cert-line-date">
@@ -206,15 +226,26 @@ function renderWaves(equipment, pending) {
   }
 
   const lines = [
-    ...queued.map((wave) => waveLine(wave, true)),
-    ...recorded.map((wave) => waveLine(wave, false)),
+    ...queued.map((wave) => waveLine(wave, 'queued')),
+    ...recorded.map((wave) => waveLine(
+      wave, wave.approval_status === 'pending' ? 'awaiting' : 'settled'
+    )),
   ].join('');
 
-  const note = queued.length
-    ? `<div class="cert-line-note">${escapeHtml(t('off_wave_pending_note', { count: queued.length }))}</div>`
-    : '';
+  const awaiting = recorded.filter((wave) => wave.approval_status === 'pending').length;
 
-  return renderPanel(t('eqp_col_wave'), lines + note);
+  const notes = [
+    queued.length
+      ? `<div class="cert-line-note">${escapeHtml(t('off_wave_pending_note', { count: queued.length }))}</div>`
+      : '',
+    // Said separately from the queued note because the fix is different: a
+    // queued wave needs signal, one awaiting review needs an admin.
+    awaiting
+      ? `<div class="cert-line-note">${escapeHtml(t('off_wave_awaiting_note', { count: awaiting }))}</div>`
+      : '',
+  ].join('');
+
+  return renderPanel(t('eqp_col_wave'), lines + notes);
 }
 
 /**

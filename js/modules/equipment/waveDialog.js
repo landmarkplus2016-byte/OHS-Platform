@@ -21,7 +21,10 @@ import { t } from '../../i18n/i18n.js';
 import { escapeHtml, todayISO } from '../../utils/format.js';
 import { formDialog, confirmDialog } from '../../components/modal.js';
 import { WAVE_RESULTS, WAVE_RESULT_LABEL_KEYS } from './constants.js';
-import { recordInspectionWave, updateInspectionWave, voidInspectionWave } from './dataActions.js';
+import {
+  recordInspectionWave, updateInspectionWave, voidInspectionWave,
+  approveInspectionWave, rejectInspectionWave,
+} from './dataActions.js';
 
 /** Matches the server's WAVE_COMMENTS_MAX, so the field stops before the API does. */
 const COMMENTS_MAX = 500;
@@ -222,4 +225,54 @@ export async function openVoidWaveDialog(wave) {
   if (!answer) return null;
 
   return voidInspectionWave(wave.wave_id, answer.value);
+}
+
+/**
+ * Approve an officer's wave — confirm what they found.
+ *
+ * The confirmation names what changes, because approving is not a formality: a
+ * pending pass is doing nothing to the verdict until this runs, so this is the
+ * moment an item an officer inspected actually goes back into service.
+ *
+ * @param {Object} wave
+ * @returns {Promise<{wave: Object, derived: Object|null}|null>}
+ */
+export async function openApproveWaveDialog(wave) {
+  const answer = await confirmDialog({
+    title: t('eqp_wave_approve_title', { wave: wave.wave_no }),
+    message: t(
+      wave.result === 'fail' ? 'eqp_wave_approve_fail_message' : 'eqp_wave_approve_pass_message'
+    ),
+    confirmLabel: t('eqp_wave_approve_confirm'),
+  });
+  if (!answer) return null;
+
+  return approveInspectionWave(wave.wave_id);
+}
+
+/**
+ * Reject an officer's wave — do not accept the finding.
+ *
+ * The reason is required for the same reason it is on void: a finding that
+ * stopped counting with nothing saying why is a finding that disappeared. The
+ * row stays on the record either way.
+ *
+ * @param {Object} wave
+ * @returns {Promise<{wave: Object, derived: Object|null}|null>}
+ */
+export async function openRejectWaveDialog(wave) {
+  const answer = await confirmDialog({
+    title: t('eqp_wave_reject_title', { wave: wave.wave_no }),
+    message: t('eqp_wave_reject_message'),
+    confirmLabel: t('eqp_wave_reject_confirm'),
+    danger: true,
+    input: {
+      label: t('eqp_wave_reject_reason'),
+      placeholder: t('eqp_wave_reject_reason_hint'),
+      required: true,
+    },
+  });
+  if (!answer) return null;
+
+  return rejectInspectionWave(wave.wave_id, answer.value);
 }

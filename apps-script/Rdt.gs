@@ -168,10 +168,14 @@ function rdtSettings_(moduleSettings) {
 /**
  * The fiscal year an ISO date falls inside.
  *
- * With a start month of 4, everything from 2026-04-01 to 2027-03-31 is
- * "2026-2027". The label is stamped onto a log row once at selection and never
- * recomputed, so a test selected in March and completed in April still counts
- * against the year it was selected in.
+ * The calendar itself lives in Utils.gs as fiscalYearFor_, because inspection
+ * waves need the same April year and two copies of it would disagree the first
+ * time one was corrected. This wrapper stays because every caller in this file
+ * reads as RDT code, and because the *policy* below is RDT's alone:
+ *
+ * The label is stamped onto a log row once at selection and never recomputed,
+ * so a test selected in March and completed in April still counts against the
+ * year it was selected in.
  *
  * @param {string} iso        'YYYY-MM-DD'
  * @param {number} startMonth 1–12
@@ -179,23 +183,7 @@ function rdtSettings_(moduleSettings) {
  *           start_date: string, end_date: string}}
  */
 function rdtFiscalYear_(iso, startMonth) {
-  var year = Number(iso.slice(0, 4));
-  var month = Number(iso.slice(5, 7));
-
-  var startYear = month >= startMonth ? year : year - 1;
-  var endYear = startYear + 1;
-
-  // The last day of the year is the day before the next one begins.
-  var nextStart = new Date(Date.UTC(endYear, startMonth - 1, 1));
-  nextStart.setUTCDate(nextStart.getUTCDate() - 1);
-
-  return {
-    label: startYear + '-' + endYear,
-    start_year: startYear,
-    end_year: endYear,
-    start_date: startYear + '-' + padNumber_(startMonth, 2) + '-01',
-    end_date: nextStart.toISOString().slice(0, 10)
-  };
+  return fiscalYearFor_(iso, startMonth);
 }
 
 /** True when this month draws repeat tests rather than first-time ones. */

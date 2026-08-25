@@ -38,12 +38,17 @@
 /**
  * The tab's columns, in order. setupInspectionWavesTab() writes exactly this row
  * and nothing else decides the layout.
+ *
+ * The approval columns sit at the end rather than beside `result`, because
+ * addWaveApprovalColumns() appends them to a tab that already exists and the two
+ * layouts must converge. Same reasoning as addEmployeeCertFlagColumns().
  */
 var INSPECTION_WAVE_HEADERS = [
-  'wave_id', 'equipment_id', 'wave_no', 'wave_date', 'result', 'comments',
+  'wave_id', 'equipment_id', 'wave_no', 'fiscal_year', 'wave_date', 'result', 'comments',
   'origin', 'client_id',
   'voided', 'voided_at', 'voided_by', 'void_reason',
-  'recorded_at', 'recorded_by', 'updated_at', 'updated_by'
+  'recorded_at', 'recorded_by', 'updated_at', 'updated_by',
+  'approval_status', 'reviewed_at', 'reviewed_by', 'rejection_reason'
 ];
 
 /**
@@ -52,6 +57,42 @@ var INSPECTION_WAVE_HEADERS = [
  * worth being able to answer without a second migration. Mirrors RdtLog.origin.
  */
 var INSPECTION_WAVE_ORIGINS = ['officer', 'admin', 'migration'];
+
+/**
+ * The review states a wave can be in.
+ *
+ * An officer's wave lands `pending` and waits for an admin to confirm what they
+ * found. An admin's lands `approved` — the admin filing it *is* the review, and
+ * a queue that asks you to approve your own typing is a queue nobody reads.
+ *
+ * `rejected` is the review's other outcome and behaves like `voided` for the
+ * verdict: the row stays, and it counts for nothing. The two are kept apart
+ * because they answer different questions — voiding says the inspection should
+ * never have been filed, rejecting says it was filed and the finding was not
+ * accepted. Collapsing them would lose which of those happened.
+ */
+var WAVE_APPROVAL_STATES = ['pending', 'approved', 'rejected'];
+
+/**
+ * The internal wave programme: three inspections a year, one per quarter, with
+ * the fourth quarter given over to the third-party inspection.
+ *
+ * This is why `wave_no` is derived from `wave_date` and never allocated. The
+ * wave number *is* the fiscal quarter — Q1 is wave 1, Q2 wave 2, Q3 wave 3 —
+ * so a re-inspection after a rejected wave carries the same number as the one
+ * it replaces, with nothing to reset and no counter to keep in step.
+ *
+ * A wave dated in Q4 gets WAVE_SLOT_OFF_CYCLE. It records, and it drives the
+ * verdict exactly like any other wave, but it fills no slot: an officer who
+ * finds a frayed harness in February must always be able to write that down,
+ * and refusing the entry would mean the platform's answer to a real hazard was
+ * "not this quarter".
+ */
+var WAVE_SLOT_QUARTERS = [1, 2, 3];
+var WAVE_SLOT_OFF_CYCLE = 0;
+
+/** ModuleSettings fallback when `equipment.wave_fiscal_year_start_month` is unset. */
+var WAVE_FISCAL_START_MONTH_DEFAULT = 4;
 
 /** Free-text ceiling, matching RdtLog.notes. */
 var WAVE_COMMENTS_MAX = 500;
@@ -113,9 +154,16 @@ function clearInspectionWaveCache_() {
 /**
  * {equipment_id → [wave, ...]} for the derivation, newest first.
  *
- * **Voided waves are excluded here**, which is the whole of what voiding means:
- * the row survives in history, and the verdict stops seeing it. Doing the filter
- * once at the source means no derivation path can forget it.
+ * **Voided and rejected waves are excluded here**, which is the whole of what
+ * both states mean: the row survives in history, and the verdict stops seeing
+ * it. Doing the filter once at the source means no derivation path can forget
+ * it.
+ *
+ * Pending waves *are* included, and must be. A pending fail blocks the item —
+ * an officer who finds damaged gear takes it out of service on the spot, and
+ * waiting for an admin to agree before that happens would put the delay in
+ * exactly the wrong place. Which pending waves count for what is decided in
+ * Compliance.gs, not by hiding them here.
  *
  * @return {Object<string, Array<Object>>}
  */
@@ -125,6 +173,7 @@ function wavesByEquipmentId_() {
 
   for (var i = 0; i < waves.length; i++) {
     if (waves[i].voided) continue;
+    if (waves[i].approval_status === 'rejected') continue;
 
     var id = waves[i].equipment_id;
     if (id === '') continue;
@@ -161,16 +210,22 @@ function wavesForEquipment_(equipmentId, includeVoided) {
  */
 function shapeInspectionWave_(row) {
   var waveNo = Number(normalizeString(row.wave_no));
+  var origin = normalizeString(row.origin).toLowerCase() || 'admin';
 
   return {
     wave_id: normalizeString(row.wave_id),
     equipment_id: normalizeString(row.equipment_id),
-    wave_no: isFinite(waveNo) && waveNo > 0 ? Math.floor(waveNo) : 0,
+    wave_no: isFinite(waveNo) && waveNo > 0 ? Math.floor(waveNo) : WAVE_SLOT_OFF_CYCLE,
+    fiscal_year: normalizeString(row.fiscal_year),
     wave_date: normalizeIsoDate(row.wave_date),
     result: normalizeString(row.result).toLowerCase(),
     comments: normalizeString(row.comments),
-    origin: normalizeString(row.origin).toLowerCase() || 'admin',
+    origin: origin,
     client_id: normalizeString(row.client_id),
+    approval_status: normalizeWaveApproval_(row.approval_status, origin),
+    reviewed_at: normalizeIsoDateTime(row.reviewed_at),
+    reviewed_by: normalizeString(row.reviewed_by),
+    rejection_reason: normalizeString(row.rejection_reason),
     voided: normalizeBoolean(row.voided),
     voided_at: normalizeIsoDateTime(row.voided_at),
     voided_by: normalizeString(row.voided_by),
@@ -180,6 +235,29 @@ function shapeInspectionWave_(row) {
     updated_at: normalizeIsoDateTime(row.updated_at),
     updated_by: normalizeString(row.updated_by)
   };
+}
+
+/**
+ * @private
+ * A stored approval value, defaulted by origin when the cell is blank.
+ *
+ * A blank means the row predates the approval columns, and the honest default
+ * depends on who filed it. An admin's wave and a migrated one were already
+ * counting toward the verdict before this feature existed, so reading them as
+ * `approved` preserves exactly what the fleet said yesterday. An officer's was
+ * counting too — but the whole point of the change is that an officer's finding
+ * is confirmed before it stands, and defaulting those to `pending` puts the
+ * handful that exist in front of an admin instead of grandfathering them past
+ * the review they now require.
+ *
+ * @param {*} raw
+ * @param {string} origin  Already lowercased.
+ * @return {string}
+ */
+function normalizeWaveApproval_(raw, origin) {
+  var value = normalizeString(raw).toLowerCase();
+  if (WAVE_APPROVAL_STATES.indexOf(value) !== -1) return value;
+  return origin === 'officer' ? 'pending' : 'approved';
 }
 
 /**
@@ -228,25 +306,44 @@ function nextWaveIdNumber_(waves) {
 }
 
 /**
- * @private
- * The next wave number for one item — its highest so far, plus one.
+ * The month Landmark's inspection year starts on, from ModuleSettings.
  *
- * Counts voided waves too. Wave 4 being void does not make the next one wave 4
- * again; the numbers are a record of how many inspections were filed against
- * this item, not of how many currently count.
+ * Configurable rather than hardcoded for the same reason RDT's is: it is a
+ * calendar policy, not a domain rule. It sits under `equipment` and not in the
+ * global Config because the employee module already owns its own copy — the two
+ * happen to both be April today, and nothing says they must move together.
  *
- * @param {Array<Object>} waves  Every wave on the tab.
- * @param {string} equipmentId
+ * @return {number} 1–12
+ */
+function waveFiscalStartMonth_() {
+  var raw = Number(readModuleSetting_(
+    getModuleSettingsMap(), 'equipment', 'wave_fiscal_year_start_month'
+  ));
+
+  if (!isFinite(raw) || raw < 1 || raw > 12) return WAVE_FISCAL_START_MONTH_DEFAULT;
+  return Math.floor(raw);
+}
+
+/**
+ * The slot a wave date falls in: 1, 2, 3, or WAVE_SLOT_OFF_CYCLE.
+ *
+ * Derived, never allocated. Three internal waves a year, one per quarter, with
+ * Q4 given over to the third-party inspection — so the quarter *is* the wave
+ * number, and an inspection filed to replace a rejected one carries the same
+ * number as long as it happens in the same quarter.
+ *
+ * The consequence worth knowing: an inspection that slips into the next quarter
+ * files under *that* quarter's number, and the slot it was meant to fill stays
+ * empty for that year. That is a true statement about the programme — the wave
+ * was missed — and inventing a number that hid it would make the coverage
+ * figures say the opposite of what happened.
+ *
+ * @param {string} iso  'YYYY-MM-DD'
  * @return {number}
  */
-function nextWaveNumberFor_(waves, equipmentId) {
-  var max = 0;
-
-  for (var i = 0; i < waves.length; i++) {
-    if (waves[i].equipment_id !== equipmentId) continue;
-    if (waves[i].wave_no > max) max = waves[i].wave_no;
-  }
-  return max + 1;
+function waveSlotFor_(iso) {
+  var quarter = fiscalQuarterFor_(iso, waveFiscalStartMonth_());
+  return WAVE_SLOT_QUARTERS.indexOf(quarter) === -1 ? WAVE_SLOT_OFF_CYCLE : quarter;
 }
 
 /**
@@ -359,8 +456,14 @@ function equipmentByIdMap_() {
  * @private
  * Appends one validated wave and returns it, shaped.
  *
- * MUST be called inside a script lock: it reads the highest wave_id and the
- * item's highest wave_no, then writes based on both.
+ * MUST be called inside a script lock: it reads the highest wave_id and writes
+ * based on it.
+ *
+ * `wave_no` needs no lock of its own any more — it comes from the wave's own
+ * date, so two officers filing against the same item in the same second get the
+ * same slot without either read racing the other. That is a real consequence of
+ * the quarter model rather than a coincidence: the number describes *when* the
+ * inspection happened, and nothing about the tab's contents can change that.
  *
  * @param {Object} values     From validateWaveInput_.
  * @param {string} origin     One of INSPECTION_WAVE_ORIGINS.
@@ -372,15 +475,23 @@ function appendInspectionWave_(values, origin, clientId, actingUserId) {
   var waves = readInspectionWaves_();
   var stampedAt = nowIso();
 
+  // An admin filing a wave is the review. An officer's waits for one.
+  var approved = origin !== 'officer';
+
   var row = {
     wave_id: 'IW-' + padNumber_(nextWaveIdNumber_(waves), 6),
     equipment_id: values.equipment_id,
-    wave_no: String(nextWaveNumberFor_(waves, values.equipment_id)),
+    wave_no: String(waveSlotFor_(values.wave_date)),
+    fiscal_year: fiscalYearFor_(values.wave_date, waveFiscalStartMonth_()).label,
     wave_date: values.wave_date,
     result: values.result,
     comments: values.comments,
     origin: origin,
     client_id: clientId,
+    approval_status: approved ? 'approved' : 'pending',
+    reviewed_at: approved ? stampedAt : '',
+    reviewed_by: approved ? actingUserId : '',
+    rejection_reason: '',
     voided: 'FALSE',
     voided_at: '',
     voided_by: '',
@@ -423,8 +534,8 @@ function handleListInspectionWaves(session, payload) {
   if (denied) return denied;
 
   var unknown = collectUnknownKeys_(payload, [
-    'equipment_id', 'month', 'result', 'recorded_by', 'origin',
-    'include_voided', 'search', 'page', 'page_size'
+    'equipment_id', 'month', 'result', 'recorded_by', 'origin', 'approval_status',
+    'fiscal_year', 'wave_no', 'include_voided', 'search', 'page', 'page_size'
   ]);
   if (hasKeys_(unknown)) {
     return errResponse('validation_failed', 'unknown_payload_fields', unknown);
@@ -444,6 +555,20 @@ function handleListInspectionWaves(session, payload) {
   if (origin !== '' && INSPECTION_WAVE_ORIGINS.indexOf(origin) === -1) {
     fieldErrors.origin = 'invalid_value';
   }
+
+  // The filter behind the review queue: `pending` is the admin's inbox.
+  var approval = normalizeString(payload && payload.approval_status).toLowerCase();
+  if (approval !== '' && WAVE_APPROVAL_STATES.indexOf(approval) === -1) {
+    fieldErrors.approval_status = 'invalid_value';
+  }
+
+  var fiscalYear = normalizeString(payload && payload.fiscal_year);
+  if (fiscalYear !== '' && !/^\d{4}-\d{4}$/.test(fiscalYear)) {
+    fieldErrors.fiscal_year = 'invalid_format';
+  }
+
+  var waveNo = normalizeString(payload && payload.wave_no);
+  if (waveNo !== '' && !/^[0-3]$/.test(waveNo)) fieldErrors.wave_no = 'invalid_value';
 
   var page = readPositiveInt_(payload && payload.page, 1);
   if (page === null) fieldErrors.page = 'invalid_number';
@@ -477,6 +602,9 @@ function handleListInspectionWaves(session, payload) {
     if (equipmentId !== '' && wave.equipment_id !== equipmentId) continue;
     if (result !== '' && wave.result !== result) continue;
     if (origin !== '' && wave.origin !== origin) continue;
+    if (approval !== '' && wave.approval_status !== approval) continue;
+    if (fiscalYear !== '' && wave.fiscal_year !== fiscalYear) continue;
+    if (waveNo !== '' && String(wave.wave_no) !== waveNo) continue;
     if (recordedBy !== '' && wave.recorded_by !== recordedBy) continue;
     if (month !== '' && wave.wave_date.slice(0, 7) !== month) continue;
 
@@ -588,7 +716,16 @@ function handleUpdateInspectionWave(session, payload) {
       if (normalizeString(updates.wave_date) === '') errors.wave_date = 'required';
       else if (waveDate === '') errors.wave_date = 'invalid_format';
       else if (waveDate > today) errors.wave_date = 'future_date';
-      else changes.wave_date = waveDate;
+      else {
+        changes.wave_date = waveDate;
+
+        // The slot and the year are functions of the date, so a correction that
+        // moves the date has to move both with it. Leaving them behind would
+        // produce a wave filed in October still numbered as Q1 — the one way
+        // the derived model can go out of step with itself.
+        changes.wave_no = String(waveSlotFor_(waveDate));
+        changes.fiscal_year = fiscalYearFor_(waveDate, waveFiscalStartMonth_()).label;
+      }
     }
 
     if (has_(updates, 'result')) {
@@ -683,6 +820,119 @@ function handleVoidInspectionWave(session, payload) {
       voided_at: stampedAt,
       voided_by: session.user.user_id,
       void_reason: reason,
+      updated_at: stampedAt,
+      updated_by: session.user.user_id
+    });
+    clearInspectionWaveCache_();
+
+    return okResponse(waveWriteResponse_(shapeInspectionWave_(merged)));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * `approve_inspection_wave` — an admin confirms an officer's finding.
+ *
+ * The wave starts counting toward the item's verdict in full: an approved pass
+ * clears it, an approved fail keeps it blocked. Before this, a pending pass was
+ * doing nothing at all (Section 6.3), so approving is the act that lets an
+ * officer's inspection put equipment back into service.
+ *
+ * Idempotent — approving an already-approved wave returns it unchanged rather
+ * than re-stamping who did it, matching void.
+ *
+ * @param {Object} session
+ * @param {Object} payload  {wave_id}
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleApproveInspectionWave(session, payload) {
+  return reviewWave_(session, payload, 'approved');
+}
+
+/**
+ * `reject_inspection_wave` — an admin does not accept an officer's finding.
+ *
+ * The row stays on the tab forever with the reason and the reviewer on it, and
+ * counts for nothing from that moment (wavesByEquipmentId_ drops it at the
+ * source, exactly as it drops a voided one). It also frees the wave's slot: the
+ * quarter has no accepted inspection again, so a re-inspection inside the same
+ * quarter files under the same number.
+ *
+ * `reason` is required, for the reason it is required on void — a finding that
+ * stopped counting with nothing saying why is a finding that disappeared.
+ *
+ * @param {Object} session
+ * @param {Object} payload  {wave_id, reason}
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function handleRejectInspectionWave(session, payload) {
+  return reviewWave_(session, payload, 'rejected');
+}
+
+/**
+ * @private
+ * The body both review actions share.
+ *
+ * @param {Object} session
+ * @param {Object} payload
+ * @param {string} decision  'approved' | 'rejected'
+ * @return {GoogleAppsScript.Content.TextOutput}
+ */
+function reviewWave_(session, payload, decision) {
+  var denied = requireModuleEdit(session, 'equipment');
+  if (denied) return denied;
+
+  var rejecting = decision === 'rejected';
+  var allowed = rejecting ? ['wave_id', 'reason'] : ['wave_id'];
+
+  var unknown = collectUnknownKeys_(payload, allowed);
+  if (hasKeys_(unknown)) {
+    return errResponse('validation_failed', 'unknown_payload_fields', unknown);
+  }
+
+  var waveId = normalizeString(payload && payload.wave_id);
+  var reason = normalizeString(payload && payload.reason);
+
+  var fieldErrors = {};
+  if (waveId === '') fieldErrors.wave_id = 'required';
+  if (rejecting) {
+    if (reason === '') fieldErrors.reason = 'required';
+    else if (reason.length > WAVE_COMMENTS_MAX) fieldErrors.reason = 'too_long';
+  }
+  if (hasKeys_(fieldErrors)) {
+    return errResponse('validation_failed', 'invalid_payload', fieldErrors);
+  }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    console.error('review wave (' + decision + '): could not acquire script lock');
+    return errResponse('server_error', 'lock_timeout');
+  }
+
+  try {
+    var found = findWaveRow_(waveId);
+    if (!found) return errResponse('not_found', 'wave_not_found');
+
+    var current = shapeInspectionWave_(found.data);
+
+    // A voided wave is already outside the verdict. Reviewing it would be
+    // deciding about a record that was withdrawn, and the two states would then
+    // both claim to explain why it does not count.
+    if (current.voided) return errResponse('conflict', 'wave_voided');
+
+    if (current.approval_status === decision) {
+      return okResponse(waveWriteResponse_(current));
+    }
+
+    var stampedAt = nowIso();
+    var merged = updateRowAt(SHEET_NAMES.INSPECTION_WAVES, found.row, {
+      approval_status: decision,
+      reviewed_at: stampedAt,
+      reviewed_by: session.user.user_id,
+      // Cleared on approval so a wave rejected and later approved does not keep
+      // a reason that no longer describes it.
+      rejection_reason: rejecting ? reason : '',
       updated_at: stampedAt,
       updated_by: session.user.user_id
     });
@@ -896,6 +1146,9 @@ function shapeWaveForList_(wave, equipmentRow, names) {
   out.voided_by_name = wave.voided_by === ''
     ? ''
     : (names[wave.voided_by] || wave.voided_by);
+  out.reviewed_by_name = wave.reviewed_by === ''
+    ? ''
+    : (names[wave.reviewed_by] || wave.reviewed_by);
 
   out.item = equipmentRow ? normalizeString(equipmentRow.item) : '';
   out.brand = equipmentRow ? normalizeString(equipmentRow.brand) : '';
@@ -986,6 +1239,92 @@ function setupInspectionWavesTab() {
   return { created: true, headers: INSPECTION_WAVE_HEADERS };
 }
 
+/**
+ * One-shot: adds the approval and fiscal-year columns to a tab that already
+ * exists, and backfills every row.
+ *
+ * Run once from the Apps Script editor if the InspectionWaves tab was created
+ * before the review flow existed. Idempotent — a column already present is left
+ * alone, so re-running after a failure is safe. A tab created by
+ * setupInspectionWavesTab() from now on already has all four and needs nothing.
+ *
+ * The backfill is the same judgement shapeInspectionWave_ makes for a blank
+ * cell, written down once: admin and migrated rows read as `approved` because
+ * they were already driving the verdict and nothing about them changed; officer
+ * rows read as `pending`, because an officer's finding now waits for a review
+ * and the few already on the tab should join that queue rather than skip it.
+ *
+ * `wave_no` is recomputed from each row's own date, since the number is now the
+ * fiscal quarter rather than a per-item counter. Rows with no date keep what
+ * they have — there is nothing to derive from.
+ *
+ * @return {{added: Array<string>, rows: number, renumbered: number,
+ *     pending: number}}
+ */
+function addWaveApprovalColumns() {
+  var sheet = getSheet(SHEET_NAMES.INSPECTION_WAVES);
+  var headers = getHeaders(SHEET_NAMES.INSPECTION_WAVES);
+
+  var wanted = ['fiscal_year', 'approval_status', 'reviewed_at', 'reviewed_by', 'rejection_reason'];
+  var added = [];
+
+  for (var i = 0; i < wanted.length; i++) {
+    if (headers.indexOf(wanted[i]) !== -1) continue;
+
+    var col = headers.length + 1;
+    sheet.getRange(1, col, sheet.getMaxRows(), 1).setNumberFormat('@');
+    sheet.getRange(1, col).setValue(wanted[i]).setFontWeight('bold');
+    headers.push(wanted[i]);
+    added.push(wanted[i]);
+  }
+
+  clearSheetCache();
+  clearInspectionWaveCache_();
+
+  // --- Backfill ------------------------------------------------------------
+  var startMonth = waveFiscalStartMonth_();
+  var pairs = readAllRowsWithIndex(SHEET_NAMES.INSPECTION_WAVES);
+  var renumbered = 0;
+  var pending = 0;
+
+  for (var r = 0; r < pairs.length; r++) {
+    var row = pairs[r].data;
+    if (normalizeString(row.wave_id) === '') continue;
+
+    var origin = normalizeString(row.origin).toLowerCase() || 'admin';
+    var date = normalizeIsoDate(row.wave_date);
+    var changes = {};
+
+    if (normalizeString(row.approval_status) === '') {
+      changes.approval_status = origin === 'officer' ? 'pending' : 'approved';
+      if (changes.approval_status === 'pending') pending++;
+    }
+
+    if (date !== '') {
+      if (normalizeString(row.fiscal_year) === '') {
+        changes.fiscal_year = fiscalYearFor_(date, startMonth).label;
+      }
+
+      var slot = String(waveSlotFor_(date));
+      if (normalizeString(row.wave_no) !== slot) {
+        changes.wave_no = slot;
+        renumbered++;
+      }
+    }
+
+    if (hasKeys_(changes)) updateRowAt(SHEET_NAMES.INSPECTION_WAVES, pairs[r].row, changes);
+  }
+
+  clearInspectionWaveCache_();
+
+  console.log('addWaveApprovalColumns: ' + added.length + ' columns added (' +
+    (added.join(', ') || 'none') + '), ' + pairs.length + ' rows scanned, ' +
+    renumbered + ' renumbered to their fiscal quarter, ' +
+    pending + ' officer waves now awaiting review');
+
+  return { added: added, rows: pairs.length, renumbered: renumbered, pending: pending };
+}
+
 // ---------------------------------------------------------------------------
 // Migration — the wave_1/2/3 columns into the log
 // ---------------------------------------------------------------------------
@@ -1045,11 +1384,18 @@ function migrateWaves_(apply) {
   getSheet(SHEET_NAMES.INSPECTION_WAVES);
 
   var existing = readInspectionWaves_();
+
+  // Keyed on the date rather than the old slot number, because the slot is now
+  // derived from the date and the two no longer mean the same thing. What makes
+  // a re-run a no-op is "this item already has an inspection on this day",
+  // which is the honest statement of what a duplicate would be.
   var taken = {};
   for (var e = 0; e < existing.length; e++) {
-    taken[existing[e].equipment_id + '#' + existing[e].wave_no] = true;
+    if (existing[e].wave_date === '') continue;
+    taken[existing[e].equipment_id + '#' + existing[e].wave_date] = true;
   }
 
+  var startMonth = waveFiscalStartMonth_();
   var equipmentRows = readAllRows(SHEET_NAMES.EQUIPMENT);
   var nextId = nextWaveIdNumber_(existing);
 
@@ -1070,7 +1416,7 @@ function migrateWaves_(apply) {
       // An untouched slot is not a wave that happened.
       if (date === '' && result === '') continue;
 
-      if (taken[equipmentId + '#' + waveNo]) {
+      if (date !== '' && taken[equipmentId + '#' + date]) {
         skipped++;
         continue;
       }
@@ -1081,15 +1427,32 @@ function migrateWaves_(apply) {
       // a migration is to carry that across faithfully.
       if (date === '' || result === '') incomplete++;
 
+      // The old column position is discarded, not carried over. `wave_1_date`
+      // meant "the first inspection we did"; the new number means "the quarter
+      // it happened in", and an inspection filed in the old wave-1 column but
+      // dated November is a Q3 wave. Keeping the column's number would put the
+      // migrated history on a different calendar from everything recorded after
+      // it, which is the one thing a migration must not do.
+      var slot = date === '' ? WAVE_SLOT_OFF_CYCLE : waveSlotFor_(date);
+      if (date !== '') taken[equipmentId + '#' + date] = true;
+
       newRows.push({
         wave_id: 'IW-' + padNumber_(nextId, 6),
         equipment_id: equipmentId,
-        wave_no: String(waveNo),
+        wave_no: String(slot),
+        fiscal_year: date === '' ? '' : fiscalYearFor_(date, startMonth).label,
         wave_date: date,
         result: result,
         comments: '',
         origin: 'migration',
         client_id: '',
+        // Migrated waves were already driving the verdict from the Equipment
+        // row before this tab existed. Landing them as `pending` would put
+        // years of settled history into the admin's review queue on day one.
+        approval_status: 'approved',
+        reviewed_at: '',
+        reviewed_by: '',
+        rejection_reason: '',
         voided: 'FALSE',
         voided_at: '',
         voided_by: '',

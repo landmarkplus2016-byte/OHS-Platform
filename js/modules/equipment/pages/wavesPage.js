@@ -29,10 +29,15 @@ import { statusBadge } from '../../../components/badge.js';
 import { toast, toastSuccess, toastError } from '../../../components/toast.js';
 import { exportToExcel, exportBlockReason } from '../../../utils/exportHelpers.js';
 import { listInspectionWaves } from '../dataActions.js';
-import { openCorrectWaveDialog, openVoidWaveDialog } from '../waveDialog.js';
+import {
+  openCorrectWaveDialog, openVoidWaveDialog,
+  openApproveWaveDialog, openRejectWaveDialog,
+} from '../waveDialog.js';
 import {
   WAVE_RESULTS, WAVE_RESULT_LABEL_KEYS, WAVE_ORIGIN_LABEL_KEYS, WAVE_PAGE_SIZE,
+  WAVE_APPROVAL_LABEL_KEYS, WAVE_SLOTS, WAVE_SLOT_OFF_CYCLE,
 } from '../constants.js';
+import { waveApprovalBadge } from '../waveBadge.js';
 import { invalidateEquipmentList } from './listPage.js';
 import { invalidateEquipmentDetail } from './detailPage.js';
 
@@ -46,6 +51,8 @@ function pageState() {
       month: '',
       result: '',
       origin: '',
+      approval: '',
+      waveNo: '',
       includeVoided: false,
       page: 1,
 
@@ -63,7 +70,10 @@ function pageState() {
 
 /** Every filter is applied server-side, so all of them belong in the key. */
 function queryKey(s) {
-  return [s.equipmentId, s.month, s.result, s.origin, s.includeVoided, s.page].join(' ');
+  return [
+    s.equipmentId, s.month, s.result, s.origin, s.approval, s.waveNo,
+    s.includeVoided, s.page,
+  ].join(' ');
 }
 
 /* ---------- Data ---------------------------------------------------------- */
@@ -74,6 +84,8 @@ function filterParams(s) {
   if (s.month) params.month = s.month;
   if (s.result) params.result = s.result;
   if (s.origin) params.origin = s.origin;
+  if (s.approval) params.approval_status = s.approval;
+  if (s.waveNo) params.wave_no = s.waveNo;
   if (s.includeVoided) params.include_voided = true;
   return params;
 }
@@ -173,6 +185,24 @@ function renderFilters(s) {
       </div>
 
       <div class="field">
+        <label for="wv-approval">${escapeHtml(t('eqp_wave_filter_status'))}</label>
+        <select id="wv-approval" data-filter="approval">
+          ${option('', t('filter_all'), s.approval)}
+          ${Object.keys(WAVE_APPROVAL_LABEL_KEYS)
+            .map((v) => option(v, t(WAVE_APPROVAL_LABEL_KEYS[v]), s.approval)).join('')}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="wv-slot">${escapeHtml(t('eqp_col_wave'))}</label>
+        <select id="wv-slot" data-filter="waveNo">
+          ${option('', t('filter_all'), s.waveNo)}
+          ${WAVE_SLOTS.map((v) => option(v, t('eqp_wave_n', { wave: v }), s.waveNo)).join('')}
+          ${option(WAVE_SLOT_OFF_CYCLE, t('eqp_wave_off_cycle'), s.waveNo)}
+        </select>
+      </div>
+
+      <div class="field">
         <label for="wv-voided">
           <input id="wv-voided" type="checkbox" data-filter-check="includeVoided"
                  ${s.includeVoided ? 'checked' : ''}>
@@ -194,8 +224,17 @@ function renderRow(wave, editable, scoped) {
   const originKey = WAVE_ORIGIN_LABEL_KEYS[wave.origin];
   const itemLabel = [wave.item, wave.brand].filter(Boolean).join(' · ');
 
+  // Wave 0 is an inspection recorded in Q4, the third-party quarter. It counts
+  // toward the verdict like any other but fills no slot, so it is labelled
+  // rather than numbered.
+  const slotLabel = String(wave.wave_no) === WAVE_SLOT_OFF_CYCLE
+    ? t('eqp_wave_off_cycle')
+    : t('eqp_wave_n', { wave: wave.wave_no });
+
+  const reviewable = editable && !wave.voided && wave.approval_status === 'pending';
+
   return `
-    <tr class="${wave.voided ? 'row-voided' : ''}">
+    <tr class="${wave.voided || wave.approval_status === 'rejected' ? 'row-voided' : ''}">
       <td>${escapeHtml(fmtDate(wave.wave_date))}</td>
 
       ${scoped ? '' : `
@@ -206,10 +245,16 @@ function renderRow(wave, editable, scoped) {
           <div class="cell-sub">${escapeHtml(wave.serial_no || wave.equipment_id)}</div>
         </td>`}
 
-      <td>${escapeHtml(t('eqp_wave_n', { wave: wave.wave_no }))}</td>
+      <td>
+        ${escapeHtml(slotLabel)}
+        ${wave.fiscal_year ? `<div class="cell-sub">${escapeHtml(wave.fiscal_year)}</div>` : ''}
+      </td>
+
       <td>${labelKey
         ? statusBadge(t(labelKey), wave.result === 'pass')
         : `<span class="cell-sub">${escapeHtml(t('eqp_wave_pending'))}</span>`}</td>
+
+      <td>${waveApprovalBadge(wave)}</td>
 
       <td class="rdt-notes-cell">
         ${escapeHtml(wave.comments || '')}
@@ -225,6 +270,11 @@ function renderRow(wave, editable, scoped) {
 
       ${editable ? `
         <td class="cell-actions">
+          ${reviewable ? `
+            <button type="button" class="btn btn-primary btn-sm" data-action="approve-wave"
+                    data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_approve'))}</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="reject-wave"
+                    data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_reject'))}</button>` : ''}
           ${wave.voided ? '' : `
             <button type="button" class="btn btn-ghost btn-sm" data-action="correct-wave"
                     data-wave-id="${escapeHtml(wave.wave_id)}">${escapeHtml(t('eqp_wave_correct'))}</button>
@@ -266,7 +316,7 @@ export function renderEquipmentWavesPage(params) {
 
   const editable = canEdit(MODULE_NAMES.EQUIPMENT);
   const pages = Math.max(1, Math.ceil(s.data.total_matching / s.data.page_size));
-  const columns = 5 + (scoped ? 0 : 1) + (editable ? 1 : 0);
+  const columns = 6 + (scoped ? 0 : 1) + (editable ? 1 : 0);
 
   return `
     <div class="equipment-waves">
@@ -280,6 +330,7 @@ export function renderEquipmentWavesPage(params) {
             ${scoped ? '' : `<th>${escapeHtml(t('eqp_col_item'))}</th>`}
             <th>${escapeHtml(t('eqp_col_wave'))}</th>
             <th>${escapeHtml(t('eqp_col_result'))}</th>
+            <th>${escapeHtml(t('eqp_col_status'))}</th>
             <th>${escapeHtml(t('eqp_col_comments'))}</th>
             <th>${escapeHtml(t('eqp_col_recorded_by'))}</th>
             ${editable ? '<th></th>' : ''}
@@ -407,6 +458,8 @@ export function bindEquipmentWavesPageEvents(params) {
     s.month = '';
     s.result = '';
     s.origin = '';
+    s.approval = '';
+    s.waveNo = '';
     s.includeVoided = false;
     s.page = 1;
     s.status = 'idle';
@@ -456,6 +509,20 @@ export function bindEquipmentWavesPageEvents(params) {
     btn.addEventListener('click', () => {
       const wave = findWave(btn.dataset.waveId);
       if (wave) runWaveDialog(() => openVoidWaveDialog(wave));
+    });
+  });
+
+  root.querySelectorAll('[data-action="approve-wave"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wave = findWave(btn.dataset.waveId);
+      if (wave) runWaveDialog(() => openApproveWaveDialog(wave));
+    });
+  });
+
+  root.querySelectorAll('[data-action="reject-wave"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const wave = findWave(btn.dataset.waveId);
+      if (wave) runWaveDialog(() => openRejectWaveDialog(wave));
     });
   });
 

@@ -81,13 +81,19 @@ const en = {
   off_wave_field_result: 'Result',
   off_wave_field_comments: 'What did you find?',
   off_wave_comments_hint: 'Condition, damage, anything the next inspection should know.',
-  off_wave_verdict_note: 'The verdict above updates once this reaches the server.',
+  // Both halves of the review policy, said plainly, because an officer needs to
+  // know which of the two they are about to do. A fail acts on their word; a
+  // pass waits for an admin.
+  off_wave_verdict_note: 'A fail takes the item out of service as soon as this reaches the server. A pass is checked by an admin before it counts.',
 
   off_wave_saved: 'Inspection recorded.',
   off_wave_queued: 'Saved on this phone — it will upload when you have signal.',
   off_wave_none: 'No inspection recorded yet',
   off_wave_pending_label: 'Waiting to upload',
   off_wave_pending_note: '{count} inspection(s) on this phone are not on the record yet.',
+  off_wave_awaiting_label: 'awaiting approval',
+  off_wave_awaiting_note: '{count} inspection(s) are with an admin for review.',
+  off_wave_off_cycle: 'Extra inspection',
   off_wave_pending_banner: '{count} inspection(s) waiting to upload.',
   off_wave_retry: 'Retry',
   off_wave_flush_sent: '{count} inspection(s) uploaded.',
@@ -167,13 +173,16 @@ const ar = {
   off_wave_field_result: 'النتيجة',
   off_wave_field_comments: 'ماذا رصدت؟',
   off_wave_comments_hint: 'الحالة، أي تلف، وأي شيء يجب أن يعرفه الفحص التالي.',
-  off_wave_verdict_note: 'يتحدث الحكم أعلاه بمجرد وصول هذا الفحص إلى الخادم.',
+  off_wave_verdict_note: 'الرسوب يوقف استخدام الصنف فور وصول الفحص إلى الخادم. أما النجاح فيراجعه المشرف قبل أن يُحتسب.',
 
   off_wave_saved: 'تم تسجيل الفحص.',
   off_wave_queued: 'محفوظ على هذا الهاتف — سيُرفع عند توفر الشبكة.',
   off_wave_none: 'لم يُسجَّل أي فحص بعد',
   off_wave_pending_label: 'في انتظار الرفع',
   off_wave_pending_note: '{count} فحص على هذا الهاتف لم يُسجَّل بعد في النظام.',
+  off_wave_awaiting_label: 'بانتظار الاعتماد',
+  off_wave_awaiting_note: '{count} فحص لدى المشرف للمراجعة.',
+  off_wave_off_cycle: 'فحص إضافي',
   off_wave_pending_banner: '{count} فحص في انتظار الرفع.',
   off_wave_retry: 'إعادة المحاولة',
   off_wave_flush_sent: 'تم رفع {count} فحص.',

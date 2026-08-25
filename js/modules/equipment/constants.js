@@ -48,6 +48,33 @@ export const WAVE_RESULT_LABEL_KEYS = {
 };
 
 /**
+ * Review state → i18n key.
+ *
+ * An officer's wave lands `pending` and waits for an admin to confirm what they
+ * found; an admin's is `approved` as it is written. `rejected` keeps the row on
+ * the record and stops it counting — the same outcome as a void, reached by a
+ * different decision (Section 6.3).
+ */
+export const WAVE_APPROVAL_LABEL_KEYS = {
+  pending: 'eqp_wave_status_pending',
+  approved: 'eqp_wave_status_approved',
+  rejected: 'eqp_wave_status_rejected',
+};
+
+/**
+ * The three internal wave slots, one per quarter of the April fiscal year, plus
+ * the off-cycle bucket for anything recorded in Q4.
+ *
+ * Q4 is the third-party inspection's quarter and has no internal slot, but an
+ * officer who finds damaged gear in February still has to be able to write it
+ * down — so it records as wave 0 and drives the verdict like any other wave
+ * while filling no slot. The server is the authority on this (waveSlotFor_);
+ * these values exist only to label the filter.
+ */
+export const WAVE_SLOTS = ['1', '2', '3'];
+export const WAVE_SLOT_OFF_CYCLE = '0';
+
+/**
  * Dropdown columns → the FieldOptions list that fills them.
  *
  * `subcontractor` borrows the employees' list rather than owning one. The

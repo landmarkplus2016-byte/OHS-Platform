@@ -414,7 +414,16 @@ function shapeOfficerEquipment_(row, derived, employeesById, waves) {
       wave_no: list[w].wave_no,
       wave_date: list[w].wave_date,
       result: list[w].result,
-      comments: list[w].comments
+      comments: list[w].comments,
+      // Included, unlike every other review field. An officer who filed an
+      // inspection this morning needs to see that it is still waiting rather
+      // than think it never sent — and a pending pass genuinely has not moved
+      // the verdict yet, so the card would otherwise contradict itself.
+      //
+      // `reviewed_by` and `rejection_reason` stay off the phone: the first is a
+      // `*_by` column (Section 7.6), and the second is an admin explaining a
+      // decision to other admins. A rejected wave never arrives here at all.
+      approval_status: list[w].approval_status
     });
   }
 

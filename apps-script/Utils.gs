@@ -293,6 +293,68 @@ function padNumber_(value, width) {
 }
 
 // ---------------------------------------------------------------------------
+// Fiscal year and quarter
+// ---------------------------------------------------------------------------
+
+/**
+ * The fiscal year an ISO date falls inside.
+ *
+ * With a start month of 4, everything from 2026-04-01 to 2027-03-31 is
+ * "2026-2027".
+ *
+ * Shared ground rather than owned by either module. RDT stamps it on a log row
+ * at selection; inspection waves stamp it at recording, so that "wave 2" means
+ * wave 2 *of a particular year for a particular item*. Both run on Landmark's
+ * April year, and two implementations of the same calendar would disagree the
+ * first time one of them was corrected.
+ *
+ * @param {string} iso        'YYYY-MM-DD'
+ * @param {number} startMonth 1–12
+ * @return {{label: string, start_year: number, end_year: number,
+ *           start_date: string, end_date: string}}
+ */
+function fiscalYearFor_(iso, startMonth) {
+  var year = Number(iso.slice(0, 4));
+  var month = Number(iso.slice(5, 7));
+
+  var startYear = month >= startMonth ? year : year - 1;
+  var endYear = startYear + 1;
+
+  // The last day of the year is the day before the next one begins.
+  var nextStart = new Date(Date.UTC(endYear, startMonth - 1, 1));
+  nextStart.setUTCDate(nextStart.getUTCDate() - 1);
+
+  return {
+    label: startYear + '-' + endYear,
+    start_year: startYear,
+    end_year: endYear,
+    start_date: startYear + '-' + padNumber_(startMonth, 2) + '-01',
+    end_date: nextStart.toISOString().slice(0, 10)
+  };
+}
+
+/**
+ * Which quarter of the fiscal year an ISO date falls in, 1–4.
+ *
+ * With a start month of 4: Apr–Jun is 1, Jul–Sep is 2, Oct–Dec is 3, Jan–Mar
+ * is 4. This is what gives an inspection wave its number — the wave *is* the
+ * quarter, so a re-inspection inside the same quarter carries the same number
+ * as the one it replaces (Section 6.3).
+ *
+ * @param {string} iso        'YYYY-MM-DD'
+ * @param {number} startMonth 1–12
+ * @return {number} 1–4, or 0 when the date is unreadable
+ */
+function fiscalQuarterFor_(iso, startMonth) {
+  var month = Number(String(iso).slice(5, 7));
+  if (!isFinite(month) || month < 1 || month > 12) return 0;
+
+  // Months since the year began, 0-11.
+  var offset = (month - startMonth + 12) % 12;
+  return Math.floor(offset / 3) + 1;
+}
+
+// ---------------------------------------------------------------------------
 // Aggregation helpers
 // ---------------------------------------------------------------------------
 

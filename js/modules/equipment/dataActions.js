@@ -230,6 +230,34 @@ export function voidInspectionWave(waveId, reason) {
   return api.call('void_inspection_wave', { wave_id: waveId, reason });
 }
 
+/**
+ * `approve_inspection_wave` — confirm an officer's finding.
+ *
+ * The wave starts counting in full from here. Until it does, a pending pass
+ * changes nothing about the item's verdict, so this is the act that lets an
+ * officer's inspection put equipment back into service.
+ *
+ * @param {string} waveId
+ * @returns {Promise<{wave: Object, derived: Object|null}>}
+ */
+export function approveInspectionWave(waveId) {
+  return api.call('approve_inspection_wave', { wave_id: waveId });
+}
+
+/**
+ * `reject_inspection_wave` — do not accept an officer's finding.
+ *
+ * The row stays on the record with the reason on it and stops counting, and the
+ * quarter's slot opens up again for a re-inspection.
+ *
+ * @param {string} waveId
+ * @param {string} reason required by the server
+ * @returns {Promise<{wave: Object, derived: Object|null}>}
+ */
+export function rejectInspectionWave(waveId, reason) {
+  return api.call('reject_inspection_wave', { wave_id: waveId, reason });
+}
+
 /* ---------- Writes -------------------------------------------------------- */
 
 /**

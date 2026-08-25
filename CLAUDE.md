@@ -95,7 +95,7 @@ These are the rules that everything downstream depends on. Never break one witho
 
 ### Officer app
 
-16. **Officers write inspection waves, and nothing else.** This is the single exception to what was a blanket read-only rule, and it is scoped as narrowly as it can be: one action (`officer_record_wave`), one tab (`InspectionWaves`), append only. An officer session cannot modify or delete any record, cannot touch the Equipment row, and every row it writes carries `recorded_by` from the session. All other feedback still happens outside the app (WhatsApp, phone). A submitted wave is frozen to the officer — only an admin corrects or voids it.
+16. **Officers write inspection waves, and nothing else.** This is the single exception to what was a blanket read-only rule, and it is scoped as narrowly as it can be: one action (`officer_record_wave`), one tab (`InspectionWaves`), append only. An officer session cannot modify or delete any record, cannot touch the Equipment row, and every row it writes carries `recorded_by` from the session. All other feedback still happens outside the app (WhatsApp, phone). A submitted wave is frozen to the officer — only an admin corrects, voids, approves or rejects it. **An officer's wave lands `pending` and is reviewed by an admin before a pass counts; a fail blocks immediately** (Section 6.3).
 17. **Officer app is cache-first for verdict lookups** — the officer taps an entity, the app shows the cached verdict instantly with no server call. A manual "Refresh" button on the verdict page lets the officer force a fresh fetch when they want confirmation.
 18. **Fail-closed on stale cache** — if the officer's cache is older than `max_stale_hours` (default 72, configurable), lock the app until re-sync succeeds. No override, no supervisor bypass. Officers who work at remote sites without signal must sync before leaving. **Recording a wave is behind the same gate**: an officer working from a snapshot too old to read a verdict from is also too old to be identifying the item in their hands. The lockout redirects every route but sync, and the record button lives on a verdict route.
 19. **Officers never see users, passwords, comments, or audit history** — Apps Script strips these fields before returning any snapshot to an officer session.
@@ -430,12 +430,16 @@ Append-only. One row per internal inspection wave, recorded by an admin at a des
 |---|---|---|
 | `wave_id` | text | Primary key (e.g. `IW-000001`) |
 | `equipment_id` | text | FK to Equipment |
-| `wave_no` | integer | Sequential per item — 1, 2, 3, 4… no ceiling |
+| `wave_no` | integer | **Derived from `wave_date`** — the fiscal quarter. 1, 2, 3, or 0 for off-cycle |
+| `fiscal_year` | text | `"2026-2027"` — the year the slot belongs to |
 | `wave_date` | date | ISO date the inspection happened |
 | `result` | text | `pass` \| `fail` |
 | `comments` | text | Free text, ≤500 chars |
 | `origin` | text | `officer` \| `admin` \| `migration` — how the row came to exist |
 | `client_id` | text | Idempotency key from the officer's outbox. Blank on admin rows |
+| `approval_status` | text | `pending` \| `approved` \| `rejected` — the admin's review |
+| `reviewed_at` / `reviewed_by` | | Server-set when the decision is made |
+| `rejection_reason` | text | Required on reject; cleared on a later approve |
 | `voided` | boolean | Admin correction. A voided wave stays in history and counts for nothing |
 | `voided_at` / `voided_by` / `void_reason` | | Server-set on void; the reason is required |
 | `recorded_at` / `recorded_by` | | Server-set from the clock and the session |
@@ -444,12 +448,36 @@ Append-only. One row per internal inspection wave, recorded by an admin at a des
 **Rules:**
 
 - **Never deleted** (rule 6). `RdtLog` is the platform's one documented exception and this tab is not it. A wave is a record that somebody inspected a piece of safety equipment and wrote down what they found; deleting that is destroying evidence, whatever the reason. A wave recorded in error is *voided*: the row survives, the verdict stops reading it, and the reason sits on the record beside who decided.
-- `wave_no` counts voided waves too. Wave 4 being void does not make the next one wave 4 again — the numbers record how many inspections were filed against the item, not how many currently count.
+
+**`wave_no` is a quarter, not a counter.** Landmark runs three internal waves a year, one per quarter, with Q4 given over to the third-party inspection. So the wave number is derived from `wave_date` and never allocated:
+
+| Quarter | Months | Slot |
+|---|---|---|
+| Q1 | Apr – Jun | wave 1 |
+| Q2 | Jul – Sep | wave 2 |
+| Q3 | Oct – Dec | wave 3 |
+| Q4 | Jan – Mar | third-party inspection — no internal slot |
+
+This is what makes a re-inspection after a rejected wave carry the *same* number as the one it replaces: the number describes when the inspection happened, so there is nothing to reset and no counter to keep in step. It also means `appendInspectionWave_` needs no lock for numbering — two officers filing against one item in the same second get the same slot without either read racing the other.
+
+Two consequences the model produces on purpose:
+
+- **A slipped re-inspection changes slot.** A wave 1 rejected in June and re-done in July files as wave 2, and wave 1 stays unfilled for that item that year. The programme really did miss it, and a number that hid that would make coverage figures say the opposite of what happened.
+- **A Q4 inspection records as wave 0.** It drives the verdict exactly like any other wave and fills no slot. An officer who finds a frayed harness in February has to be able to write that down; "not this quarter" is not an answer the platform is allowed to give about a real hazard. The UI labels it *Off-cycle* rather than showing a zero.
+
+**Every officer wave is reviewed before it counts.** An officer's wave lands `pending`; an admin's lands `approved`, because the admin filing it *is* the review and a queue that asks you to approve your own typing is a queue nobody reads. A migrated wave lands `approved` — those were already driving the verdict from the Equipment row, and landing years of settled history in the review queue on day one would bury the waves that need looking at.
+
+`rejected` and `voided` reach the same outcome — the row stays, and it counts for nothing — and are kept apart because they answer different questions. Voiding says the inspection should never have been filed (wrong item, duplicate). Rejecting says it was filed and the finding was not accepted. Collapsing them would lose which of those happened. Rejecting also frees the quarter's slot; voiding does too, by the same mechanism, since neither is visible to the derivation.
+
+**Adding the approval columns to an existing tab:** run `addWaveApprovalColumns()` once from the Apps Script editor. It appends any of the five missing columns, backfills `approval_status` by origin, stamps `fiscal_year`, and renumbers every dated row to its fiscal quarter. Idempotent. Until it has run the platform still works: a blank `approval_status` reads as `approved` for admin and migrated rows and `pending` for officer rows, which is the same judgement the backfill writes down.
 - **`client_id` is what makes the officer's offline outbox safe.** The dangerous failure is not "the request failed" but "the request succeeded and the answer never arrived", which on a phone at the edge of coverage is routine. The entry is still queued, gets sent again, and without the key a second inspection appears against the same item on the same day that nobody would ever catch. The server refuses a `client_id` it already holds and returns the row it has, which makes a flush repeatable by construction.
 - `origin` records how a row came to exist. Nothing filters on it — every origin drives the verdict alike — and it exists so "did an officer or an admin file this" can be answered later without a second migration. Same reasoning as `RdtLog.origin`.
-- An officer's failed wave blocks the item exactly as an admin's does. There is no author special case in Section 6.3: a failed wave is a failed wave, and the officer who finds a frayed harness takes it out of service on the spot.
+- An officer's failed wave blocks the item exactly as an admin's does, and does so before anybody reviews it: a failed wave is a failed wave, and the officer who finds a frayed harness takes it out of service on the spot. The review in Section 6.3 gates the other direction only — an officer's *pass* waits for an admin before it can clear an item.
+- `origin` and `approval_status` are independent, and neither substitutes for the other. `origin` is who filed the wave and nothing filters on it; `approval_status` is whether it counts. An approved officer wave drives the verdict identically to an admin's.
 
 **Creating the tab and migrating:** run `setupInspectionWavesTab()` once from the Apps Script editor, then `previewWaveMigration()` to read the counts in the execution log, then `migrateWavesToLog()` to write. The migration copies every non-empty `wave_1/2/3` slot across as `origin = migration`, dates `recorded_at` from the wave's own date, and leaves `recorded_by` blank — nothing on the Equipment row ever recorded who filed a wave, and stamping whoever runs the migration would put a name against inspections they never performed. It is idempotent and does not clear the source columns.
+
+**The old column position is discarded, not carried over.** `wave_1_date` meant "the first inspection we did"; `wave_no` now means "the quarter it happened in", so a wave sitting in the old wave-1 column but dated November migrates as wave 3. Keeping the column's number would put migrated history on a different calendar from everything recorded after it, which is the one thing a migration must not do. Idempotency is keyed on (`equipment_id`, `wave_date`) for the same reason — the old slot number is no longer a stable identity.
 
 Until `setupInspectionWavesTab()` has run the platform still works: a missing tab reads as "no item has any waves", the verdict falls back to the third-party date alone, and nobody sees a broken page. Same deliberate degradation as `addEmployeeCertFlagColumns()`.
 
@@ -492,6 +520,9 @@ Per-module config that would otherwise clutter Config.
 - (`employees`, `blocker_certs`, `wah_practical,wah_theoretical,mcu`)
 - (`employees`, `warning_certs`, `fa,ff,ra,ec`)
 - (`equipment`, `blocker_condition`, `third_party_expired_or_latest_wave_failed`)
+- (`equipment`, `wave_fiscal_year_start_month`, `4`)
+
+**`equipment.wave_fiscal_year_start_month`** decides which quarter a wave date falls in, and so which slot it fills (Section 2). It defaults to `4` when the row is absent — April, matching `employees.rdt_fiscal_year_start_month`. The two are deliberately separate rows rather than one global: they happen to agree today, and nothing says a change to the drug-testing year should silently renumber every inspection wave.
 
 **RDT configuration** lives here too, all under the `employees` module. The RDT page is off until `rdt_enabled` is `TRUE`; the page offers a one-click enable that seeds every row below with its default.
 
@@ -1413,6 +1444,9 @@ The internal wave log. One action behind two screens: an item's history when `eq
   "result": "fail",
   "recorded_by": "USR003",
   "origin": "officer",
+  "approval_status": "pending",
+  "fiscal_year": "2026-2027",
+  "wave_no": "2",
   "include_voided": false,
   "search": "harness",
   "page": 1,
@@ -1422,7 +1456,9 @@ The internal wave log. One action behind two screens: an item's history when `eq
 
 All fields optional. Sorted by `wave_date` descending, ties broken by `wave_no` — the same ordering Section 6.3 uses to pick the deciding wave, so the list an admin reads and the wave the verdict chose agree by construction. `page_size` capped at 500. Voided waves are hidden unless asked for.
 
-Every entry carries `item`, `brand`, `serial_no`, `subcontractor` and `recorded_by_name` joined server-side, so neither screen makes a second call to render a table.
+`approval_status: "pending"` is the review queue: the admin's inbox of officer findings waiting on a decision. `wave_no` accepts `0`–`3`, where `0` is the off-cycle bucket.
+
+Every entry carries `item`, `brand`, `serial_no`, `subcontractor`, `recorded_by_name` and `reviewed_by_name` joined server-side, so neither screen makes a second call to render a table.
 
 ### `record_inspection_wave`
 
@@ -1432,7 +1468,7 @@ Every entry carries `item`, `brand`, `serial_no`, `subcontractor` and `recorded_
 
 **Validation:** the item must exist and not be rejected (`not_found` otherwise); `wave_date` ISO and not in the future; `result` is `pass` or `fail`; `comments` ≤ 500.
 
-**Server behavior:** under a script lock, `wave_no` is the item's highest plus one and `wave_id` comes from the highest `IW-######`. `origin = admin`.
+**Server behavior:** under a script lock, `wave_id` comes from the highest `IW-######`. `wave_no` and `fiscal_year` are derived from `wave_date` (Section 2). `origin = admin`, `approval_status = approved` — the admin filing it is the review.
 
 **Success `data`:** `{ "wave": {...}, "derived": {...} }` — the item's freshly derived block rides along so the caller never has to follow a write with a read to find out what it changed.
 
@@ -1444,7 +1480,33 @@ Corrects a wave in place. This is the path an officer does not have: their wave 
 
 **Payload:** `{ "wave_id": "IW-000042", "updates": { "wave_date": "...", "result": "...", "comments": "..." } }`
 
-`equipment_id` and `wave_no` cannot move. A wave filed against the wrong item is not one to be edited across — it is voided, and a fresh one filed, so both facts survive. A voided wave returns `conflict`.
+`equipment_id` cannot move. A wave filed against the wrong item is not one to be edited across — it is voided, and a fresh one filed, so both facts survive. A voided wave returns `conflict`.
+
+`wave_no` cannot be sent either, but for a different reason than it used to be: it is derived. A correction that moves `wave_date` recomputes `wave_no` and `fiscal_year` along with it, because leaving them behind would produce a wave filed in October still numbered as Q1 — the one way the derived model can go out of step with itself.
+
+### `approve_inspection_wave`
+
+**Permission:** `edit equipment`.
+
+**Payload:** `{ "wave_id": "IW-000042" }`
+
+Confirms an officer's finding. The wave starts counting in full: an approved pass clears the item, an approved fail keeps it blocked. Since a pending pass does nothing to the verdict (Section 6.3), this is the act that lets an officer's inspection put equipment back into service.
+
+Idempotent — approving an already-approved wave returns it unchanged rather than re-stamping who did it, matching void. A voided wave returns `conflict`: it is already outside the verdict, and two states both claiming to explain why it does not count is worse than refusing.
+
+**Success `data`:** `{ "wave": {...}, "derived": {...} }`
+
+### `reject_inspection_wave`
+
+**Permission:** `edit equipment`.
+
+**Payload:** `{ "wave_id": "IW-000042", "reason": "finding could not be confirmed on site" }`
+
+`reason` is **required**, for the reason it is required on void: a finding that stopped counting with nothing saying why is a finding that disappeared. The row stays on the tab forever with the reviewer and the reason on it, and the quarter's slot opens up again.
+
+Idempotent in the same way. `rejection_reason` is cleared if the wave is later approved, so a row cannot carry a reason that no longer describes it.
+
+**Success `data`:** `{ "wave": {...}, "derived": {...} }`
 
 ### `void_inspection_wave`
 
@@ -1584,7 +1646,11 @@ The officer files an internal inspection wave from the field. The end of the bla
 2. Under a script lock: if `client_id` is already on the tab, return that row and write nothing
 3. The item must exist and not be rejected → else `not_found`, which the app handles by telling the officer to re-sync
 4. Same validation as `record_inspection_wave`
-5. `origin = officer`, `recorded_by` / `recorded_at` from the session and the clock
+5. `origin = officer`, `approval_status = pending`, `recorded_by` / `recorded_at` from the session and the clock
+
+**The wave lands `pending` and waits for an admin.** This is the one place the two record actions genuinely differ in outcome rather than only in who may call them, and it is the point of the review: an admin confirms what the officer found before a pass is allowed to clear an item. A **fail** blocks the item the moment it reaches the server regardless, so the review never delays taking equipment out of service — only putting it back (Section 6.3).
+
+The officer sees which state their wave is in on the verdict card, and cannot change it. Approving, rejecting and correcting are all admin acts.
 
 **Success `data`:** `{ "wave": {...}, "derived": {...} }` — the derived block so the phone can repaint the verdict on the spot without a full re-sync, and without deriving anything itself (rule 13).
 
@@ -1939,9 +2005,20 @@ Equipment verdict follows the same three-value structure (`cleared` / `warning` 
 
 - `rejected === true`
 - `third_party_inspection_end_date` is set AND < today (expired)
-- The most recent completed wave has `result === 'fail'`. "Most recent completed wave" = the non-voided `InspectionWaves` row for this item with the latest `wave_date` and a `result` set; ties break on the highest `wave_no`.
+- The most recent **approved** completed wave has `result === 'fail'`. "Most recent" = the live `InspectionWaves` row for this item with the latest `wave_date` and a `result` set; ties break on the highest `wave_no`.
+- **Any unresolved (`pending`) wave has `result === 'fail'`**, whoever filed it and whether or not an admin has got to it yet.
 
-**The wave rule is unchanged; only its source moved.** Waves used to be three column pairs on the equipment row and are now rows on their own tab. Two consequences worth stating: voided waves are filtered out before derivation ever sees them, and **an officer's failed wave blocks exactly as an admin's does** — there is no author special case, and none should be added. A failed wave is a failed wave.
+**The review asymmetry is the whole policy, and it is deliberate:**
+
+> **An unresolved fail blocks. Only an approved pass clears.**
+
+An officer can take equipment out of service on their own word, and cannot put it back. A pending fail blocks immediately — an officer who finds a frayed harness at 4pm must not have to wait for an admin to agree before the item comes out of service, because the delay would sit in exactly the wrong place. A pending pass counts for nothing until reviewed, so the item stays on whatever its last *approved* wave and third-party date say; it raises a warning (`reason_wave_pending_review`) rather than silently doing nothing, so the inspection is visible on the item and not only in the queue.
+
+A pending fail blocks regardless of a later approved pass. A fail nobody has ruled on is an open question about the item, and an open question about a harness is answered by not using the harness. Approving or rejecting it is what closes the question, and either one removes it from the blocker.
+
+**What this replaced.** The rule used to read "an officer's failed wave blocks exactly as an admin's does — there is no author special case, and none should be added." Half of that survives and is now the more important half: a *failed* wave blocks whoever filed it, and an approved officer wave is indistinguishable from an admin's in every way the verdict can see. What changed is that an officer's wave is confirmed before a **pass** is allowed to clear an item. That is an author special case, added on purpose, and it is scoped to exactly one direction — it can only ever make the platform more cautious about an item, never less.
+
+Voided and rejected waves are filtered out at the source (`wavesByEquipmentId_`) before the derivation ever sees them, so no derivation path can forget either.
 
 ### Warnings (present if no blockers → `warning`)
 
@@ -2118,7 +2195,9 @@ What officers DO see:
 
 **Wave comments are shown, and that is a deliberate departure from the equipment `comments` column.** That column is admin notes about an asset. A wave comment is one officer's field observation written for the next one — "webbing frayed near the D-ring, watch it" is exactly what the officer holding the harness needs, and withholding it would make the whole feature pointless from the second inspection onward.
 
-Voided waves never reach the phone. They count for nothing, and "an admin cancelled this inspection" is a distinction with no consequence at a tower.
+**`approval_status` is shown too**, and it is the one review field that crosses to the phone. An officer who filed an inspection this morning needs to see that it is with an admin rather than think it never sent — and a pending pass genuinely has not moved the verdict yet, so a card that hid the state would contradict itself. `reviewed_by` stays off the phone under the `*_by` rule, and `rejection_reason` is an admin explaining a decision to other admins.
+
+Voided and rejected waves never reach the phone. They count for nothing, and "an admin cancelled this inspection" is a distinction with no consequence at a tower.
 - Field options for displaying dropdowns
 - Thresholds (so date states are internally consistent if a rare re-render happens)
 
@@ -2340,7 +2419,9 @@ ohs-platform/
 │   ├── modules/
 │   │   ├── employees/               # Employee module (see Section 5.1)
 │   │   ├── equipment/               # Equipment module. Adds waveDialog.js (record /
-│   │   │                            # correct / void) and pages/wavesPage.js (the log,
+│   │   │                            # correct / void / approve / reject), waveBadge.js
+│   │   │                            # (the review-state badge, drawn by two pages) and
+│   │   │                            # pages/wavesPage.js (the log and the review queue,
 │   │   │                            # fleet-wide and scoped to one item)
 │   │   └── officer/                 # Officer app module (search router, sync page,
 │   │                                # staleness check, outbox.js, waveSheet.js)
@@ -2491,8 +2572,12 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never let a queued wave change a verdict on the phone. The server derives; the client displays (rule 13). A wave in the outbox is shown as pending and nothing else.
 - Never submit a wave from the officer app without a `client_id`. A retry with no idempotency key writes a phantom second inspection that nobody will ever catch.
 - Never queue an admin write. The outbox exists for one action from one role, because towers have no signal and desks do.
-- Never re-introduce `wave_N_date` / `wave_N_result` columns on Equipment. `InspectionWaves` is the sole source of truth. Three fixed slots cannot hold a comment, an author, a fourth inspection, or a void — which is exactly what the officer flow, the review queue and the audit trail each need.
-- Never treat an officer-filed wave differently from an admin-filed one in the verdict. A failed wave blocks, whoever filed it.
+- Never re-introduce `wave_N_date` / `wave_N_result` columns on Equipment. `InspectionWaves` is the sole source of truth. Three fixed slots cannot hold a comment, an author, a void, a review, or an off-cycle inspection — which is exactly what the officer flow, the review queue and the audit trail each need. That the *programme* has three waves a year does not mean the *storage* can: the slot is derived from the wave's date, and an item can carry several rows against one slot as inspections are rejected and re-done.
+- Never let a failed wave stop blocking because nobody has reviewed it yet. A pending fail blocks exactly as an approved one does — the review gates clearing an item, never taking it out of service.
+- Never let an officer's wave clear an item before an admin approves it. A pending pass counts for nothing. This is the single author special case in the verdict and it runs one way only: it can make the platform more cautious about an item, never less.
+- Never allocate `wave_no` from a counter. It is the fiscal quarter of `wave_date` and nothing else — that is what makes a re-inspection after a rejection reuse the slot, and what lets two concurrent writes agree without a lock.
+- Never refuse an inspection because the quarter has no slot for it. A Q4 wave records as wave 0 and drives the verdict like any other. An officer who finds damaged gear in February must always be able to write it down.
+- Never hard-delete a rejected wave. Rejecting is a review outcome, not a delete — the row stays with its reason, the same as a void, and for the same reason.
 - Never sort the RDT eligible pool by anything but a random shuffle before slicing to the monthly quota. No "least recently tested first", no alphabetical, no seeding the RNG — the randomness is the point of the programme.
 - Never freeze the RDT eligible pool at the start of the fiscal year. Recompute it at every selection.
 - Never select an employee with an expired or missing MCU for RDT, including as a swap replacement.

@@ -373,7 +373,8 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
  * @param {Object} moduleSettings
  * @param {Object<string, Object>=} employeesById  employee_id → Employees row.
  * @param {Object<string, Array<Object>>=} wavesByEquipmentId  equipment_id →
- *     non-voided waves, newest first.
+ *     live waves (neither voided nor rejected), newest first. Pending waves are
+ *     included: a pending fail blocks, a pending pass does not clear.
  * @return {Object} {third_party_state, verdict, blockers, warnings}
  */
 function deriveEquipmentDerived(
@@ -410,6 +411,7 @@ function deriveEquipmentDerived(
   var equipmentId = normalizeString(row.equipment_id);
   var itemWaves = (wavesByEquipmentId && wavesByEquipmentId[equipmentId]) || [];
 
+  // An approved fail keeps the item out of service.
   var latestWave = findLatestCompletedWave_(itemWaves);
   if (latestWave && latestWave.result === 'fail') {
     blockers.push(reason_('wave_failed', 'reason_wave_failed', {
@@ -418,8 +420,33 @@ function deriveEquipmentDerived(
     }));
   }
 
+  // An unresolved fail does too, whoever filed it and whether or not an admin
+  // has got to it yet. The asymmetry with a pending pass below is the whole of
+  // the review policy: an officer can take equipment out of service on their
+  // own word, and cannot put it back.
+  var pendingFail = findPendingFailedWave_(itemWaves);
+  if (pendingFail) {
+    blockers.push(reason_('wave_pending_fail', 'reason_wave_pending_fail', {
+      wave: pendingFail.wave,
+      date: pendingFail.date
+    }));
+  }
+
   // --- Warnings (only meaningful when nothing blocks) ----------------------
   if (blockers.length === 0) {
+    // A pending pass is invisible to the verdict — findLatestCompletedWave_
+    // never sees it — so the item sits on whatever its last approved wave and
+    // third-party date say. This says so out loud, because otherwise an
+    // inspection an officer filed this morning leaves no trace on the item
+    // until somebody opens the review queue.
+    var pendingPass = findPendingPassedWave_(itemWaves);
+    if (pendingPass) {
+      warnings.push(reason_('wave_pending_review', 'reason_wave_pending_review', {
+        wave: pendingPass.wave,
+        date: pendingPass.date
+      }));
+    }
+
     // Missing proof of inspection is not the same as a failed one, but it is
     // not safe to fully clear either (Section 6.3).
     if (thirdPartyState === CERT_STATES.MISSING) {
@@ -451,23 +478,96 @@ function deriveEquipmentDerived(
 
 /**
  * @private
- * The most recent completed wave — one with both a date and a result.
+ * The most recent *approved* completed wave — one with a date and a result.
  *
  * Section 6.3 defines "most recent" by latest date, ties broken by the highest
- * wave number. Unchanged by the move to a log; only the source is different.
+ * wave number. Unchanged by the move to a log, and unchanged by the review
+ * flow; what changed is which waves are eligible to be it.
  *
- * The caller has already dropped voided waves (wavesByEquipmentId_ in
- * InspectionWaves.gs filters them at the source), so everything reaching here
- * counts. Doing it there rather than here means no derivation path can forget.
+ * Only approved waves are, and that is the load-bearing half of the review
+ * policy. A pending pass is not an item that has been cleared — it is an item
+ * whose clearance nobody has confirmed — so it must not be able to displace the
+ * last wave that *was* confirmed. A pending fail is handled separately and
+ * blocks on its own (findPendingFailedWave_), which is why filtering here is
+ * safe rather than permissive.
+ *
+ * The caller has already dropped voided and rejected waves
+ * (wavesByEquipmentId_ in InspectionWaves.gs filters them at the source), so
+ * everything reaching here is live. Doing it there rather than here means no
+ * derivation path can forget.
  *
  * The list arrives newest-first, but this does not assume it — a scan costs
  * nothing on a handful of waves and the answer stays right if a caller ever
  * hands over an unsorted array.
  *
- * @param {Array<Object>} waves  Non-voided waves for one item.
+ * @param {Array<Object>} waves  Live waves for one item.
  * @return {{wave: number, date: string, result: string}|null}
  */
 function findLatestCompletedWave_(waves) {
+  return findLatestWaveWhere_(waves, function (wave) {
+    return waveApprovalOf_(wave) === 'approved';
+  });
+}
+
+/**
+ * @private
+ * The most recent unresolved failed wave, or null.
+ *
+ * This is what lets an officer take equipment out of service without waiting.
+ * It deliberately does not care whether a later approved pass exists: a fail
+ * nobody has ruled on is an open question about the item, and an open question
+ * about a harness is answered by not using the harness. Approving or rejecting
+ * it is what closes the question, and either one removes it from here.
+ *
+ * @param {Array<Object>} waves
+ * @return {{wave: number, date: string, result: string}|null}
+ */
+function findPendingFailedWave_(waves) {
+  return findLatestWaveWhere_(waves, function (wave) {
+    return waveApprovalOf_(wave) === 'pending' &&
+      normalizeString(wave.result).toLowerCase() === 'fail';
+  });
+}
+
+/**
+ * @private
+ * The most recent pending passed wave, or null. Drives a warning only — a pass
+ * changes nothing until somebody confirms it.
+ *
+ * @param {Array<Object>} waves
+ * @return {{wave: number, date: string, result: string}|null}
+ */
+function findPendingPassedWave_(waves) {
+  return findLatestWaveWhere_(waves, function (wave) {
+    return waveApprovalOf_(wave) === 'pending' &&
+      normalizeString(wave.result).toLowerCase() === 'pass';
+  });
+}
+
+/**
+ * @private
+ * A wave's review state, defaulted the way shapeInspectionWave_ defaults it.
+ *
+ * Derivation runs on shaped waves in every real path, so this is belt and
+ * braces — but deriveEquipmentDerived is also called directly by the test
+ * helpers with hand-built rows, and a blank there must not silently read as
+ * "not approved" and unblock an item.
+ */
+function waveApprovalOf_(wave) {
+  var value = normalizeString(wave.approval_status).toLowerCase();
+  if (value === 'pending' || value === 'approved' || value === 'rejected') return value;
+  return normalizeString(wave.origin).toLowerCase() === 'officer' ? 'pending' : 'approved';
+}
+
+/**
+ * @private
+ * The newest wave with a date and a result that satisfies `predicate`.
+ *
+ * @param {Array<Object>} waves
+ * @param {function(Object): boolean} predicate
+ * @return {{wave: number, date: string, result: string}|null}
+ */
+function findLatestWaveWhere_(waves, predicate) {
   var best = null;
   if (!waves || !waves.length) return null;
 
@@ -475,6 +575,7 @@ function findLatestCompletedWave_(waves) {
     var date = normalizeIsoDate(waves[i].wave_date);
     var result = normalizeString(waves[i].result).toLowerCase();
     if (date === '' || result === '') continue;
+    if (!predicate(waves[i])) continue;
 
     var waveNo = Number(waves[i].wave_no) || 0;
     var candidate = { wave: waveNo, date: date, result: result };
@@ -873,8 +974,13 @@ function testEquipment_(overrides) {
 /**
  * @private
  * A {equipment_id → waves} map for the test item, as wavesByEquipmentId_ would
- * build it. Voided waves are filtered at the source there, so anything passed
- * here counts.
+ * build it. Voided and rejected waves are filtered at the source there, so
+ * anything passed here is live.
+ *
+ * A wave with no `approval_status` reads as approved (waveApprovalOf_ defaults
+ * by origin, and a hand-built row has no origin either). That keeps every test
+ * written before the review flow meaning what it meant — pass an explicit
+ * `approval_status: 'pending'` to exercise the review.
  */
 function testWaves_(waves) {
   var map = {};
