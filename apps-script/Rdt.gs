@@ -73,7 +73,8 @@ var RDT_SETTING_KEYS = {
   YEARLY_PCT: 'rdt_yearly_target_pct',
   HIRE_GRACE: 'rdt_hire_grace_months',
   REPEAT_MONTHS: 'rdt_repeat_months',
-  SAFETY_TITLE: 'rdt_safety_title'
+  SAFETY_TITLE: 'rdt_safety_title',
+  EXCLUDED_TITLES: 'rdt_excluded_titles'
 };
 
 /**
@@ -86,7 +87,14 @@ var RDT_DEFAULTS = {
   yearly_target_pct: 120,
   hire_grace_months: 3,
   repeat_months: [2, 3],
-  safety_title: 'Safety Officer'
+  safety_title: 'Safety Officer',
+
+  // Management titles. They hold no site role — they neither climb nor inspect —
+  // so a random testing programme aimed at the people doing the work has no
+  // business drawing them. Named rather than derived: nothing on the Employees
+  // row says "manager", and inferring it from the word in the title would break
+  // the first time somebody was called a Site Manager.
+  excluded_titles: ['HSE Director', 'HSE Manager', 'Safety Coordinator', 'DC Coordinator']
 };
 
 /** Entries on the dashboard's "recent activity" strip. */
@@ -157,7 +165,17 @@ function rdtSettings_(moduleSettings) {
     yearly_target_pct: intIn(RDT_SETTING_KEYS.YEARLY_PCT, RDT_DEFAULTS.yearly_target_pct, 0, 1000),
     hire_grace_months: intIn(RDT_SETTING_KEYS.HIRE_GRACE, RDT_DEFAULTS.hire_grace_months, 0, 60),
     repeat_months: repeatMonths,
-    safety_title: safetyTitle === '' ? RDT_DEFAULTS.safety_title : safetyTitle
+    safety_title: safetyTitle === '' ? RDT_DEFAULTS.safety_title : safetyTitle,
+
+    // Blank falls back to the default list rather than to no exclusions, the
+    // same way every other list setting on this tab behaves. It also means the
+    // exclusion applies on an installation whose ModuleSettings rows were
+    // seeded before this key existed, which is the case that matters — a
+    // migration that only takes effect once somebody visits Settings is a
+    // migration that has not happened.
+    excluded_titles: parseCsvList_(
+      read(RDT_SETTING_KEYS.EXCLUDED_TITLES), RDT_DEFAULTS.excluded_titles
+    )
   };
 }
 
@@ -230,6 +248,7 @@ function rdtGraceCutoff_(iso, months) {
 function rdtEligibleIgnoringMcu_(rows, iso, settings) {
   var cutoff = rdtGraceCutoff_(iso, settings.hire_grace_months);
   var safetyTitle = settings.safety_title.toLowerCase();
+  var excluded = rdtExcludedTitleSet_(settings);
   var out = [];
 
   for (var i = 0; i < rows.length; i++) {
@@ -238,10 +257,18 @@ function rdtEligibleIgnoringMcu_(rows, iso, settings) {
     if (normalizeBoolean(row.archived)) continue;
     if (normalizeString(row.employment_status).toLowerCase() !== 'active') continue;
 
-    // Field team is in scope at every title. Safety team only at the one title
-    // that does site work — managers, coordinators and directors are out.
+    var title = normalizeString(row.title).toLowerCase();
+
+    // Management titles are out on both teams, not only on safety. The safety
+    // rule below would already catch them where they belong, but the same title
+    // turning up on the field team — a legacy import, a mis-set team — must not
+    // be the difference between a director being drawn and not.
+    if (excluded[title] === true) continue;
+
+    // Field team is in scope at every other title. Safety team only at the one
+    // title that does site work.
     if (normalizeString(row.team).toLowerCase() === 'safety'
-      && normalizeString(row.title).toLowerCase() !== safetyTitle) continue;
+      && title !== safetyTitle) continue;
 
     // No hire date is a data gap, and a data gap cannot prove the grace period
     // has passed. Fail closed.
@@ -251,6 +278,28 @@ function rdtEligibleIgnoringMcu_(rows, iso, settings) {
     out.push(row);
   }
   return out;
+}
+
+/**
+ * @private
+ * {lowercased title → true} for the titles the programme never draws.
+ *
+ * Lowercased once per call rather than per row, and compared exactly: 'HSE
+ * Manager' typed into the setting matches the option 'HSE Manager' whatever its
+ * casing, but never matches 'Assistant HSE Manager'. A substring match would be
+ * the kind of rule that silently grows teeth as the titles list does.
+ *
+ * @param {Object} settings  From rdtSettings_().
+ * @return {Object<string, boolean>}
+ */
+function rdtExcludedTitleSet_(settings) {
+  var set = {};
+  var list = settings.excluded_titles || [];
+  for (var i = 0; i < list.length; i++) {
+    var title = normalizeString(list[i]).toLowerCase();
+    if (title !== '') set[title] = true;
+  }
+  return set;
 }
 
 /**

@@ -110,6 +110,7 @@ I've created a new Google Sheet named 'OHS Platform DB'. Give me:
    - (employees, rdt_hire_grace_months, 3)
    - (employees, rdt_repeat_months, 2,3)
    - (employees, rdt_safety_title, Safety Officer)
+   - (employees, rdt_excluded_titles, HSE Director,HSE Manager,Safety Coordinator,DC Coordinator)
 
 6. For the Users tab, ONE row: the bootstrap super admin, with:
    - user_id: USR001

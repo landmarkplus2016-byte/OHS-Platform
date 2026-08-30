@@ -237,6 +237,8 @@ export const ar = {
   settings_rdt_repeat_invalid: 'أشهر الإعادة يجب أن تكون أرقامًا من 1 إلى 12 مفصولة بفواصل.',
   settings_rdt_safety_title: 'المسمى الوظيفي المشمول في فريق السلامة',
   settings_rdt_safety_title_hint: 'المسمى الوحيد الذي يُختبر من فريق السلامة. أما الفريق الميداني فيُختبر بكل المسميات.',
+  settings_rdt_excluded_titles: 'مسميات لا تدخل السحب',
+  settings_rdt_excluded_titles_hint: 'مسميات مفصولة بفواصل تُستبعد من مجموعة السحب في الفريقين معًا — وظائف إدارية لا تعمل في المواقع. اتركه فارغًا للإبقاء على القائمة الافتراضية.',
   settings_config_saved: 'تم حفظ الإعدادات.',
   settings_err_out_of_range: 'يجب أن تكون قيمة {field} بين {min} و {max}.',
 

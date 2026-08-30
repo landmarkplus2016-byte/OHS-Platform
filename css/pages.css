@@ -46,6 +46,15 @@
   text-align: center;
   letter-spacing: 1px;
 }
+/* The login screen puts the app icon here instead of the wordmark. Sized in CSS
+   as well as on the tag so the layout does not jump before the PNG loads, and
+   height:auto so a future non-square source is not squashed. */
+.login-card .mark img {
+  display: block;
+  margin-inline: auto;
+  width: 72px;
+  height: auto;
+}
 .login-card h1 { margin: 6px 0 4px; font-size: 18px; text-align: center; }
 .login-card .sub {
   color: var(--text2);

@@ -546,6 +546,13 @@ There is no `apply` counterpart on purpose. The fix differs per record and is a 
 | `rdt_hire_grace_months` | `3` | New hires are covered by their hiring medical for this long |
 | `rdt_repeat_months` | `2,3` | Months that draw from already-tested employees instead of untested ones |
 | `rdt_safety_title` | `Safety Officer` | The only safety-team title in scope. Field team is in scope at every title |
+| `rdt_excluded_titles` | `HSE Director,HSE Manager,Safety Coordinator,DC Coordinator` | Titles never drawn, on **either** team |
+
+**`rdt_excluded_titles`** names the management roles the programme skips. They do no site work — they neither climb nor inspect — so a testing programme aimed at the people doing the work has no business drawing them.
+
+It applies to both teams rather than only to safety, which makes it redundant with `rdt_safety_title` for a correctly-filed director and the whole of the rule for one whose `team` says `field` — a legacy import, a mis-set team. Neither column is proof of the other, and a title is what the programme actually reasons about here.
+
+A blank value falls back to the default list rather than to no exclusions, the same way `rdt_repeat_months` and `employees.archive_statuses` behave. That is also what makes the setting take effect on an installation whose ModuleSettings rows were seeded before the key existed: no migration to run, and no "takes effect once somebody opens Settings".
 
 The retired `rdt_year_start` and `rdt_target_pct` keys are superseded by these.
 
@@ -1321,7 +1328,8 @@ An employee is in the RDT pool when **all** of these hold:
 
 - `archived === false`
 - `employment_status === 'Active'`
-- Team is `field` (any title), **or** team is `safety` and `title === rdt_safety_title`
+- `title` is not on `rdt_excluded_titles` — management roles are out on both teams
+- Team is `field` (any other title), **or** team is `safety` and `title === rdt_safety_title`
 - `hired_date` is set and at least `rdt_hire_grace_months` before today — new hires are covered by their hiring medical
 - `cert_mcu_expiry` is set and `>= today`, and the MCU is flagged neither `na` nor `suspended`
 

@@ -53,7 +53,9 @@ export function renderLoginPage(config) {
   return `
     <div class="login-wrap">
       <div class="login-card">
-        <div class="mark">LMP</div>
+        <div class="mark">
+          <img src="icons/icon-192.png" alt="${appName}" width="72" height="72">
+        </div>
         <h1>${appName}</h1>
         <div class="sub">${companyName} — ${t('app_sub')}</div>
 

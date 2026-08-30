@@ -106,6 +106,7 @@ const RDT_SETTING_FIELDS = [
   { key: 'rdt_hire_grace_months', type: 'number', labelKey: 'settings_rdt_hire_grace', min: 0, max: 60 },
   { key: 'rdt_repeat_months', type: 'text', labelKey: 'settings_rdt_repeat_months' },
   { key: 'rdt_safety_title', type: 'text', labelKey: 'settings_rdt_safety_title' },
+  { key: 'rdt_excluded_titles', type: 'text', labelKey: 'settings_rdt_excluded_titles' },
 ];
 
 /** What a missing RDT setting reads as. Mirrors RDT_DEFAULTS in Rdt.gs. */
@@ -117,6 +118,7 @@ const RDT_SETTING_DEFAULTS = {
   rdt_hire_grace_months: '3',
   rdt_repeat_months: '2,3',
   rdt_safety_title: 'Safety Officer',
+  rdt_excluded_titles: 'HSE Director,HSE Manager,Safety Coordinator,DC Coordinator',
 };
 
 /**

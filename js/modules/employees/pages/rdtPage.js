@@ -61,6 +61,7 @@ const RDT_SEED_SETTINGS = {
   rdt_hire_grace_months: '3',
   rdt_repeat_months: '2,3',
   rdt_safety_title: 'Safety Officer',
+  rdt_excluded_titles: 'HSE Director,HSE Manager,Safety Coordinator,DC Coordinator',
 };
 
 function pageState() {
