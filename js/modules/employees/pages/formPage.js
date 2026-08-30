@@ -32,6 +32,7 @@ import {
   archiveEmployee, loadArchiveStatuses,
 } from '../dataActions.js';
 import { invalidateEmployeeDetail } from './detailPage.js';
+import { invalidateResignedList } from './resignedPage.js';
 import {
   TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor, listKeyFor,
   isArchiveStatus,
@@ -445,7 +446,9 @@ async function offerArchive(employeeId, nextStatus) {
     await archiveEmployee(employeeId, answer.value);
     toastSuccess(t('emp_archived_ok'));
 
+    // Both lists change hands here: off a team list, onto Resigned & Terminated.
     delete UI.employeeList;
+    invalidateResignedList();
     invalidateEmployeeDetail();
   } catch (err) {
     console.error('[employees] archive after status change failed:', err);

@@ -76,6 +76,27 @@ export function setRoute(route, params) {
 }
 
 /**
+ * Drops every page's cached data and UI state, without touching the session.
+ *
+ * This is what the topbar's Refresh button runs. Each page caches what it
+ * fetched under its own `UI.<page>` key and its `ensureData` returns early once
+ * that key says `ready`, so nothing refetches until something invalidates it.
+ * A write invalidates the pages it knows it affected — but "knows" is doing the
+ * work there, and a page it forgot goes on showing the world as it was.
+ *
+ * The whole object goes rather than a named list, for the same reason the
+ * button exists: a selective wipe would need updating every time a page is
+ * added, which is the failure it is meant to cover for. That also clears the
+ * current page's search text, filters and page number — refresh means refresh.
+ *
+ * It is deliberately the same wipe clearSession() does, minus the session:
+ * signing out and back in was how admins were reaching for this.
+ */
+export function clearPageCaches() {
+  UI = {};
+}
+
+/**
  * Wipes everything tied to the logged-in user. SCRIPT_URL survives — it is a
  * property of the device, not of the session, so the next user on this machine
  * does not have to paste the Apps Script URL again.

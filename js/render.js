@@ -20,7 +20,7 @@ import { renderLoginPage, bindLoginPageEvents } from './shell/loginPage.js';
 import { renderChangePasswordPage, bindChangePasswordEvents } from './shell/changePasswordPage.js';
 import { renderSidebar, bindSidebarEvents } from './shell/sidebar.js';
 import { renderMobileNav, bindMobileNavEvents } from './shell/mobileNav.js';
-import { renderTopbar } from './shell/topbar.js';
+import { renderTopbar, bindTopbarEvents } from './shell/topbar.js';
 import { renderDashboardPage, bindDashboardPageEvents } from './shell/dashboardPage.js';
 import { renderSettingsPage, bindSettingsPageEvents } from './shell/settingsPage.js';
 import { renderExportPage, bindExportPageEvents } from './shell/exportPage.js';
@@ -269,6 +269,7 @@ export function render() {
 
   bindSidebarEvents();
   bindMobileNavEvents();
+  bindTopbarEvents();
   bindPage(entry);
   hoistPageActions(app);
   restoreFocus(focusSnapshot);

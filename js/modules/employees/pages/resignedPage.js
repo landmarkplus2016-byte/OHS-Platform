@@ -51,6 +51,25 @@ function pageState() {
   return UI.employeeResigned;
 }
 
+/**
+ * Drop this page's cached roster, so it refetches next time it is drawn.
+ *
+ * Archiving and unarchiving are the only things that move a record between a
+ * team list and this one, and both happen on *other* pages — the detail page,
+ * and the form page's post-save offer. Each of those already drops
+ * `UI.employeeList`; without this they left this page's own cache behind, so an
+ * employee archived from their detail page vanished from Field Team correctly
+ * and never appeared under Resigned & Terminated until the session was cleared.
+ *
+ * Exported rather than inlined as `delete UI.employeeResigned` at each call
+ * site, mirroring invalidateEmployeeDetail(): the page that owns a cache key is
+ * the page that should own the invalidation, and a key spelled out in four
+ * files is a key that gets forgotten in the fifth.
+ */
+export function invalidateResignedList() {
+  delete UI.employeeResigned;
+}
+
 /* ---------- Data ---------------------------------------------------------- */
 
 async function ensureData() {

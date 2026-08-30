@@ -2450,7 +2450,8 @@ ohs-platform/
 │   │   ├── sidebar.js               # Renders sidebar from registered manifests + permissions.
 │   │   │                            # Owns visibleNavItems() — the one list of destinations
 │   │   ├── mobileNav.js             # Bottom nav ribbon + "More" sheet, admin shell under 900px
-│   │   ├── topbar.js                # Renders topbar (admin shell only)
+│   │   ├── topbar.js                # Renders topbar (admin shell only). Owns the
+│   │   │                            # Refresh button — the one action it also binds
 │   │   ├── loginPage.js             # Login + change-password screens
 │   │   ├── dashboardPage.js         # Aggregates module dashboard contributions
 │   │   ├── settingsPage.js          # Users tab, Lists tab, Thresholds tab, Data tab
@@ -2613,5 +2614,6 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never let a module admin call user-management actions. Super admin only, enforced server-side.
 - Never allow demoting or deactivating the last super admin. Server-side check on every user mutation.
 - Never render an unpaginated list. All list_* actions have server-side paging; frontend respects `page_size`.
+- Never invalidate only one side of a move. A write that shifts a record between two lists — archive/unarchive, reject/unreject — makes *both* caches wrong: the list it left still holds a row that is gone, and the list it joined is missing the row that arrived. Each page owns its key and exports an invalidator (`invalidateResignedList`, `invalidateRejectedEquipment`); call both. The topbar's Refresh button exists partly to rescue the case where somebody forgets, but a button the admin has to know to press is not the fix.
 - Never rebuild the DOM via `innerHTML` on every keystroke of a search input without restoring focus and caret position on the freshly-rendered input. This is how OHS-DB lost focus on every keystroke. In any page where a text input drives a live filter (search boxes, live-filter dropdowns), the `bind*Events` function must remember which input was focused and restore focus + selection range after the re-render, OR the input must be event-listener-updated in place without a full page re-render.
 - Never add a feature not in this file without confirming with Khaled.

@@ -207,6 +207,28 @@
   align-items: center;
 }
 
+/* The shell's Refresh button. Its glyph is a separate span so only the icon
+   spins while a redraw is in flight, and so the gap between icon and label does
+   not depend on a space character surviving translation. */
+.topbar-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar-refresh .ic {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Below the sidebar breakpoint the label is dropped and the glyph carries the
+   button on its own: eleven destinations already compete for this row on a
+   phone, and Refresh is the one thing here that does not need naming twice. */
+@media (max-width: 640px) {
+  .topbar-refresh { padding-inline: 10px; }
+  .topbar-refresh .ic { font-size: 17px; }
+  .topbar-refresh > :not(.ic) { display: none; }
+}
+
 /* ==========================================================================
    Mobile admin shell — bottom navigation ribbon (js/shell/mobileNav.js)
 

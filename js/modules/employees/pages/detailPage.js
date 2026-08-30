@@ -29,6 +29,7 @@ import {
 import { openRdtRecordDialog } from '../rdtRecordDialog.js';
 import { invalidateRdt } from './rdtPage.js';
 import { invalidateRdtHistory } from './rdtHistoryPage.js';
+import { invalidateResignedList } from './resignedPage.js';
 import {
   TEAMS, CERT_LABEL_KEYS, QUAL_KEYS, QUAL_LABEL_KEYS, certKeysFor,
 } from '../constants.js';
@@ -448,9 +449,11 @@ async function doArchive(employeeId) {
 
       toastSuccess(t('emp_archived_ok'));
 
-      // The team lists no longer contain this employee — drop their cached
-      // pages so they refetch rather than showing a row that is gone.
+      // The employee has moved between two lists, so both caches are now wrong:
+      // the team lists still hold a row that is gone, and Resigned & Terminated
+      // is missing the one that just arrived.
       delete UI.employeeList;
+      invalidateResignedList();
       invalidate();
       return true;
     },
@@ -491,7 +494,9 @@ async function doUnarchive(employeeId) {
     await unarchiveEmployee(employeeId);
     toastSuccess(t('emp_unarchived_ok'));
 
+    // The same move, in reverse — both lists are stale either way.
     delete UI.employeeList;
+    invalidateResignedList();
     invalidate();
   } catch (err) {
     console.error('[employees] unarchive failed:', err);

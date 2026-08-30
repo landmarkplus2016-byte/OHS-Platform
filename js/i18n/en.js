@@ -135,6 +135,8 @@ export const en = {
   view: 'View',
   back: 'Back',
   refresh: 'Refresh',
+  refresh_hint: 'Reload this page from the server. Clears any search or filter you have set.',
+  refreshed_ok: 'Reloaded from the server.',
   search: 'Search',
   saving: 'Saving…',
   actions: 'Actions',
