@@ -24,9 +24,10 @@ import {
 import { toastSuccess, toastError, toast } from '../../../components/toast.js';
 import { confirmDialog, formDialog } from '../../../components/modal.js';
 import {
-  getEmployee, archiveEmployee, unarchiveEmployee, loadArchiveStatuses,
+  getEmployee, archiveEmployee, unarchiveEmployee, loadArchiveStatuses, deleteRdtEntry,
 } from '../dataActions.js';
 import { openRdtRecordDialog } from '../rdtRecordDialog.js';
+import { openRdtEditDialog } from '../rdtEditDialog.js';
 import { invalidateRdt } from './rdtPage.js';
 import { invalidateRdtHistory } from './rdtHistoryPage.js';
 import { invalidateResignedList } from './resignedPage.js';
@@ -169,17 +170,20 @@ function renderHistory(history) {
  *
  * WHAT MAY BE WRITTEN FROM HERE, AND WHAT MAY NOT
  * -----------------------------------------------
- * Exactly one thing: recording a test that happened outside the monthly draw.
- * Everything that touches a *pick* — marking it completed, missed, swapping it,
- * reverting it — stays on the RDT page, where the month's quota and the eligible
- * pool are on screen beside it. A pick completed from a page with sight of
- * neither is how a programme quietly drifts off target, and that reasoning has
- * not changed.
+ * Three things, and one line runs under all of them: a *completed* row is a
+ * record of a test that happened to this person, so recording, correcting and
+ * removing one all belong on their file. An admin who has just typed a wrong
+ * date is looking at this table, and sending them to the RDT page to fix it
+ * would be ceremony for its own sake.
  *
- * An off-cycle test is a different animal. It alters no pick, consumes no quota,
- * and is inherently about one person — so the person's own file is where an
- * admin goes looking for it, and sending them to the RDT page to hunt for a name
- * in a roster picker would be ceremony for its own sake.
+ * Everything that touches a *pick* — completing one, missing it, swapping it,
+ * reverting it — stays on the RDT page, where the month's quota and the
+ * eligible pool are on screen beside it. A pick completed from a page with
+ * sight of neither is how a programme quietly drifts off target, and that
+ * reasoning has not changed. It is why the row buttons below appear on
+ * `completed` rows only: a `selected` or `missed` row is a pick, and deleting
+ * one from here would shrink the month's selection with nothing in view to say
+ * by how much.
  *
  * @param {Array<Object>} history rows from get_employee's `rdt_history`
  * @param {Object} employee the employee whose file this is
@@ -213,6 +217,7 @@ function renderRdtHistory(history, employee, editable) {
             <th>${escapeHtml(t('emp_rdt_col_status'))}</th>
             <th>${escapeHtml(t('emp_rdt_result'))}</th>
             <th>${escapeHtml(t('emp_rdt_notes'))}</th>
+            ${editable ? `<th>${escapeHtml(t('actions'))}</th>` : ''}
           </tr>
         </thead>
         <tbody>
@@ -223,11 +228,40 @@ function renderRdtHistory(history, employee, editable) {
               <td>${rdtStatusBadge(row.status)}</td>
               <td>${rdtResultBadge(row.result) || '—'}</td>
               <td class="rdt-notes-cell">${escapeHtml(row.notes || '')}</td>
+              ${editable ? `<td class="cell-actions">${rdtRowActions(row)}</td>` : ''}
             </tr>`).join('')}
         </tbody>
       </table>
       ${foot}
     </div>`;
+}
+
+/**
+ * The per-row buttons in the Drug Testing table.
+ *
+ * Offered on `completed` rows only, and that line is the same one the section's
+ * header comment draws. A completed row is a record of a test that happened to
+ * this person — correcting a mistyped date on it, or removing one entered
+ * against the wrong file, is about them and nothing else, so their file is the
+ * right place for it.
+ *
+ * A `selected` or `missed` row is a *pick*. Completing, missing, swapping or
+ * reverting one moves this month's quota, and dropping one from here would
+ * shrink the month's selection with neither the quota nor the eligible pool in
+ * sight. Those stay on the RDT page, where both are on screen.
+ *
+ * Delete is the documented exception to rule 6 (Section 2, RdtLog) and the only
+ * hard delete in the platform, which is why it is confirmed and styled as the
+ * destructive act it is.
+ */
+function rdtRowActions(row) {
+  if (row.status !== 'completed') return '';
+
+  return `
+    <button type="button" class="btn btn-ghost btn-sm"
+            data-rdt-edit="${escapeHtml(row.log_id)}">${escapeHtml(t('emp_rdt_edit'))}</button>
+    <button type="button" class="btn btn-danger btn-sm"
+            data-rdt-delete="${escapeHtml(row.log_id)}">${escapeHtml(t('emp_rdt_delete'))}</button>`;
 }
 
 /**
@@ -548,6 +582,95 @@ export function bindEmployeeDetailPageEvents(params) {
 
   const recordTest = root.querySelector('[data-rdt-record]');
   if (recordTest) recordTest.addEventListener('click', () => doRecordTest(employee));
+
+  root.querySelectorAll('[data-rdt-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => doEditTest(btn.dataset.rdtEdit));
+  });
+
+  root.querySelectorAll('[data-rdt-delete]').forEach((btn) => {
+    btn.addEventListener('click', () => doDeleteTest(btn.dataset.rdtDelete));
+  });
+}
+
+/**
+ * @private
+ * The RDT entry on screen under this log_id.
+ *
+ * Read back out of the page's own loaded data rather than passed through the
+ * button: a data attribute carrying a whole entry would have to be serialised
+ * into the markup, and the row is already here.
+ */
+function findRdtEntry(logId) {
+  const s = pageState();
+  const history = (s.data && s.data.rdt_history) || [];
+  return history.find((row) => row.log_id === logId) || null;
+}
+
+/**
+ * Correct a completed test on this employee's file — a mistyped date, the wrong
+ * outcome, a note.
+ *
+ * Shares its dialog with the RDT page (rdtEditDialog.js), so the two screens
+ * cannot disagree about what may be corrected or how it is validated.
+ */
+async function doEditTest(logId) {
+  const entry = findRdtEntry(logId);
+  if (!entry) return;
+
+  const saved = await openRdtEditDialog({ logId: logId, entry: entry });
+  if (!saved) return;
+
+  invalidateRdtCaches();
+  toastSuccess(t('emp_rdt_edited'));
+  render();
+}
+
+/**
+ * Delete one entry from the log.
+ *
+ * This is the platform's only hard delete, permitted here because an RdtLog row
+ * is a plan rather than an entity record (Section 2, RdtLog). It is confirmed
+ * every time, and the confirmation says it cannot be undone — because it cannot.
+ */
+async function doDeleteTest(logId) {
+  const s = pageState();
+  if (s.busy) return;
+
+  const answer = await confirmDialog({
+    title: t('emp_rdt_delete'),
+    message: t('emp_rdt_delete_confirm'),
+    confirmLabel: t('emp_rdt_delete'),
+    danger: true,
+  });
+  if (!answer) return;
+
+  s.busy = true;
+  try {
+    await deleteRdtEntry(logId);
+    invalidateRdtCaches();
+    toastSuccess(t('emp_rdt_deleted'));
+  } catch (err) {
+    console.error('[employees] delete_rdt_entry failed:', err);
+    toastError(err);
+  } finally {
+    s.busy = false;
+    render();
+  }
+}
+
+/**
+ * @private
+ * Every view that counts the same log: this file, the RDT dashboard, its
+ * history page, and the dashboard's coverage card.
+ *
+ * One function because three call sites here need the same four, and three
+ * copies of the list is how one of them ends up short by a cache.
+ */
+function invalidateRdtCaches() {
+  invalidate();
+  invalidateRdt();
+  invalidateRdtHistory();
+  delete UI.employeeDashboard;
 }
 
 /**
@@ -565,11 +688,7 @@ async function doRecordTest(employee) {
   const saved = await openRdtRecordDialog({ employee });
   if (!saved) return;
 
-  invalidate();
-  invalidateRdt();
-  invalidateRdtHistory();
-  delete UI.employeeDashboard;
-
+  invalidateRdtCaches();
   toastSuccess(t('emp_rdt_recorded', { name: employee.name }));
   render();
 }

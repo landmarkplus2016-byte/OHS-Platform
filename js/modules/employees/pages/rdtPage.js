@@ -29,18 +29,18 @@ import { UI } from '../../../state.js';
 import { go } from '../../../router.js';
 import { render } from '../../../render.js';
 import { t, getLanguage } from '../../../i18n/i18n.js';
-import { escapeHtml, fmtDate, todayISO } from '../../../utils/format.js';
+import { escapeHtml, fmtDate } from '../../../utils/format.js';
 import { canEdit, isSuperAdmin } from '../../../utils/permissions.js';
 import { MODULE_NAMES } from '../../../constants/globals.js';
 import { teamBadge, rdtStatusBadge, rdtResultBadge } from '../../../components/badge.js';
 import { toast, toastSuccess, toastError } from '../../../components/toast.js';
-import { confirmDialog, formDialog } from '../../../components/modal.js';
+import { confirmDialog } from '../../../components/modal.js';
 import {
   listRdtOverview, generateRdtSelection, updateRdtEntry,
   swapRdtSelection, deleteRdtEntry, updateModuleSettings,
 } from '../dataActions.js';
-import { RDT_RESULTS } from '../constants.js';
 import { openRdtRecordDialog } from '../rdtRecordDialog.js';
+import { openRdtEditDialog } from '../rdtEditDialog.js';
 import { openRdtImportDialog } from '../rdtImportDialog.js';
 import { invalidateRdtHistory } from './rdtHistoryPage.js';
 
@@ -435,58 +435,14 @@ function findEntry(logId) {
 }
 
 /**
- * Complete and Edit are one dialog: both capture a date, an outcome and a note.
- * Editing pre-fills from the entry; completing starts at today and `pass`.
+ * Complete and Edit are one dialog, and it lives in rdtEditDialog.js because
+ * the employee detail page opens the same one to correct a test on a person's
+ * file. What stays here is the part that is this page's: which caches the write
+ * makes stale, and what to say afterwards.
  */
 async function openCompleteDialog(logId, existing) {
   const isEdit = !!existing;
-  const testDate = (existing && existing.test_date) || todayISO();
-  const result = (existing && existing.result) || 'pass';
-  const notes = (existing && existing.notes) || '';
-
-  const saved = await formDialog({
-    title: t(isEdit ? 'emp_rdt_edit_title' : 'emp_rdt_complete_title'),
-    bodyHtml: `
-      <div class="field">
-        <label for="rdt-test-date">${escapeHtml(t('emp_rdt_test_date'))}</label>
-        <input id="rdt-test-date" type="date" value="${escapeHtml(testDate)}">
-      </div>
-      <div class="field">
-        <label for="rdt-result">${escapeHtml(t('emp_rdt_result'))}</label>
-        <select id="rdt-result">
-          ${RDT_RESULTS.map((value) => `
-            <option value="${value}"${value === result ? ' selected' : ''}>${
-              escapeHtml(t('emp_rdt_result_' + value))
-            }</option>`).join('')}
-        </select>
-      </div>
-      <div class="field">
-        <label for="rdt-notes">${escapeHtml(t('emp_rdt_notes'))}</label>
-        <textarea id="rdt-notes" rows="3" maxlength="500">${escapeHtml(notes)}</textarea>
-      </div>`,
-
-    submit: async (root, setError) => {
-      const date = root.querySelector('#rdt-test-date').value;
-      if (!date) {
-        setError(t('emp_rdt_date_required'));
-        return false;
-      }
-
-      try {
-        await updateRdtEntry(logId, {
-          status: 'completed',
-          test_date: date,
-          result: root.querySelector('#rdt-result').value,
-          notes: root.querySelector('#rdt-notes').value,
-        });
-        return true;
-      } catch (err) {
-        console.error('[employees] update_rdt_entry failed:', err);
-        setError(t('err_server_error'));
-        return false;
-      }
-    },
-  });
+  const saved = await openRdtEditDialog({ logId: logId, entry: existing });
 
   if (!saved) return;
 

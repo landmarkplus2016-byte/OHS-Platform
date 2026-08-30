@@ -228,6 +228,7 @@ const en = {
   emp_rdt_date_future: 'A test cannot be dated in the future.',
   emp_rdt_result_none: 'Not recorded',
   emp_rdt_result_none_hint: 'Leave as “Not recorded” when the outcome was never written down. The test still counts toward coverage.',
+  emp_rdt_result_required: 'Choose an outcome. A completed test cannot be saved without one.',
 
   // Importing past tests
   emp_rdt_import: 'Import past tests',
@@ -533,6 +534,7 @@ const ar = {
   emp_rdt_date_future: 'لا يمكن أن يكون تاريخ الاختبار في المستقبل.',
   emp_rdt_result_none: 'غير مسجَّلة',
   emp_rdt_result_none_hint: 'اترك «غير مسجَّلة» إذا لم تُدوَّن النتيجة أصلًا. يُحتسب الاختبار ضمن التغطية على أي حال.',
+  emp_rdt_result_required: 'اختر النتيجة. لا يمكن حفظ اختبار مكتمل بدون نتيجة.',
 
   // استيراد الاختبارات السابقة
   emp_rdt_import: 'استيراد اختبارات سابقة',
