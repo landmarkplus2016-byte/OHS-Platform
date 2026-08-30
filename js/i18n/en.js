@@ -257,10 +257,6 @@ export const en = {
   settings_rdt_repeat_months: 'Repeat-phase months',
   settings_rdt_repeat_months_hint: 'Comma-separated month numbers that draw from employees already tested this year. Default 2,3 for February and March.',
   settings_rdt_repeat_invalid: 'Repeat months must be comma-separated numbers from 1 to 12.',
-  settings_rdt_safety_title: 'Safety-team title in scope',
-  settings_rdt_safety_title_hint: 'The only safety-team title tested. Field team is tested at every title.',
-  settings_rdt_excluded_titles: 'Titles never drawn',
-  settings_rdt_excluded_titles_hint: 'Comma-separated titles left out of the pool on both teams — management roles that do no site work. Leave blank to keep the default list.',
   settings_config_saved: 'Settings saved.',
   settings_err_out_of_range: '{field} must be between {min} and {max}.',
 

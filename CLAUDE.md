@@ -545,16 +545,7 @@ There is no `apply` counterpart on purpose. The fix differs per record and is a 
 | `rdt_yearly_target_pct` | `120` | Yearly coverage goal |
 | `rdt_hire_grace_months` | `3` | New hires are covered by their hiring medical for this long |
 | `rdt_repeat_months` | `2,3` | Months that draw from already-tested employees instead of untested ones |
-| `rdt_safety_title` | `Safety Officer` | The only safety-team title in scope. Field team is in scope at every title |
-| `rdt_excluded_titles` | `HSE Director,HSE Manager,Safety Coordinator,DC Coordinator` | Titles never drawn, on **either** team |
-
-**`rdt_excluded_titles`** names the management roles the programme skips. They do no site work — they neither climb nor inspect — so a testing programme aimed at the people doing the work has no business drawing them.
-
-It applies to both teams rather than only to safety, which makes it redundant with `rdt_safety_title` for a correctly-filed director and the whole of the rule for one whose `team` says `field` — a legacy import, a mis-set team. Neither column is proof of the other, and a title is what the programme actually reasons about here.
-
-A blank value falls back to the default list rather than to no exclusions, the same way `rdt_repeat_months` and `employees.archive_statuses` behave. That is also what makes the setting take effect on an installation whose ModuleSettings rows were seeded before the key existed: no migration to run, and no "takes effect once somebody opens Settings".
-
-The retired `rdt_year_start` and `rdt_target_pct` keys are superseded by these.
+**There is no title setting.** `rdt_safety_title` is retired along with `rdt_year_start` and `rdt_target_pct`. Scope is decided by the medical, not the job title — see the eligibility rule in Section 3.5. A `rdt_safety_title` row left on the tab from an earlier version is inert; nothing reads it.
 
 ### `Vehicles` and `VehicleHistory`
 
@@ -1154,7 +1145,7 @@ Everything the RDT dashboard draws, in one call: settings, the current fiscal ye
   "enabled": true,
   "settings": {
     "fiscal_year_start_month": 4, "monthly_target_pct": 10, "yearly_target_pct": 120,
-    "hire_grace_months": 3, "repeat_months": [2, 3], "safety_title": "Safety Officer"
+    "hire_grace_months": 3, "repeat_months": [2, 3]
   },
   "fiscal_year": { "label": "2026-2027", "start_date": "2026-04-01", "end_date": "2027-03-31" },
   "month": { "iso": "2026-08", "is_repeat_phase": false, "quota": 14 },
@@ -1328,12 +1319,14 @@ An employee is in the RDT pool when **all** of these hold:
 
 - `archived === false`
 - `employment_status === 'Active'`
-- `title` is not on `rdt_excluded_titles` — management roles are out on both teams
-- Team is `field` (any other title), **or** team is `safety` and `title === rdt_safety_title`
 - `hired_date` is set and at least `rdt_hire_grace_months` before today — new hires are covered by their hiring medical
 - `cert_mcu_expiry` is set and `>= today`, and the MCU is flagged neither `na` nor `suspended`
 
-That last one is a hard exclusion, not a warning: an expired MCU means the employee is in the medical-renewal window, and the renewal itself includes a drug test. Selecting them for a standalone RDT is redundant work. They re-enter the pool automatically the moment a renewed MCU expiry is recorded. The boundary is `>= today`, matching how `deriveCertState` treats it.
+**Team and title are not looked at, and must not be reintroduced.** The medical is the scope rule. An employee holding a live MCU is an employee Landmark sends for medicals, which is the same population the drug programme is aimed at; management who never go to site never take an MCU and so leave the pool on their own, by a fact already on their record. A title list has to be maintained by hand — it is wrong the first time a role is renamed, the first time one is added, and the first time an import sets somebody's `team` wrong. The medical is maintained anyway, because the compliance half of the platform depends on it.
+
+This replaced two rules that both keyed off the job: a `rdt_safety_title` setting naming the one safety-team title in scope, and briefly a list of management titles to exclude on either team.
+
+The MCU rule is a hard exclusion, not a warning, and it runs in both directions. An expired MCU means the employee is in the medical-renewal window, and the renewal itself includes a drug test — selecting them for a standalone RDT is redundant work. They re-enter the pool automatically the moment a renewed MCU expiry is recorded. The boundary is `>= today`, matching how `deriveCertState` treats it.
 
 The two flag columns fail the check whatever the date holds. `na` means the employee has no medical on the platform's books; `suspended` means the one on file is void. Either way there is no live medical to reason from — and testing the date alone would let an N/A medical with a stale future date keep somebody in the pool.
 
@@ -2608,6 +2601,7 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never sort the RDT eligible pool by anything but a random shuffle before slicing to the monthly quota. No "least recently tested first", no alphabetical, no seeding the RNG — the randomness is the point of the programme.
 - Never freeze the RDT eligible pool at the start of the fiscal year. Recompute it at every selection.
 - Never select an employee with an expired or missing MCU for RDT, including as a swap replacement.
+- Never scope the RDT pool by team or job title. The MCU is the scope rule and the only one: whoever Landmark sends for medicals is whoever the programme draws from. A title list is a second roster to maintain, and it is wrong the first time a role is renamed or an import sets a `team` column wrong. The retired `rdt_safety_title` setting is not to come back.
 - Never let Feb/Mar draw an employee who has no `completed` entry this fiscal year — that would book a repeat test for someone who never had a first one.
 - Never let RDT status affect a site-check verdict or a dashboard compliance KPI. An employee overdue for RDT is still `cleared` if their certificates are in order. RDT is HR paperwork, not a safety blocker.
 - Never expose RdtLog or any RDT setting to an officer session.

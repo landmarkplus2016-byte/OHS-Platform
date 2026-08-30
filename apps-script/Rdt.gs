@@ -72,10 +72,15 @@ var RDT_SETTING_KEYS = {
   MONTHLY_PCT: 'rdt_monthly_target_pct',
   YEARLY_PCT: 'rdt_yearly_target_pct',
   HIRE_GRACE: 'rdt_hire_grace_months',
-  REPEAT_MONTHS: 'rdt_repeat_months',
-  SAFETY_TITLE: 'rdt_safety_title',
-  EXCLUDED_TITLES: 'rdt_excluded_titles'
+  REPEAT_MONTHS: 'rdt_repeat_months'
 };
+
+/* No title key. The programme used to name the one safety-team title in scope,
+   and briefly also named the management titles to leave out; both are gone.
+   Scope is decided by the medical, not the job title — see rdtEligible_.
+
+   A `rdt_safety_title` or `rdt_excluded_titles` row left on the ModuleSettings
+   tab from an earlier version is inert. Nothing reads either one. */
 
 /**
  * What `enable RDT` seeds, and what a missing or unreadable setting falls back
@@ -86,15 +91,7 @@ var RDT_DEFAULTS = {
   monthly_target_pct: 10,
   yearly_target_pct: 120,
   hire_grace_months: 3,
-  repeat_months: [2, 3],
-  safety_title: 'Safety Officer',
-
-  // Management titles. They hold no site role — they neither climb nor inspect —
-  // so a random testing programme aimed at the people doing the work has no
-  // business drawing them. Named rather than derived: nothing on the Employees
-  // row says "manager", and inferring it from the word in the title would break
-  // the first time somebody was called a Site Manager.
-  excluded_titles: ['HSE Director', 'HSE Manager', 'Safety Coordinator', 'DC Coordinator']
+  repeat_months: [2, 3]
 };
 
 /** Entries on the dashboard's "recent activity" strip. */
@@ -156,26 +153,13 @@ function rdtSettings_(moduleSettings) {
     }
   }
 
-  var safetyTitle = read(RDT_SETTING_KEYS.SAFETY_TITLE);
-
   return {
     enabled: normalizeBoolean(read(RDT_SETTING_KEYS.ENABLED)),
     fiscal_year_start_month: intIn(RDT_SETTING_KEYS.FY_START_MONTH, RDT_DEFAULTS.fiscal_year_start_month, 1, 12),
     monthly_target_pct: intIn(RDT_SETTING_KEYS.MONTHLY_PCT, RDT_DEFAULTS.monthly_target_pct, 0, 100),
     yearly_target_pct: intIn(RDT_SETTING_KEYS.YEARLY_PCT, RDT_DEFAULTS.yearly_target_pct, 0, 1000),
     hire_grace_months: intIn(RDT_SETTING_KEYS.HIRE_GRACE, RDT_DEFAULTS.hire_grace_months, 0, 60),
-    repeat_months: repeatMonths,
-    safety_title: safetyTitle === '' ? RDT_DEFAULTS.safety_title : safetyTitle,
-
-    // Blank falls back to the default list rather than to no exclusions, the
-    // same way every other list setting on this tab behaves. It also means the
-    // exclusion applies on an installation whose ModuleSettings rows were
-    // seeded before this key existed, which is the case that matters — a
-    // migration that only takes effect once somebody visits Settings is a
-    // migration that has not happened.
-    excluded_titles: parseCsvList_(
-      read(RDT_SETTING_KEYS.EXCLUDED_TITLES), RDT_DEFAULTS.excluded_titles
-    )
+    repeat_months: repeatMonths
   };
 }
 
@@ -234,7 +218,8 @@ function rdtGraceCutoff_(iso, months) {
 // ---------------------------------------------------------------------------
 
 /**
- * Everyone in scope except for the MCU rule.
+ * Everyone in scope except for the MCU rule: employed, here long enough to be
+ * past the new-hire grace, and nothing else.
  *
  * Split out from rdtEligible_ so the dashboard can report how many otherwise
  * eligible people the MCU exclusion dropped. Keeping the shared filter in one
@@ -247,8 +232,6 @@ function rdtGraceCutoff_(iso, months) {
  */
 function rdtEligibleIgnoringMcu_(rows, iso, settings) {
   var cutoff = rdtGraceCutoff_(iso, settings.hire_grace_months);
-  var safetyTitle = settings.safety_title.toLowerCase();
-  var excluded = rdtExcludedTitleSet_(settings);
   var out = [];
 
   for (var i = 0; i < rows.length; i++) {
@@ -257,18 +240,7 @@ function rdtEligibleIgnoringMcu_(rows, iso, settings) {
     if (normalizeBoolean(row.archived)) continue;
     if (normalizeString(row.employment_status).toLowerCase() !== 'active') continue;
 
-    var title = normalizeString(row.title).toLowerCase();
-
-    // Management titles are out on both teams, not only on safety. The safety
-    // rule below would already catch them where they belong, but the same title
-    // turning up on the field team — a legacy import, a mis-set team — must not
-    // be the difference between a director being drawn and not.
-    if (excluded[title] === true) continue;
-
-    // Field team is in scope at every other title. Safety team only at the one
-    // title that does site work.
-    if (normalizeString(row.team).toLowerCase() === 'safety'
-      && title !== safetyTitle) continue;
+    // Neither team nor title is looked at. See rdtEligible_ for why.
 
     // No hire date is a data gap, and a data gap cannot prove the grace period
     // has passed. Fail closed.
@@ -278,28 +250,6 @@ function rdtEligibleIgnoringMcu_(rows, iso, settings) {
     out.push(row);
   }
   return out;
-}
-
-/**
- * @private
- * {lowercased title → true} for the titles the programme never draws.
- *
- * Lowercased once per call rather than per row, and compared exactly: 'HSE
- * Manager' typed into the setting matches the option 'HSE Manager' whatever its
- * casing, but never matches 'Assistant HSE Manager'. A substring match would be
- * the kind of rule that silently grows teeth as the titles list does.
- *
- * @param {Object} settings  From rdtSettings_().
- * @return {Object<string, boolean>}
- */
-function rdtExcludedTitleSet_(settings) {
-  var set = {};
-  var list = settings.excluded_titles || [];
-  for (var i = 0; i < list.length; i++) {
-    var title = normalizeString(list[i]).toLowerCase();
-    if (title !== '') set[title] = true;
-  }
-  return set;
 }
 
 /**
@@ -323,7 +273,30 @@ function rdtHasValidMcu_(row, iso) {
   return expiry !== '' && expiry >= iso;
 }
 
-/** The full eligible pool: in scope AND holding a valid MCU. */
+/**
+ * The full eligible pool: in scope AND holding a valid MCU.
+ *
+ * THE MEDICAL IS THE SCOPE RULE, NOT THE JOB TITLE
+ * ------------------------------------------------
+ * The programme used to decide scope by title — field team at every title, the
+ * safety team only at `rdt_safety_title` — with a list of management titles
+ * layered on top to catch the ones that rule missed. Both are gone, and neither
+ * should come back.
+ *
+ * An employee who holds a live MCU is an employee Landmark sends for medicals,
+ * and that is the same population the drug programme is aimed at. Management who
+ * never go to site never take an MCU, so they leave the pool on their own, by a
+ * fact already on their record rather than by a list somebody has to remember to
+ * update. A title list has to be maintained: it is wrong the first time a role is
+ * renamed, the first time a new one is added, and the first time somebody's team
+ * column is set wrong by an import. The medical is maintained anyway, because
+ * the compliance side of the platform depends on it.
+ *
+ * The exclusion this replaced ran the other way as well, and that half is worth
+ * keeping in view: an expired MCU also drops somebody out, because the renewal
+ * itself carries a drug test. So the pool is exactly "people with a current
+ * medical on file", in both directions.
+ */
 function rdtEligible_(rows, iso, settings) {
   var base = rdtEligibleIgnoringMcu_(rows, iso, settings);
   var out = [];
