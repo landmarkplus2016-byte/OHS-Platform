@@ -1718,6 +1718,87 @@ Apps Script has a 50MB request limit. In practice, the largest actions are `bulk
 
 Any `action` string not in the catalog returns `validation_failed` with `field_errors: {action: "unknown"}`. This is a validation failure rather than 404 because the request itself is malformed.
 
+## 3.10 Data quality actions (1)
+
+### `list_data_issues`
+
+Every record on the platform that contradicts itself or is missing something it should carry. One action behind the Data Quality page (Section 8.5).
+
+**Permission:** any authenticated admin. Each module's findings are included only if the session can `view` that module — a module admin who cannot see equipment does not learn how many equipment records are broken. Officers cannot call it at all.
+
+**Payload:**
+```json
+{
+  "modules": ["employees"],
+  "severity": "contradiction",
+  "check": "cert_blank_not_na",
+  "page": 1,
+  "page_size": 100
+}
+```
+
+All fields optional. `modules` defaults to every module the session can view. `page_size` capped at 500.
+
+**Success `data`:**
+```json
+{
+  "findings": [
+    {
+      "module": "employees",
+      "entity_id": "LM-EMP-0141",
+      "entity_label": "Moamen Hamed Zakaria",
+      "severity": "gap",
+      "check": "cert_blank_not_na",
+      "field": "cert_mcu_expiry",
+      "text_key": "dq_cert_blank_not_na",
+      "text_params": { "cert": "mcu" },
+      "edit_route": "employee/LM-EMP-0141/edit"
+    }
+  ],
+  "total_matching": 63,
+  "counts": { "contradiction": 15, "gap": 48 },
+  "by_check": { "cert_blank_not_na": 36, "hire_date_implausible": 14 },
+  "page": 1,
+  "page_size": 100
+}
+```
+
+`text_key` + `text_params` is the same shape the verdict reasons use (Section 6.4) — the frontend passes them straight to `t()`, and every translation stays in the i18n files.
+
+**One finding is one problem with one field.** A record with three broken certificates produces three findings, not one finding listing three things. That is what lets the page group by check ("36 blank certificates") as readily as by record, and what lets `edit_route` point at somewhere specific.
+
+**`edit_route` is what makes this a tool rather than a report.** Every finding carries the route to the form that fixes it, so the admin goes from the list to the field in one click. A page that tells you what is wrong and then makes you go and find it is a page nobody works through.
+
+### The check catalogue
+
+Two severities, and the split is a real distinction rather than a priority guess:
+
+**`contradiction`** — the record disagrees with itself. Something here is definitely wrong, whoever looks at it.
+
+| Check | Condition |
+|---|---|
+| `cert_na_and_suspended` | Both `_na` and `_suspended` ticked on one certificate |
+| `archived_status_drift` | `archived = TRUE` but `employment_status` is not on `employees.archive_statuses` |
+| `status_archive_drift` | `employment_status` is on `archive_statuses` but `archived = FALSE` |
+| `national_id_malformed` | `national_id` is not 14 digits |
+| `hire_date_implausible` | `hired_date` before 1990 — the Excel serial-zero artifact that reads as `1905-07-xx` |
+| `wah_practical_without_mcu` | `wah_practical` has a live expiry while `mcu` is blank and not flagged N/A. **Practical only** — the theoretical needs no medical (Section 6.1), so a theoretical cert with no MCU on file is not a contradiction and must not be raised as one |
+
+**`gap`** — something is not recorded. It may be an oversight or it may be fine; the platform cannot tell, and says so rather than guessing.
+
+| Check | Condition |
+|---|---|
+| `cert_blank_not_na` | Cert expiry blank and `_na` unticked — "should be recorded, isn't" |
+| `hire_date_missing` | `hired_date` empty. Also silently drops the employee out of the RDT pool (Section 3.5) |
+| `legal_permission_missing` | `legal_permission` blank |
+| `equipment_no_subcontractor` | Equipment `subcontractor` blank — the column added after the tab was in use |
+| `equipment_no_third_party` | `third_party_inspection_end_date` blank |
+| `wave_pending_stale` | A wave has sat `pending` for more than 14 days |
+
+**What this deliberately does not check.** Whether an `_na` flag is *correct*. "This Site Engineer has their medical marked N/A and probably shouldn't" is not mechanically decidable — it needs somebody who knows the roster, and a platform that asserted it would be wrong often enough to train admins to ignore the page. The page may surface the *pattern* (how many records carry each flag, grouped by title) so a human can spot it. It must never raise it as a finding.
+
+**There is no bulk-fix action, and none is to be added.** Same reasoning as `previewStatusArchiveDrift()` in Section 2: the fix differs per record and is a judgement only somebody who knows the roster can make. A blank MCU resolves either to *enter the medical* or *tick N/A*, and a script guessing would silently invent one answer across the whole roster. Every fix goes through the module's own form, through the action that already validates and stamps it.
+
 ---
 
 # Section 4 — Session and Auth Model
@@ -1879,6 +1960,16 @@ export const manifest = {
     charts: renderEmployeeCharts,         // returns HTML for chart row
   },
 
+  // Data Quality contributions (Section 3.10). Optional — a module with no
+  // integrity checks omits the key and simply contributes no findings.
+  integrity: {
+    checks: ['cert_blank_not_na', 'cert_na_and_suspended', 'hire_date_missing',
+             'hire_date_implausible', 'national_id_malformed',
+             'wah_practical_without_mcu', 'status_archive_drift',
+             'archived_status_drift', 'legal_permission_missing'],
+    editRoute: (entityId) => `employee/${entityId}/edit`,
+  },
+
   // Officer app contributions
   officer: {
     searchEntities: (query, snapshot) => [...matching entities...],
@@ -1964,7 +2055,7 @@ Every certificate is classified into one of seven states based on today's date, 
 | State | Condition | Color |
 |---|---|---|
 | `na` | `cert_<key>_na` is TRUE | Slate |
-| `suspended` | `cert_<key>_suspended` is TRUE, **or** the certificate is a WAH cert (`wah_practical` / `wah_theoretical`) and the employee's `mcu` is `expired`. Applied regardless of the cert's own expiry date. | Yellow |
+| `suspended` | `cert_<key>_suspended` is TRUE, **or** the certificate is `wah_practical` and the employee's `mcu` is `expired`. Applied regardless of the cert's own expiry date. | Yellow |
 | `missing` | expiry_date is empty | Gray |
 | `expired` | expiry_date < today | Red |
 | `urgent` | expiry_date within `urgent_days` (default 30) | Orange |
@@ -1981,9 +2072,15 @@ Every certificate is classified into one of seven states based on today's date, 
 
 **Two-tier notification ladder.** There is no 90-day tier. Anything more than `soon_days` (60) out is `valid` and shows green. This is a deliberate simplification: the earlier OHS-DB "plan" tier at 90 days added noise without action value.
 
-**The MCU cascade.** The medical checkup (MCU) is a prerequisite for working at heights. When MCU is expired, both WAH certs are considered void until MCU is renewed — even if the WAH cert's own date is still in the future. The `suspended` state expresses this. It is a per-cert state (not just an aggregate flag) so it shows up correctly in the cert list wherever WAH is rendered.
+**The MCU cascade.** The medical checkup (MCU) is a prerequisite for working at heights. When MCU is expired, `wah_practical` is considered void until MCU is renewed — even if its own date is still in the future. The `suspended` state expresses this. It is a per-cert state (not just an aggregate flag) so it shows up correctly in the cert list wherever WAH is rendered.
 
-The cascade triggers on `mcu === expired` and nothing else. An MCU flagged `na` or manually suspended does not cascade — a suspended MCU is already a blocker in its own right, and whether it should also void WAH is a policy question for Khaled, not a mechanical consequence. A WAH cert that is `missing` or `na` is never suspended by the cascade; there is nothing to suspend. A WAH cert the admin suspended manually keeps its own reason when the cascade also applies.
+**The cascade reaches `wah_practical` only, never `wah_theoretical`.** The two WAH certificates are different things: the theoretical is classroom training, and the practical is the one that puts somebody on a structure. A medical is a prerequisite for climbing, not for sitting an exam, so voiding the theoretical when a medical lapses says something untrue about the employee — they did pass that course, and their passing it did not expire when their medical did.
+
+This is a domain rule from Khaled, and it corrects an earlier version that cascaded to both. The correction changes no verdict: an expired MCU is a blocker in its own right and still suspends the practical, so every employee blocked before is blocked after. What it changes is what the record *says* — one badge, and one line in the officer's reasons list that was naming a certificate with nothing wrong with it.
+
+The cascade triggers on `mcu === expired` and nothing else. An MCU flagged `na` or manually suspended does not cascade — a suspended MCU is already a blocker in its own right, and whether it should also void WAH is a policy question for Khaled, not a mechanical consequence. A `wah_practical` that is `missing` or `na` is never suspended by the cascade; there is nothing to suspend. One the admin suspended manually keeps its own reason when the cascade also applies.
+
+`wah_theoretical` remains a blocker certificate in its own right (Section 6.2) — expired or manually suspended, it blocks. It is only the *cascade* that no longer reaches it.
 
 This scheme is derived once per read in Apps Script and returned inside `derived.per_cert` and `derived.worst_state`.
 
@@ -2000,7 +2097,7 @@ The employee site-check verdict returns one of three verdicts: `cleared`, `warni
 - `cert_wah_theoretical` state is `expired` OR `suspended`
 - `cert_mcu` state is `expired`
 
-Note: because expired MCU triggers the `suspended` state on both WAH certs (Section 6.1), an expired MCU cascades into three blockers — the MCU itself, and both WAH certs as suspended. This is intentional: the officer's reasons list explicitly names each affected cert so the admin knows what needs renewing (usually just the MCU, which unblocks the WAH pair).
+Note: because expired MCU triggers the `suspended` state on `wah_practical` (Section 6.1), an expired MCU cascades into two blockers — the MCU itself, and the practical as suspended. This is intentional: the officer's reasons list names the affected cert so the admin knows what needs renewing (usually just the MCU, which unblocks the practical). `wah_theoretical` is untouched by the cascade and keeps whatever state its own date gives it.
 
 ### Warnings (present if no blockers → `warning`; ignored if already blocked)
 
@@ -2061,16 +2158,15 @@ For both employees and equipment, every `list_*` and `get_*` action returns a `d
   "expired_count": 1,                 // count of certs in 'expired' state
   "expiring_soon_count": 0,           // count in urgent + soon
   "per_cert": {
-    "wah_practical": "suspended",     // both WAH certs go suspended when mcu is expired
-    "wah_theoretical": "suspended",
+    "wah_practical": "suspended",     // the practical goes suspended when mcu is expired
+    "wah_theoretical": "valid",       // the theoretical does NOT — classroom training needs no medical
     "mcu": "expired",
     ...
   },
   "verdict": "blocked",               // cleared | warning | blocked
   "blockers": [
     { "type": "cert_expired", "text_key": "reason_expired", "text_params": { "cert": "mcu", "days": 5 } },
-    { "type": "wah_suspended", "text_key": "reason_wah_suspended", "text_params": { "cert": "wah_practical" } },
-    { "type": "wah_suspended", "text_key": "reason_wah_suspended", "text_params": { "cert": "wah_theoretical" } }
+    { "type": "wah_suspended", "text_key": "reason_wah_suspended", "text_params": { "cert": "wah_practical" } }
   ],
   "warnings": []
 }
@@ -2361,6 +2457,7 @@ EQUIPMENT
   Inspection Waves     → #/equipment/waves, one item's log at #/equipment/waves/:id
 
 SYSTEM
+  Data Quality     → #/data-quality
   Export
   Settings
 ```
@@ -2368,6 +2465,10 @@ SYSTEM
 - Always-visible uppercase group headers, no collapse behavior
 - Sidebar filters items by user's view permissions; entire groups hidden when the user has no view access to any item in them
 - Future modules (cars-tracking, ladders, etc.) insert as their own groups between EQUIPMENT and SYSTEM
+
+**Data Quality sits in SYSTEM rather than inside a module** because it is housekeeping across every module at once, the same as Export. It is a shell page (`js/shell/dataQualityPage.js`) that aggregates whatever the registered manifests contribute through their `integrity` key (Section 5.2), filtered by view permission — so a module admin who can only see employees gets a page about employees, and a module that declares no checks contributes nothing rather than breaking the page.
+
+It shows the two severity counts as a header strip, then the findings grouped by check with the record list under each, because the same cleanup is nearly always the same fix repeated — thirty-six blank certificates is one afternoon's work, and thirty-six separate rows scattered by employee is not.
 
 **Below 900px the sidebar is replaced by a bottom navigation ribbon** (`js/shell/mobileNav.js`). Admins still work on desktop — this is the same app on a phone, not a second one — but the sidebar is a 230px column, and on a narrow screen it used to fold to the *top* of the page, so an admin opening the platform on a phone scrolled past a full screen of links before reaching the dashboard. The ribbon is fixed to the bottom instead: the page starts at the top of the viewport and every destination stays one tap away.
 
@@ -2408,6 +2509,8 @@ ohs-platform/
 │   ├── FieldOptions.gs              # field options + module settings actions
 │   ├── Officer.gs                   # officer sync + entity fetches
 │   ├── Compliance.gs                # deriveCertState, deriveEmployeeDerived, deriveEquipmentDerived
+│   ├── Integrity.gs                 # list_data_issues + the check catalogue (Section 3.10).
+│   │                                # Separate from Compliance.gs on purpose — see below
 │   ├── Config.gs                    # get_config, update_config, list_config
 │   ├── Sheets.gs                    # low-level sheet read/write helpers
 │   ├── Utils.gs                     # ID generation, validation helpers, timestamping
@@ -2455,6 +2558,8 @@ ohs-platform/
 │   │   ├── loginPage.js             # Login + change-password screens
 │   │   ├── dashboardPage.js         # Aggregates module dashboard contributions
 │   │   ├── settingsPage.js          # Users tab, Lists tab, Thresholds tab, Data tab
+│   │   ├── dataQualityPage.js       # Data Quality: aggregates manifest `integrity`
+│   │   │                            # contributions, grouped by check (Section 8.5)
 │   │   ├── exportPage.js            # Multi-module export UI
 │   │   └── officerShell.js          # Phone frame, header, sync strip
 │   │
@@ -2611,6 +2716,12 @@ Add to this list of prohibitions rather than reasoning case by case:
 - Never maintain drug-test records in the legacy workbook once they have been imported. Two sources that disagree fail silently: a test typed into the spreadsheet is invisible to the next draw, and one recorded in the platform is missing from the spreadsheet. After the backfill those columns are frozen history.
 - Never derive `archived` from `employment_status`, or the reverse. They answer different questions and both are real: the status is why someone left, `archived` is whether the platform still lists them. The coupling is a prompt on one side and a required field on the other (Section 3.5) — never an assignment, because an assignment would either archive people who have not left yet or stamp `archived_by` against a decision nobody made.
 - Never archive an employee without recording an employment status from `employees.archive_statuses`. A record in Resigned & Terminated still labelled `Active` cannot be spotted from that page — it renders the certificate roll-up, not the status — and cannot be corrected in place, because an archived row rejects every update.
+- Never cascade an expired MCU onto `wah_theoretical`. The medical is a prerequisite for climbing, not for sitting an exam — the cascade reaches `wah_practical` and stops there. `WAH_KEYS` in `Compliance.gs` is a one-element list and the name is the only thing plural about it. The theoretical is still a blocker cert on its own expiry; it is the cascade that must not reach it.
+- Never let a data-quality finding affect a verdict, a compliance state, or a dashboard KPI. An employee with a malformed `national_id` is still `cleared` if their certificates are in order. The Data Quality page answers "does this record contradict itself", which is a different question from "may this person work today" — same separation RDT has, and for the same reason.
+- Never put integrity checks in `Compliance.gs`. That file is on the hot path for every list, every verdict and the officer snapshot, and it is about dates. `Integrity.gs` is asked a different question at a different moment, by one admin page, and merging them would put roster-wide bookkeeping inside the derivation that runs per row on every read.
+- Never add a bulk-fix action to Data Quality. The fix differs per record and is a judgement only somebody who knows the roster can make — a blank MCU resolves either to *enter the medical* or *tick N/A*, and a script picking one would invent that answer across the whole roster. Findings link to the module's own form; the existing write actions stay the only way in. Same reasoning that gave `previewStatusArchiveDrift()` no `apply` counterpart.
+- Never raise a finding that asserts an `_na` flag is wrong. Whether a certificate genuinely does not apply to somebody is not mechanically decidable, and a page that guesses it teaches admins to ignore the page. Surfacing the pattern for a human to read is fine; asserting the conclusion is not.
+- Never show Data Quality to an officer session, and never let `list_data_issues` return findings for a module the session cannot view. It is admin paperwork about record-keeping, and it names records an officer has no business enumerating.
 - Never let a module admin call user-management actions. Super admin only, enforced server-side.
 - Never allow demoting or deactivating the last super admin. Server-side check on every user mutation.
 - Never render an unpaginated list. All list_* actions have server-side paging; frontend respects `page_size`.

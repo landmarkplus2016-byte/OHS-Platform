@@ -266,7 +266,8 @@ Build apps-script/Compliance.gs:
   (missing, expired, urgent, soon, valid — no `plan` tier)
 - stateRank(state) → integer ranking per Section 6.1: suspended=6, expired=5, urgent=4,
   soon=3, missing=1, valid=0
-- WAH_KEYS = ['wah_practical', 'wah_theoretical']
+- WAH_KEYS = ['wah_practical']   ← the MCU cascade reaches the practical ONLY.
+  The theoretical is classroom training and needs no medical (Section 6.1).
 - APPLICABLE_CERTS_FIELD = ['wah_practical','wah_theoretical','ra','fa','ff','ec','mcu']
 - APPLICABLE_CERTS_SAFETY = [...APPLICABLE_CERTS_FIELD, 'ppe','lifting','scaffolding']
 - getBlockerCerts(moduleSettings) → parses ModuleSettings 'employees.blocker_certs'

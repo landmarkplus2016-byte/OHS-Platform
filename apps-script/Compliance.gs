@@ -52,8 +52,27 @@ var STATE_RANKS = {
   na: -1
 };
 
-/** Certs that go `suspended` when MCU is expired. */
-var WAH_KEYS = ['wah_practical', 'wah_theoretical'];
+/**
+ * Certs that go `suspended` when MCU is expired.
+ *
+ * ONE ELEMENT, AND IT STAYS THAT WAY
+ * ----------------------------------
+ * The two WAH certificates are different things. The theoretical is classroom
+ * training; the practical is the one that puts somebody on a structure. A
+ * medical is a prerequisite for climbing, not for sitting an exam — so an
+ * expired MCU voids the practical and leaves the theoretical alone. They did
+ * pass that course, and their passing it did not expire when their medical did.
+ *
+ * This corrects an earlier version that listed both. The correction changes no
+ * verdict: an expired MCU blocks in its own right and still suspends the
+ * practical, so anyone blocked before is blocked after. What it changes is what
+ * the record says — one badge, and one line in the officer's reasons list that
+ * was naming a certificate with nothing wrong with it.
+ *
+ * `wah_theoretical` is still a blocker cert on its own expiry (Section 6.2).
+ * It is the cascade that must not reach it. Do not add it back here.
+ */
+var WAH_KEYS = ['wah_practical'];
 
 /** Certs that apply to a field-team employee. */
 var APPLICABLE_CERTS_FIELD = ['wah_practical', 'wah_theoretical', 'ra', 'fa', 'ff', 'ec', 'mcu'];
@@ -221,10 +240,13 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
 
   // --- 2. WAH suspension ---------------------------------------------------
   // MCU is the medical prerequisite for working at heights: when it lapses,
-  // both WAH certs are void regardless of their own dates. A WAH cert with no
+  // `wah_practical` is void regardless of its own date. A practical with no
   // date stays `missing` — there is nothing to suspend — and one flagged N/A
   // stays `na` for the same reason. Applied before the worst_state and blocker
   // passes so it cascades (Section 6.1).
+  //
+  // WAH_KEYS holds the practical alone. The theoretical is classroom training
+  // and needs no medical, so it keeps whatever state its own date gives it.
   //
   // The trigger is strictly `mcu === expired`, so an MCU the admin flagged N/A
   // or manually suspended does not cascade. A manually suspended MCU is already
@@ -281,7 +303,7 @@ function deriveEmployeeDerived(employeeRow, today, thresholds, moduleSettings) {
   }
 
   // Expired blocker certs first, then suspensions — this is the order the
-  // Section 6.4 example shows (MCU expired, then both WAH suspended).
+  // Section 6.4 example shows (MCU expired, then the practical suspended).
   //
   // A cert flagged N/A never reaches either loop: its state is `na`, which
   // matches neither test. That is the whole of the "excluded from the verdict"
@@ -739,7 +761,7 @@ function testDerivation() {
   var d1 = deriveEmployeeDerived(testEmployee_({}), today, thresholds, settings);
   check_(results, '1. all valid → cleared', d1.verdict === VERDICTS.CLEARED, d1.verdict);
 
-  // --- 2. Expired MCU cascades to both WAH certs ---------------------------
+  // --- 2. Expired MCU cascades to the practical, and only the practical ----
   var d2 = deriveEmployeeDerived(testEmployee_({
     cert_mcu_expiry: testDateOffset_(-5),
     cert_wah_practical_expiry: testDateOffset_(200),
@@ -747,28 +769,35 @@ function testDerivation() {
   }), today, thresholds, settings);
 
   check_(results, '2. expired MCU → blocked', d2.verdict === VERDICTS.BLOCKED, d2.verdict);
-  check_(results, '2. expired MCU → 3 blockers', d2.blockers.length === 3, d2.blockers.length);
+  check_(results, '2. expired MCU → 2 blockers', d2.blockers.length === 2, d2.blockers.length);
   check_(results, '2. mcu = expired', d2.per_cert.mcu === CERT_STATES.EXPIRED, d2.per_cert.mcu);
   check_(results, '2. wah_practical = suspended',
     d2.per_cert.wah_practical === CERT_STATES.SUSPENDED, d2.per_cert.wah_practical);
-  check_(results, '2. wah_theoretical = suspended',
-    d2.per_cert.wah_theoretical === CERT_STATES.SUSPENDED, d2.per_cert.wah_theoretical);
+
+  // The whole point of the narrowed cascade: a medical is a prerequisite for
+  // climbing, not for sitting an exam. The theoretical keeps its own date.
+  check_(results, '2. wah_theoretical NOT cascaded',
+    d2.per_cert.wah_theoretical === CERT_STATES.VALID, d2.per_cert.wah_theoretical);
+
   check_(results, '2. worst_state = suspended',
     d2.worst_state === CERT_STATES.SUSPENDED, d2.worst_state);
   check_(results, '2. expired_count = 1', d2.expired_count === 1, d2.expired_count);
 
-  // --- 3. Expired MCU with a missing WAH cert ------------------------------
+  // --- 3. Expired MCU with a missing practical -----------------------------
   var d3 = deriveEmployeeDerived(testEmployee_({
     cert_mcu_expiry: testDateOffset_(-5),
     cert_wah_practical_expiry: '',
     cert_wah_theoretical_expiry: testDateOffset_(200)
   }), today, thresholds, settings);
 
-  check_(results, '3. missing WAH stays missing',
+  check_(results, '3. missing practical stays missing',
     d3.per_cert.wah_practical === CERT_STATES.MISSING, d3.per_cert.wah_practical);
-  check_(results, '3. other WAH suspended',
-    d3.per_cert.wah_theoretical === CERT_STATES.SUSPENDED, d3.per_cert.wah_theoretical);
-  check_(results, '3. 2 blockers', d3.blockers.length === 2, d3.blockers.length);
+  check_(results, '3. theoretical untouched by the cascade',
+    d3.per_cert.wah_theoretical === CERT_STATES.VALID, d3.per_cert.wah_theoretical);
+
+  // Only the MCU itself. There is nothing to suspend on a missing practical,
+  // and the theoretical is outside the cascade entirely.
+  check_(results, '3. 1 blocker', d3.blockers.length === 1, d3.blockers.length);
 
   // --- 4. WAH urgent -------------------------------------------------------
   var d4 = deriveEmployeeDerived(testEmployee_({
@@ -846,18 +875,26 @@ function testDerivation() {
     d6e.per_cert.ppe === CERT_STATES.NA, d6e.per_cert.ppe);
   check_(results, '6e. → cleared', d6e.verdict === VERDICTS.CLEARED, d6e.verdict);
 
-  // --- 6f. Expired MCU still cascades over a manually suspended WAH --------
+  // --- 6f. Manual suspension wins the reason over the cascade --------------
+  // Both apply to wah_practical at once: the admin ticked the box AND the MCU
+  // has expired. The state is the same either way; the reason is not, and the
+  // manual one is the more specific fact about the record.
   var d6f = deriveEmployeeDerived(testEmployee_({
     cert_mcu_expiry: testDateOffset_(-5),
     cert_wah_practical_suspended: 'TRUE'
   }), today, thresholds, settings);
 
+  check_(results, '6f. 2 blockers (mcu + practical)',
+    d6f.blockers.length === 2, d6f.blockers.length);
   check_(results, '6f. manual flag keeps its own reason',
-    d6f.blockers.length === 3 && d6f.blockers[1].text_key === 'reason_cert_suspended',
+    d6f.blockers.length === 2 && d6f.blockers[1].text_key === 'reason_cert_suspended',
     d6f.blockers);
-  check_(results, '6f. cascaded WAH keeps the MCU reason',
-    d6f.blockers.length === 3 && d6f.blockers[2].text_key === 'reason_wah_suspended',
-    d6f.blockers);
+
+  // The theoretical is valid on its own date and outside the cascade, so it
+  // contributes no blocker at all. This is the assertion that would fail first
+  // if WAH_KEYS ever grew back to a pair.
+  check_(results, '6f. theoretical contributes no blocker',
+    d6f.per_cert.wah_theoretical === CERT_STATES.VALID, d6f.per_cert.wah_theoretical);
 
   // --- 7. Equipment: third-party expired -----------------------------------
   var e7 = deriveEquipmentDerived(testEquipment_({
