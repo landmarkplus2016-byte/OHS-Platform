@@ -186,6 +186,14 @@ var AUTHENTICATED_ACTIONS = {
     return handleRejectInspectionWave(session, payload);
   },
 
+  // --- Data quality (Section 3.10, Integrity.gs) ----------------------------
+  // Cross-module housekeeping. The permission gate is per module inside the
+  // handler rather than one check here: a module admin gets findings for the
+  // modules they can view and is not told how many problems the others hold.
+  'list_data_issues': function (session, payload) {
+    return handleListDataIssues(session, payload);
+  },
+
   // --- Field options (Section 3.7) -----------------------------------------
   'list_field_options': function (session, payload) {
     return handleListFieldOptions(session, payload);

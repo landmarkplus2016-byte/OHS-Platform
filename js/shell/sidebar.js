@@ -28,6 +28,11 @@ import { renderThemeSwatches, bindThemeSwatches } from '../components/themeSwatc
  * step (Section 8.5).
  */
 const SYSTEM_ITEMS = [
+  // Data Quality needs no flag of its own: the page shows findings only for the
+  // modules the session can view, and an admin with no view permission anywhere
+  // gets an empty page rather than a hidden one. `anyViewOnly` keeps it out of
+  // the nav in that case, since a permanently empty destination is noise.
+  { labelKey: 'nav_data_quality', route: 'data-quality', icon: '⚑', anyViewOnly: true },
   { labelKey: 'nav_export',   route: 'export',   icon: '↓' },
   { labelKey: 'nav_settings', route: 'settings', icon: '⚙', superAdminOnly: true },
 ];
@@ -55,7 +60,11 @@ function visibleModules(modules) {
 
 /** The SYSTEM items this user may see. */
 function visibleSystemItems() {
-  return SYSTEM_ITEMS.filter((item) => !item.superAdminOnly || isSuperAdmin());
+  return SYSTEM_ITEMS.filter((item) => {
+    if (item.superAdminOnly && !isSuperAdmin()) return false;
+    if (item.anyViewOnly && !hasAnyViewPermission()) return false;
+    return true;
+  });
 }
 
 /**

@@ -40,6 +40,7 @@ const SHELL_ROUTES = [
   { path: 'change-password' },
   { path: 'dashboard', titleKey: 'nav_dashboard' },
   { path: 'export',    titleKey: 'nav_export' },
+  { path: 'data-quality', titleKey: 'nav_data_quality' },
   { path: 'settings',  titleKey: 'nav_settings', superAdminOnly: true },
 ];
 

@@ -24,6 +24,7 @@ import { renderTopbar, bindTopbarEvents } from './shell/topbar.js';
 import { renderDashboardPage, bindDashboardPageEvents } from './shell/dashboardPage.js';
 import { renderSettingsPage, bindSettingsPageEvents } from './shell/settingsPage.js';
 import { renderExportPage, bindExportPageEvents } from './shell/exportPage.js';
+import { renderDataQualityPage, bindDataQualityPageEvents } from './shell/dataQualityPage.js';
 import { renderOfficerShell, bindOfficerShellEvents } from './shell/officerShell.js';
 import { go, guardRoute, findRoute, getModules, isCheckRoute } from './router.js';
 import { ROLES } from './constants/globals.js';
@@ -43,6 +44,7 @@ const SHELL_PAGES = new Map([
   ['dashboard', { page: renderDashboardPage, bind: bindDashboardPageEvents }],
   ['settings',  { page: renderSettingsPage,  bind: bindSettingsPageEvents }],
   ['export',    { page: renderExportPage,    bind: bindExportPageEvents }],
+  ['data-quality', { page: renderDataQualityPage, bind: bindDataQualityPageEvents }],
 ]);
 
 /** Temporary page body for routes whose real page has not been built yet. */

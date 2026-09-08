@@ -95,7 +95,66 @@ export const en = {
      is left here belongs to the shell itself. */
   nav_dashboard: 'Dashboard',
   nav_export: 'Export',
+  nav_data_quality: 'Data Quality',
   nav_settings: 'Settings',
+
+  // --- Data Quality (Section 3.10) -----------------------------------------
+  dq_subtitle: 'Records that contradict themselves or are missing something they should carry.',
+  dq_severity_contradiction: 'Contradictions',
+  dq_severity_gap: 'Gaps',
+  dq_severity_all: 'All findings',
+  dq_summary_note: 'A finding here never affects a site-check verdict. This is about record-keeping, not about who may work today.',
+  dq_all_clear: 'No issues found. Every record is internally consistent.',
+  dq_none_in_filter: 'Nothing in this category.',
+  dq_no_modules: 'You do not have view access to any module yet.',
+  dq_load_failed: 'Could not load the findings.',
+  dq_retry: 'Try again',
+  dq_show_all: 'Show {count} more',
+  dq_show_fewer: 'Show fewer',
+  dq_patterns_title: 'Medicals marked N/A, by job title ({count})',
+  dq_patterns_note: 'Not a finding — the platform cannot tell whether an N/A is correct. Shown so you can spot a role that looks wrong.',
+
+  // Check names
+  dq_check_cert_na_and_suspended: 'Certificate marked both N/A and suspended',
+  dq_check_archived_status_drift: 'Archived, but the employment status does not say they left',
+  dq_check_status_archive_drift: 'Employment status says they left, but the record is not archived',
+  dq_check_national_id_malformed: 'National ID is not 14 digits',
+  dq_check_hire_date_implausible: 'Hire date is not a real date',
+  dq_check_wah_practical_without_mcu: 'Working-at-heights practical, no medical on file',
+  dq_check_cert_blank_not_na: 'Certificate has no date and is not marked N/A',
+  dq_check_hire_date_missing: 'No hire date',
+  dq_check_legal_permission_missing: 'No legal permission recorded',
+  dq_check_equipment_no_subcontractor: 'No owning company recorded',
+  dq_check_equipment_no_third_party: 'No third-party inspection date',
+  dq_check_wave_pending_stale: 'Inspection waiting on review',
+
+  // Why each check matters — the sentence that turns a list into a decision
+  dq_why_cert_na_and_suspended: 'Both flags are ticked. N/A wins, so the certificate reads as not required — but one of the two was a mistake.',
+  dq_why_archived_status_drift: 'The record sits in Resigned & Terminated while still labelled active. That page shows the certificate roll-up, not the status, so this is invisible from the list.',
+  dq_why_status_archive_drift: 'The person is marked as having left but still appears on the team list. Either archive them, or the status was set before their last day.',
+  dq_why_national_id_malformed: 'Egyptian national IDs are 14 digits. A different length is almost always a lost or doubled keystroke at import.',
+  dq_why_hire_date_implausible: 'A date read as a number rather than a date lands in 1905. It also makes any length-of-service figure wrong.',
+  dq_why_wah_practical_without_mcu: 'Somebody recorded this person as trained to work at heights while no medical is on file. The medical is a prerequisite for climbing.',
+  dq_why_cert_blank_not_na: 'No date recorded, and not marked as not-applicable — so the platform reads it as "should be there, is not". Either enter the date or tick N/A.',
+  dq_why_hire_date_missing: 'Without a hire date the employee silently drops out of the drug-testing pool, without appearing in the excluded count.',
+  dq_why_legal_permission_missing: 'Legal permission is blank, so the site-check verdict blocks this employee on a field nobody filled in.',
+  dq_why_equipment_no_subcontractor: 'The owning company was added to the schema after this item was recorded. Without it, "whose equipment is this" has no answer.',
+  dq_why_equipment_no_third_party: 'No proof of third-party inspection, so the item carries a permanent warning it can never clear.',
+  dq_why_wave_pending_stale: 'An officer filed this inspection and no admin has ruled on it. A pending pass counts for nothing, so the item has not been cleared by it.',
+
+  // Finding text — what is wrong with this particular record
+  dq_cert_na_and_suspended: '{cert} is marked both N/A and suspended',
+  dq_archived_status_drift: 'Archived, but the status is still "{status}"',
+  dq_status_archive_drift: 'Status is "{status}" but the record is not archived',
+  dq_national_id_malformed: 'National ID has {length} digits, not 14',
+  dq_hire_date_implausible: 'Hire date reads {date}',
+  dq_wah_practical_without_mcu: 'Practical valid to {expiry}, no medical recorded',
+  dq_cert_blank_not_na: '{cert} has no expiry date and is not marked N/A',
+  dq_hire_date_missing: 'No hire date recorded',
+  dq_legal_permission_missing: 'No legal permission recorded',
+  dq_equipment_no_subcontractor: 'No owning company recorded',
+  dq_equipment_no_third_party: 'No third-party inspection date recorded',
+  dq_wave_pending_stale: 'Inspection from {date} has waited {days} days for review',
 
   // The mobile bottom ribbon (js/shell/mobileNav.js). `nav_more` is the tab
   // holding the sidebar footer; `nav_menu` labels the ribbon for screen readers.
