@@ -83,7 +83,16 @@ export function invalidateDataQuality() {
 
 async function ensureData() {
   const s = pageState();
-  if (s.status === 'loading' || s.status === 'ready') return;
+
+  // `error` is in this guard deliberately, and it is the difference between a
+  // failed load and a retry storm. bind runs on every render(), ensureData
+  // renders when it fails, and a guard that let `error` through would fetch →
+  // fail → render → fetch forever, against a rate-limited backend (Section 3.9)
+  // that would start returning 429 and never stop being asked.
+  //
+  // Recovery is explicit instead: the Retry button below, the topbar Refresh,
+  // or navigating away and back.
+  if (s.status === 'loading' || s.status === 'ready' || s.status === 'error') return;
 
   const mySeq = ++s.seq;
   s.status = 'loading';
@@ -260,7 +269,10 @@ export function renderDataQualityPage() {
 
   if (s.status === 'error') {
     return `<div class="data-quality">${head}
-      <div class="page-placeholder">${escapeHtml(t('dq_load_failed'))}</div></div>`;
+      <div class="page-placeholder">
+        <div>${escapeHtml(t('dq_load_failed'))}</div>
+        <button class="btn-primary" data-dq-retry>${escapeHtml(t('dq_retry'))}</button>
+      </div></div>`;
   }
 
   const data = s.data || {};
@@ -299,6 +311,17 @@ export function bindDataQualityPageEvents() {
   if (!root) return;
 
   ensureData();
+
+  // The only way out of the error state, since ensureData refuses to retry on
+  // its own. Explicit beats automatic here: a person pressing a button knows
+  // they are asking again, and a loop does not.
+  const retry = root.querySelector('[data-dq-retry]');
+  if (retry) {
+    retry.addEventListener('click', () => {
+      invalidateDataQuality();
+      render();
+    });
+  }
 
   root.querySelectorAll('[data-dq-severity]').forEach((el) => {
     el.addEventListener('click', () => {
