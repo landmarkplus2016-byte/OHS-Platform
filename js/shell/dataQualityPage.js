@@ -5,9 +5,8 @@
    -----------------------
    Every record on the platform that contradicts itself or is missing something
    it should carry. It is the page you open to answer "what is wrong with our
-   data", and it is deliberately not the page that answers "who may work today"
-   — that is the dashboard and the verdict cards, and a finding here never
-   changes either of them.
+   data", and deliberately not the page that answers "who may work today" — a
+   finding here never changes a verdict.
 
    Two severities, and the split is a real distinction rather than a priority
    guess:
@@ -17,25 +16,26 @@
      gap            something is not recorded. It may be an oversight or it may
                     be fine; the platform cannot tell, and says so.
 
-   GROUPED BY CHECK, NOT BY RECORD
-   -------------------------------
-   The same cleanup is nearly always the same fix repeated. Thirty-six blank
-   certificates is one afternoon's work when they are listed together and a
-   scavenger hunt when they are scattered across thirty-six employees. So the
-   page groups by check and lists the records under each.
+   WHY IT LOOKS LIKE EVERY OTHER LIST
+   ----------------------------------
+   Filter bar, then `table.tbl`, then a pager — the same three pieces as Field
+   Team, Active Equipment and the wave log, built from the same classes. This
+   page is a list of records with a problem, which is the same shape as a list
+   of employees with a certificate state, and an admin should not have to learn
+   a second way of reading a table. The check is a filter, not a layout.
 
    EVERY ROW IS A LINK
    -------------------
-   A finding carries the route to the form that fixes it. A page that tells you
-   what is wrong and then makes you go and find it is a page nobody works
-   through — that is the difference between this and an export.
+   A finding carries the route to the form that fixes it, so the row and its
+   action button both go straight there. A page that tells you what is wrong
+   and then makes you go and find it is a page nobody works through.
 
    WHAT IT WILL NEVER GROW
    -----------------------
    A bulk-fix button. The fix differs per record and is a judgement only
-   somebody who knows the roster can make: a blank MCU resolves either to "enter
-   the medical" or to "tick N/A", and a button picking one would invent that
-   answer across the whole roster (Section 3.10).
+   somebody who knows the roster can make: a blank MCU resolves either to
+   "enter the medical" or to "tick N/A", and a button picking one would invent
+   that answer across the whole roster (Section 3.10).
    ========================================================================== */
 
 import { UI } from '../state.js';
@@ -47,8 +47,8 @@ import { hasAnyViewPermission } from '../utils/permissions.js';
 import { toastError } from '../components/toast.js';
 import { api } from '../api.js';
 
-/** Findings shown per check before the group collapses behind a "show all". */
-const GROUP_PREVIEW_LIMIT = 8;
+/** Findings per page. Matches the other admin lists. */
+const PAGE_SIZE = 50;
 
 function pageState() {
   if (!UI.dataQuality) {
@@ -57,8 +57,11 @@ function pageState() {
       seq: 0,
       data: null,
       error: null,
-      severity: '',      // '' | 'contradiction' | 'gap'
-      expanded: {},      // check → true, for groups the admin opened
+      severity: '',       // '' | 'contradiction' | 'gap'
+      check: '',          // '' | a check name
+      search: '',
+      page: 1,
+      checkOptions: null, // held from the first unfiltered load
     };
   }
   return UI.dataQuality;
@@ -67,11 +70,9 @@ function pageState() {
 /**
  * Drop the cached findings so the next render refetches.
  *
- * Exported because every write anywhere on the platform can resolve a finding —
- * an employee edit, an archive, a wave approval. Rather than have each of those
- * pages know about this one, the topbar Refresh button and a fresh navigation
- * both land here. Callers that already know they fixed something may call it
- * directly.
+ * Exported because a write anywhere on the platform can resolve a finding — an
+ * employee edit, an archive, a wave approval. Rather than have every page know
+ * about this one, navigating here fresh and the topbar Refresh both land here.
  */
 export function invalidateDataQuality() {
   const s = pageState();
@@ -87,11 +88,8 @@ async function ensureData() {
   // `error` is in this guard deliberately, and it is the difference between a
   // failed load and a retry storm. bind runs on every render(), ensureData
   // renders when it fails, and a guard that let `error` through would fetch →
-  // fail → render → fetch forever, against a rate-limited backend (Section 3.9)
-  // that would start returning 429 and never stop being asked.
-  //
-  // Recovery is explicit instead: the Retry button below, the topbar Refresh,
-  // or navigating away and back.
+  // fail → render → fetch forever against a rate-limited backend (Section 3.9).
+  // Recovery is the explicit Retry in the empty row.
   if (s.status === 'loading' || s.status === 'ready' || s.status === 'error') return;
 
   const mySeq = ++s.seq;
@@ -100,14 +98,25 @@ async function ensureData() {
   render();
 
   try {
-    // Deliberately unpaged: the whole point is to see the size of the problem,
-    // and the server caps at 500. A roster that ever produces more than that
-    // has a bigger issue than this page's scroll length.
-    const data = await api.call('list_data_issues', { page_size: 500 });
+    // Severity and check filter server-side, so `total_matching` describes the
+    // filtered set exactly as it does on the employee list.
+    const data = await api.call('list_data_issues', {
+      severity: s.severity || undefined,
+      check: s.check || undefined,
+      page: s.page,
+      page_size: PAGE_SIZE,
+    });
     if (mySeq !== s.seq) return;
 
     s.data = data;
     s.status = 'ready';
+
+    // Hold the full check list from the first unfiltered load. Without this,
+    // picking a check would shrink the dropdown to that one option, stranding
+    // the admin with no way back to the others.
+    if (!s.check && !s.severity && data.by_check) {
+      s.checkOptions = Object.keys(data.by_check).sort();
+    }
   } catch (err) {
     if (mySeq !== s.seq) return;
 
@@ -120,129 +129,223 @@ async function ensureData() {
   render();
 }
 
+/** Refetch from page 1 — for any filter change. */
+function applyFilters() {
+  const s = pageState();
+  s.page = 1;
+  s.status = 'idle';
+  s.data = null;
+  ensureData();
+}
+
+/**
+ * The findings to draw: the loaded page, narrowed by the search box.
+ *
+ * Search filters in place rather than refetching, because it matches within the
+ * page the admin is already looking at and a round trip per keystroke would be
+ * slower and noisier than the filter is worth. Severity and check go to the
+ * server, because those change which findings exist at all.
+ */
+function visibleFindings(s) {
+  const all = (s.data && s.data.findings) || [];
+  const needle = s.search.trim().toLowerCase();
+  if (needle === '') return all;
+
+  return all.filter((f) => (
+    (f.entity_label || '').toLowerCase().indexOf(needle) !== -1 ||
+    (f.entity_id || '').toLowerCase().indexOf(needle) !== -1
+  ));
+}
+
 /* ---------- Rendering ----------------------------------------------------- */
 
-/** The two severity counts, plus an all-clear when both are zero. */
-function renderSummary(data) {
-  const counts = data.counts || {};
-  const contradictions = counts.contradiction || 0;
-  const gaps = counts.gap || 0;
+function option(value, label, selected) {
+  return `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${
+    escapeHtml(label)
+  }</option>`;
+}
 
-  if (contradictions === 0 && gaps === 0) {
-    return `
-      <div class="card dq-summary is-clear">
-        <div class="dq-clear">${escapeHtml(t('dq_all_clear'))}</div>
-      </div>`;
-  }
+/** The check dropdown, listing only checks that actually have findings. */
+function renderCheckOptions(s) {
+  const known = s.checkOptions || [];
+  return option('', t('dq_filter_all_checks'), s.check)
+    + known.map((c) => option(c, t('dq_check_' + c), s.check)).join('');
+}
 
-  const s = pageState();
-  const tile = (key, value, tone) => `
-    <button class="dq-tile ${tone}${s.severity === key ? ' is-active' : ''}"
-            data-dq-severity="${escapeHtml(key)}">
-      <span class="dq-tile-value">${value}</span>
-      <span class="dq-tile-label">${escapeHtml(t('dq_severity_' + key))}</span>
-    </button>`;
+/** The filter bar. Same pieces as every other list: search, selects, count. */
+function renderFilters(s) {
+  const total = s.data ? s.data.total_matching : 0;
+  const shown = visibleFindings(s).length;
 
   return `
-    <div class="card dq-summary">
-      <div class="dq-tiles">
-        ${tile('contradiction', contradictions, 'is-blocked')}
-        ${tile('gap', gaps, 'is-warning')}
-        <button class="dq-tile${s.severity === '' ? ' is-active' : ''}" data-dq-severity="">
-          <span class="dq-tile-value">${contradictions + gaps}</span>
-          <span class="dq-tile-label">${escapeHtml(t('dq_severity_all'))}</span>
-        </button>
+    <div class="filter-bar">
+      <div class="field filter-search">
+        <label for="dq-search">${escapeHtml(t('search'))}</label>
+        <input id="dq-search" type="search" autocomplete="off" spellcheck="false"
+               placeholder="${escapeHtml(t('dq_search_placeholder'))}"
+               value="${escapeHtml(s.search)}">
       </div>
-      <div class="dq-summary-note">${escapeHtml(t('dq_summary_note'))}</div>
+
+      <div class="field">
+        <label for="dq-filter-severity">${escapeHtml(t('dq_filter_severity'))}</label>
+        <select id="dq-filter-severity" data-filter="severity">
+          ${option('', t('filter_all'), s.severity)}
+          ${option('contradiction', t('dq_severity_contradiction'), s.severity)}
+          ${option('gap', t('dq_severity_gap'), s.severity)}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="dq-filter-check">${escapeHtml(t('dq_filter_check'))}</label>
+        <select id="dq-filter-check" data-filter="check">
+          ${renderCheckOptions(s)}
+        </select>
+      </div>
+
+      <div class="count">${escapeHtml(t('showing_count', { shown, total }))}</div>
     </div>`;
 }
 
-/** One finding row: what is wrong, on which record, linking to the fix. */
-function renderFinding(finding) {
-  return `
-    <button class="dq-row" data-dq-route="${escapeHtml(finding.edit_route)}">
-      <span class="dq-row-entity">
-        <span class="dq-row-label">${escapeHtml(finding.entity_label || finding.entity_id)}</span>
-        <span class="dq-row-id">${escapeHtml(finding.entity_id)}</span>
-      </span>
-      <span class="dq-row-text">${escapeHtml(t(finding.text_key, finding.text_params || {}))}</span>
-      <span class="dq-row-go" aria-hidden="true">›</span>
-    </button>`;
+/** The severity badge, using the same badge classes as every other list. */
+function severityBadge(severity) {
+  const cls = severity === 'contradiction' ? 'badge-blocked' : 'badge-warning';
+  return `<span class="badge ${cls}">${escapeHtml(t('dq_severity_' + severity))}</span>`;
 }
 
 /**
- * One check's group: a heading with its count, then its records.
+ * One finding row.
  *
- * Long groups collapse to a preview because the header count is the number that
- * matters — an admin deciding what to work on needs "36 blank certificates",
- * not thirty-six names before the next heading.
+ * The "why it matters" sentence sits under the issue name as a `cell-sub`, the
+ * same way the employee list puts the record id under the name. It is the line
+ * that turns a field name into a decision, and it belongs beside the finding
+ * rather than in a paragraph above the table.
  */
-function renderGroup(check, findings) {
-  const s = pageState();
-  const expanded = s.expanded[check] === true;
-  const shown = expanded ? findings : findings.slice(0, GROUP_PREVIEW_LIMIT);
-  const hidden = findings.length - shown.length;
+function renderRow(finding) {
+  return `
+    <tr class="row-clickable" data-dq-route="${escapeHtml(finding.edit_route)}">
+      <td>
+        <b>${escapeHtml(finding.entity_label || finding.entity_id)}</b>
+        <div class="cell-sub">${escapeHtml(finding.entity_id)}</div>
+      </td>
+      <td>${severityBadge(finding.severity)}</td>
+      <td>
+        ${escapeHtml(t('dq_check_' + finding.check))}
+        <div class="cell-sub">${escapeHtml(t('dq_why_' + finding.check))}</div>
+      </td>
+      <td>${escapeHtml(t(finding.text_key, finding.text_params || {}))}</td>
+      <td data-stop-row-click>
+        <button type="button" class="btn btn-ghost btn-sm"
+                data-dq-route="${escapeHtml(finding.edit_route)}">${escapeHtml(t('dq_fix'))}</button>
+      </td>
+    </tr>`;
+}
 
-  const severity = findings[0].severity;
-  const more = hidden > 0
-    ? `<button class="dq-more" data-dq-expand="${escapeHtml(check)}">${
-        escapeHtml(t('dq_show_all', { count: hidden }))
-      }</button>`
-    : '';
+/** The results table, or the state standing in for it. */
+function renderTable(s) {
+  const columnCount = 5;
 
-  const collapse = expanded && findings.length > GROUP_PREVIEW_LIMIT
-    ? `<button class="dq-more" data-dq-expand="${escapeHtml(check)}">${
-        escapeHtml(t('dq_show_fewer'))
-      }</button>`
-    : '';
+  const header = `
+    <thead>
+      <tr>
+        <th>${escapeHtml(t('dq_col_record'))}</th>
+        <th>${escapeHtml(t('dq_col_severity'))}</th>
+        <th>${escapeHtml(t('dq_col_issue'))}</th>
+        <th>${escapeHtml(t('dq_col_detail'))}</th>
+        <th>${escapeHtml(t('actions'))}</th>
+      </tr>
+    </thead>`;
+
+  if (s.status === 'loading' || s.status === 'idle') {
+    return `<table class="tbl">${header}
+      <tbody><tr><td colspan="${columnCount}" class="cell-empty">${
+        escapeHtml(t('loading_data'))
+      }</td></tr></tbody></table>`;
+  }
+
+  if (s.status === 'error') {
+    return `<table class="tbl">${header}
+      <tbody><tr><td colspan="${columnCount}" class="cell-empty">
+        ${escapeHtml(t('err_' + ((s.error && s.error.code) || 'server_error')))}
+        <button type="button" class="btn btn-ghost btn-sm" data-action="retry">${
+          escapeHtml(t('retry'))
+        }</button>
+      </td></tr></tbody></table>`;
+  }
+
+  const rows = visibleFindings(s);
+  if (rows.length === 0) {
+    const filtered = s.search || s.severity || s.check;
+    return `<table class="tbl">${header}
+      <tbody><tr><td colspan="${columnCount}" class="cell-empty">
+        ${escapeHtml(t(filtered ? 'no_results' : 'dq_all_clear'))}
+      </td></tr></tbody></table>`;
+  }
+
+  return `<table class="tbl">${header}
+    <tbody>${rows.map(renderRow).join('')}</tbody></table>`;
+}
+
+/** Prev/next, hidden when everything fits on one page. */
+function renderPager(s) {
+  if (s.status !== 'ready') return '';
+
+  const pages = Math.max(1, Math.ceil(s.data.total_matching / s.data.page_size));
+  if (pages <= 1) return '';
 
   return `
-    <section class="card dq-group">
-      <div class="dq-group-head">
-        <span class="badge ${severity === 'contradiction' ? 'is-blocked' : 'is-warning'}">${
-          escapeHtml(t('dq_severity_' + severity))
-        }</span>
-        <span class="dq-group-title">${escapeHtml(t('dq_check_' + check))}</span>
-        <span class="dq-group-count">${findings.length}</span>
-      </div>
-      <div class="dq-group-why">${escapeHtml(t('dq_why_' + check))}</div>
-      <div class="dq-rows">${shown.map(renderFinding).join('')}</div>
-      ${more}${collapse}
-    </section>`;
+    <div class="pager">
+      <button type="button" class="btn btn-ghost btn-sm" data-page="prev"
+              ${s.page <= 1 ? 'disabled' : ''}>${escapeHtml(t('prev_page'))}</button>
+      <span class="pager-label">${escapeHtml(t('page_x_of_y', { page: s.page, pages }))}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-page="next"
+              ${s.page >= pages ? 'disabled' : ''}>${escapeHtml(t('next_page'))}</button>
+    </div>`;
 }
 
 /**
- * The N/A pattern note (Section 3.10).
+ * The N/A pattern note (Section 3.10), below the table.
  *
  * The checks are forbidden from asserting that an N/A flag is wrong, because
  * that is not mechanically decidable. But the shape of the data is worth
- * showing: a human who knows the roster reads "6 Site Engineers have their
+ * showing: somebody who knows the roster reads "6 Site Engineers have their
  * medical marked N/A" in a second, and the platform cannot read it at all.
+ *
+ * Below the worklist rather than above it — it is context, not work, and it
+ * must never be the first thing between an admin and the table.
  */
-function renderPatterns(data) {
-  const patterns = (data.patterns && data.patterns.employees) || null;
+function renderPatterns(s) {
+  if (s.status !== 'ready') return '';
+
+  const patterns = (s.data.patterns && s.data.patterns.employees) || null;
   const byTitle = patterns && patterns.mcu_na_by_title;
   if (!byTitle) return '';
 
   const rows = Object.keys(byTitle)
     .map((title) => ({ title, count: byTitle[title] }))
     .sort((a, b) => b.count - a.count);
-
   if (!rows.length) return '';
 
   const total = rows.reduce((sum, row) => sum + row.count, 0);
 
   return `
-    <section class="card dq-patterns">
+    <section class="dq-patterns">
       <div class="section-head">${escapeHtml(t('dq_patterns_title', { count: total }))}</div>
       <div class="dq-patterns-note">${escapeHtml(t('dq_patterns_note'))}</div>
-      <div class="dq-pattern-rows">
-        ${rows.map((row) => `
-          <div class="dq-pattern-row">
-            <span>${escapeHtml(row.title)}</span>
-            <span class="dq-pattern-count">${row.count}</span>
-          </div>`).join('')}
-      </div>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t('dq_col_title'))}</th>
+            <th>${escapeHtml(t('dq_col_count'))}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <td>${escapeHtml(row.title)}</td>
+              <td>${row.count}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
     </section>`;
 }
 
@@ -250,57 +353,17 @@ function renderPatterns(data) {
 export function renderDataQualityPage() {
   const s = pageState();
 
-  const head = `
-    <div class="page-head">
-      <div>
-        <div class="page-head-sub">${escapeHtml(t('dq_subtitle'))}</div>
-      </div>
-    </div>`;
-
   if (!hasAnyViewPermission()) {
-    return `<div class="data-quality">${head}
+    return `<div class="data-quality">
       <div class="page-placeholder">${escapeHtml(t('dq_no_modules'))}</div></div>`;
   }
 
-  if (s.status === 'loading' || s.status === 'idle') {
-    return `<div class="data-quality">${head}
-      <div class="page-placeholder">${escapeHtml(t('loading'))}</div></div>`;
-  }
-
-  if (s.status === 'error') {
-    return `<div class="data-quality">${head}
-      <div class="page-placeholder">
-        <div>${escapeHtml(t('dq_load_failed'))}</div>
-        <button class="btn-primary" data-dq-retry>${escapeHtml(t('dq_retry'))}</button>
-      </div></div>`;
-  }
-
-  const data = s.data || {};
-  const findings = data.findings || [];
-
-  // Group by check, preserving the server's sort — contradictions first, then
-  // by check, so the groups come out in severity order without a second sort.
-  const order = [];
-  const groups = {};
-  findings.forEach((finding) => {
-    if (s.severity !== '' && finding.severity !== s.severity) return;
-    if (!groups[finding.check]) {
-      groups[finding.check] = [];
-      order.push(finding.check);
-    }
-    groups[finding.check].push(finding);
-  });
-
-  const body = order.length
-    ? order.map((check) => renderGroup(check, groups[check])).join('')
-    : `<div class="page-placeholder">${escapeHtml(t('dq_none_in_filter'))}</div>`;
-
   return `
     <div class="data-quality">
-      ${head}
-      ${renderSummary(data)}
-      ${body}
-      ${renderPatterns(data)}
+      ${renderFilters(s)}
+      ${renderTable(s)}
+      ${renderPager(s)}
+      ${renderPatterns(s)}
     </div>`;
 }
 
@@ -312,10 +375,35 @@ export function bindDataQualityPageEvents() {
 
   ensureData();
 
-  // The only way out of the error state, since ensureData refuses to retry on
-  // its own. Explicit beats automatic here: a person pressing a button knows
-  // they are asking again, and a loop does not.
-  const retry = root.querySelector('[data-dq-retry]');
+  root.querySelectorAll('[data-filter]').forEach((el) => {
+    el.addEventListener('change', () => {
+      pageState()[el.getAttribute('data-filter')] = el.value;
+      applyFilters();
+    });
+  });
+
+  // Search narrows the loaded page rather than refetching on every keystroke.
+  // render.js restores focus and caret from the input's id, so the redraw does
+  // not eat what is being typed (Section 9.3).
+  const search = root.querySelector('#dq-search');
+  if (search) {
+    search.addEventListener('input', () => {
+      pageState().search = search.value;
+      render();
+    });
+  }
+
+  root.querySelectorAll('[data-page]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const s = pageState();
+      s.page += el.getAttribute('data-page') === 'next' ? 1 : -1;
+      s.status = 'idle';
+      s.data = null;
+      ensureData();
+    });
+  });
+
+  const retry = root.querySelector('[data-action="retry"]');
   if (retry) {
     retry.addEventListener('click', () => {
       invalidateDataQuality();
@@ -323,29 +411,16 @@ export function bindDataQualityPageEvents() {
     });
   }
 
-  root.querySelectorAll('[data-dq-severity]').forEach((el) => {
-    el.addEventListener('click', () => {
-      const s = pageState();
-      s.severity = el.getAttribute('data-dq-severity') || '';
-      render();
-    });
-  });
-
-  root.querySelectorAll('[data-dq-expand]').forEach((el) => {
-    el.addEventListener('click', () => {
-      const s = pageState();
-      const check = el.getAttribute('data-dq-expand');
-      s.expanded[check] = !s.expanded[check];
-      render();
-    });
-  });
-
   // Straight to the form that fixes it. The finding is not marked resolved
-  // here — it disappears on the next load because the underlying record
-  // changed, which is the only signal that can be trusted (rule 13's spirit:
-  // the server decides what is true, the page displays it).
+  // here — it disappears on the next load because the record changed, which is
+  // the only signal worth trusting.
+  //
+  // Both the row and its button carry the route, so the button's own listener
+  // handles the click and the row's listener ignores anything inside the
+  // actions cell — otherwise one click would navigate twice.
   root.querySelectorAll('[data-dq-route]').forEach((el) => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (event) => {
+      if (el.tagName === 'TR' && event.target.closest('[data-stop-row-click]')) return;
       invalidateDataQuality();
       go(el.getAttribute('data-dq-route'));
     });
