@@ -42,7 +42,19 @@
   <link rel="stylesheet" href="css/pages.css">
 
   <!-- Third-party libraries via pinned CDN <script> tags — no npm, ever -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!--
+    xlsx-js-style is SheetJS Community 0.18.5 with cell styling added, and it is
+    that exact version rather than a rewrite — it sets the same window.XLSX and
+    reads workbooks identically, so js/utils/excelImport.js is untouched by the
+    swap. Stock SheetJS cannot write a fill, a font or a border at all, which
+    made the management report unsendable.
+
+    It is served from jsDelivr because cdnjs does not carry it. If that ever
+    matters, the fallback is stock SheetJS again and a report with no colour —
+    never an npm dependency.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>

@@ -54,7 +54,10 @@
    is known to be bad.
    ========================================================================== */
 
-const CACHE_VERSION = 'v1';
+// v2: the SheetJS CDN URL changed to xlsx-js-style, so the v1 vendor cache
+// holds a library nothing loads any more. A rename is exactly the case the
+// bump exists for.
+const CACHE_VERSION = 'v2';
 
 const SHELL_CACHE   = `ohsp-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `ohsp-runtime-${CACHE_VERSION}`;
@@ -99,7 +102,7 @@ const PRECACHE = [
  * script loads.
  */
 const VENDOR_URLS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
 ];

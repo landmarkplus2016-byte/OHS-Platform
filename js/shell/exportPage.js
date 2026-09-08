@@ -201,6 +201,7 @@ function describeFilters(module, selection) {
  */
 function coverSection(module, selection, records) {
   return {
+    cover: true,
     heading: t('export_report_title', { module: t(module.labelKey) }),
     rows: [
       [t('export_report_company'), CONFIG.company_name || ''],
@@ -225,6 +226,43 @@ function verdictSection(records) {
     rows: VERDICTS.map((verdict) => [
       t('verdict_' + verdict), counts[verdict], sharePct(counts[verdict], records.length),
     ]),
+    // VERDICTS is worst-first, so the tones line up with the rows by
+    // construction rather than by a second list that could drift out of step.
+    tones: VERDICTS.slice(),
+    barColumn: 1,
+  };
+}
+
+/**
+ * The tone a certificate state should be read in.
+ *
+ * It is a reading aid on a summary sheet, not a verdict: `suspended` and
+ * `expired` are the two that block (Section 6.2), `urgent` and `soon` are the
+ * warning window, `valid` is clear, and `missing` gets no tone at all because
+ * absent data is not a compliance position either way.
+ */
+const STATE_TONES = {
+  suspended: 'blocked', expired: 'blocked',
+  urgent: 'warning', soon: 'warning',
+  valid: 'cleared',
+};
+
+/**
+ * A state table: one row per state that actually occurs, with its count, share
+ * and tone. States with no records are dropped — a row of zeroes is noise on a
+ * page somebody is meant to read in ten seconds.
+ */
+function stateSection(heading, states, counts, total) {
+  const present = states.filter((state) => (counts[state] || 0) > 0);
+
+  return {
+    heading,
+    head: [t('export_dash_state'), t('export_dash_count'), t('export_dash_share')],
+    rows: present.map((state) => [
+      t('state_' + state), counts[state], sharePct(counts[state], total),
+    ]),
+    tones: present.map((state) => STATE_TONES[state]),
+    barColumn: 1,
   };
 }
 
@@ -234,6 +272,7 @@ function groupSection(heading, labelHeading, groups) {
     heading,
     head: [labelHeading, t('export_dash_count'), t('verdict_blocked'), t('verdict_warning')],
     rows: groups.map((g) => [g.label, g.total, g.blocked, g.warning]),
+    barColumn: 1,
   };
 }
 
@@ -327,18 +366,10 @@ const EXPORT_MODULES = [
           coverSection(module, selection, records),
           verdictSection(records),
 
-          {
-            // Counted over people, not certificates — one employee with four
-            // expired certs is one row here and four in the table below. The
-            // two never sum to each other and are not meant to.
-            heading: t('export_dash_worst_state'),
-            head: [t('export_dash_state'), t('export_dash_count'), t('export_dash_share')],
-            rows: CERT_STATES
-              .filter((state) => (stateCounts[state] || 0) > 0)
-              .map((state) => [
-                t('state_' + state), stateCounts[state], sharePct(stateCounts[state], total),
-              ]),
-          },
+          // Counted over people, not certificates — one employee with four
+          // expired certs is one row here and four in the table below. The two
+          // never sum to each other and are not meant to.
+          stateSection(t('export_dash_worst_state'), CERT_STATES, stateCounts, total),
 
           {
             heading: t('export_dash_by_cert'),
@@ -353,6 +384,9 @@ const EXPORT_MODULES = [
               certCounts[key].soon || 0,
               certCounts[key].suspended || 0,
             ]),
+            // The bar tracks expiries, because "which certificate is driving
+            // this" is the question the table is here to answer.
+            barColumn: 1,
           },
 
           groupSection(
@@ -489,18 +523,15 @@ const EXPORT_MODULES = [
           coverSection(module, selection, records),
           verdictSection(records),
 
-          {
-            heading: t('export_dash_third_party'),
-            head: [t('export_dash_state'), t('export_dash_count'), t('export_dash_share')],
-            // `suspended` is absent: it is applied on top of a date by the
-            // employee derivation only, and a third-party inspection has no
-            // flag columns to suspend it with (Section 6.5).
-            rows: CERT_STATES
-              .filter((state) => state !== 'suspended' && (thirdParty[state] || 0) > 0)
-              .map((state) => [
-                t('state_' + state), thirdParty[state], sharePct(thirdParty[state], total),
-              ]),
-          },
+          // `suspended` is filtered out: it is applied on top of a date by the
+          // employee derivation only, and a third-party inspection has no flag
+          // columns to suspend it with (Section 6.5).
+          stateSection(
+            t('export_dash_third_party'),
+            CERT_STATES.filter((state) => state !== 'suspended'),
+            thirdParty,
+            total
+          ),
 
           groupSection(
             t('export_dash_by_item'),

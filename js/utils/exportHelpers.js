@@ -29,14 +29,28 @@
    Which columns it drops and what the Dashboard says are both the caller's
    business — this file still names no field of any module.
 
-   NO CELL FORMATTING, ANYWHERE
-   ----------------------------
-   The SheetJS build index.html loads from the CDN is the community one, which
-   cannot write fills, fonts or borders, and there is no styled build to reach
-   for without an npm dependency. Column widths (`!cols`) are the one thing it
-   does write, so that is the whole of the presentation budget here. A workbook
-   that comes out of this file is black on white by construction; any colour in
-   one has been added after the download.
+   CELL FORMATTING, AND THE ONE PLACE COLOURS ARE WRITTEN OUT
+   ----------------------------------------------------------
+   index.html loads xlsx-js-style — SheetJS Community 0.18.5 plus cell styles —
+   so fills, fonts, borders and number formats are writable. A report that goes
+   to a customer has to look like a document rather than a database dump.
+
+   The palette below repeats hex values from css/tokens.css, which rule 15
+   forbids everywhere else. This is the same exception the jsPDF `headStyles`
+   line already takes, for the same reason: a workbook is a file that outlives
+   the stylesheet and cannot read a CSS variable. Two exceptions, both in this
+   file, both named. If a third appears, that is the signal to give tokens a
+   JS-readable twin instead.
+
+   WHAT STILL CANNOT BE WRITTEN: CHARTS
+   -----------------------------------
+   No JavaScript library writes a native Excel chart — not this one, not ExcelJS.
+   A chart is a separate OOXML part wired in by relationship, and producing one
+   means hand-assembling chart XML into the zip. That is a fragile amount of
+   machinery for a workbook, so the Dashboard draws its bars in cells instead
+   (`barCell`): proportional block characters that need no library, print, and
+   survive being pasted into an email. File size was never the constraint — a
+   real chart would add tens of kilobytes to a file that is already hundreds.
 
    CAPS
    ----
@@ -64,6 +78,92 @@ const DERIVED_KEY = 'derived';
 const DERIVED_SCALARS = [
   'verdict', 'worst_state', 'third_party_state', 'expired_count', 'expiring_soon_count',
 ];
+
+/* ---------- Report styling ------------------------------------------------ */
+
+/**
+ * The palette, mirroring css/tokens.css. See the header for why the hex values
+ * are repeated here rather than referenced.
+ */
+const C = {
+  navy: '0F1942',        // --navy
+  border: 'E2E4ED',      // --border
+  wash: 'F5F6FA',        // --bg
+  text: '1A1D2E',        // --text
+  muted: '4A4F6A',       // --text2
+  white: 'FFFFFF',
+  blockedBg: 'FEE2E2', blockedTx: '991B1B',   // --blocked-bg / --blocked-dark
+  warnBg: 'FEF3C7',    warnTx: 'B45309',      // --warn-bg / --warn-dark
+  clearedBg: 'DCFCE7', clearedTx: '15803D',   // --cleared-bg / --cleared-dark
+};
+
+const HAIRLINE = { style: 'thin', color: { rgb: C.border } };
+const BOX = { top: HAIRLINE, bottom: HAIRLINE, left: HAIRLINE, right: HAIRLINE };
+
+const S = {
+  title: { font: { sz: 16, bold: true, color: { rgb: C.navy } } },
+  coverLabel: { font: { sz: 11, color: { rgb: C.muted } } },
+  coverValue: { font: { sz: 11, bold: true, color: { rgb: C.text } } },
+
+  section: {
+    font: { sz: 12, bold: true, color: { rgb: C.white } },
+    fill: { patternType: 'solid', fgColor: { rgb: C.navy } },
+    alignment: { vertical: 'center' },
+  },
+  head: {
+    font: { sz: 11, bold: true, color: { rgb: C.navy } },
+    fill: { patternType: 'solid', fgColor: { rgb: C.wash } },
+    border: BOX,
+    alignment: { vertical: 'center' },
+  },
+
+  label: { font: { sz: 11, color: { rgb: C.text } }, border: BOX },
+  number: { font: { sz: 11, color: { rgb: C.text } }, border: BOX, alignment: { horizontal: 'right' } },
+  percent: {
+    font: { sz: 11, color: { rgb: C.text } }, border: BOX,
+    alignment: { horizontal: 'right' }, numFmt: '0.0"%"',
+  },
+  bar: { font: { sz: 11, color: { rgb: C.navy } }, border: BOX },
+
+  dataHead: {
+    font: { sz: 11, bold: true, color: { rgb: C.white } },
+    fill: { patternType: 'solid', fgColor: { rgb: C.navy } },
+    alignment: { vertical: 'center' },
+  },
+};
+
+/** Row tints, keyed by the tone a section attaches to a row. */
+const TONES = {
+  blocked: { bg: C.blockedBg, tx: C.blockedTx },
+  warning: { bg: C.warnBg, tx: C.warnTx },
+  cleared: { bg: C.clearedBg, tx: C.clearedTx },
+};
+
+/** A base style tinted by tone, or the base style when there is no tone. */
+function toned(base, tone) {
+  const spec = TONES[tone];
+  if (!spec) return base;
+
+  return Object.assign({}, base, {
+    font: Object.assign({}, base.font, { color: { rgb: spec.tx }, bold: true }),
+    fill: { patternType: 'solid', fgColor: { rgb: spec.bg } },
+  });
+}
+
+/** Width of the bar column, in block characters. */
+const BAR_WIDTH = 18;
+
+/**
+ * A proportional bar as text — the Dashboard's substitute for a chart.
+ *
+ * A non-zero value always draws at least one block: a bar that rounds to
+ * nothing reads as "no data" when it means "one out of two hundred", and on a
+ * safety report those are not the same statement.
+ */
+function barCell(value, max) {
+  if (!max || value <= 0) return '';
+  return '█'.repeat(Math.max(1, Math.round((value / max) * BAR_WIDTH)));
+}
 
 /** Triggers a client-side download from an in-memory string. */
 function downloadBlob(content, filename, mime) {
@@ -161,7 +261,30 @@ function toSheet(records, omitColumn) {
     return out;
   });
 
-  return window.XLSX.utils.json_to_sheet(filled, { header });
+  const sheet = window.XLSX.utils.json_to_sheet(filled, { header });
+
+  // Header styling and an autofilter, on both spreadsheet exports. Neither
+  // touches a cell value, so the round trip through bulk_import_* is unaffected
+  // — SheetJS reads values and ignores styles.
+  header.forEach((key, c) => {
+    const address = window.XLSX.utils.encode_cell({ r: 0, c });
+    if (sheet[address]) sheet[address].s = S.dataHead;
+  });
+
+  sheet['!cols'] = header.map((key) => ({
+    wch: Math.min(32, Math.max(11, key.length + 2)),
+  }));
+  sheet['!rows'] = [{ hpt: 20 }];
+
+  if (filled.length > 0) {
+    sheet['!autofilter'] = {
+      ref: window.XLSX.utils.encode_range({
+        s: { r: 0, c: 0 }, e: { r: filled.length, c: header.length - 1 },
+      }),
+    };
+  }
+
+  return sheet;
 }
 
 /**
@@ -185,16 +308,30 @@ export function exportToExcel(records, spec) {
  * because a management sheet is read top to bottom and a grid of side-by-side
  * tables is a layout no spreadsheet reader agrees on.
  *
+ * Two optional keys shape it further:
+ *
+ *   cover      the opening block: a big title, then label/value pairs. No grid.
+ *   tones      per-row tint names ('blocked' | 'warning' | 'cleared'), so the
+ *              verdict table reads at a glance instead of being three numbers.
+ *   barColumn  index of the column to draw a proportional bar from, appended as
+ *              a trailing column. The closest thing to a chart that a workbook
+ *              can carry without hand-built OOXML.
+ *
  * An empty section is dropped rather than printed as a bare heading, the same
  * rule `exportToPDF` applies — "By subcontractor" over nothing says the data is
  * missing when in fact nothing matched.
  *
- * @param {Array<{heading: string, head?: Array<string>, rows: Array<Array>}>} sections
+ * @param {Array<Object>} sections
  * @returns {Object} an XLSX worksheet
  */
 function dashboardSheet(sections) {
+  const XLSX = window.XLSX;
   const aoa = [];
+  const styles = [];        // {r, c, s} applied after the sheet is built
+  const rowHeights = [];
   let widest = 2;
+
+  const styleAt = (r, c, s) => styles.push({ r, c, s });
 
   sections.forEach((section) => {
     if (!section) return;
@@ -202,22 +339,95 @@ function dashboardSheet(sections) {
     if (rows.length === 0) return;
 
     if (aoa.length > 0) aoa.push([]);
-    if (section.heading) aoa.push([section.heading]);
-    if (section.head) aoa.push(section.head);
 
-    rows.forEach((row) => {
-      aoa.push(row);
-      if (row.length > widest) widest = row.length;
+    if (section.cover) {
+      rowHeights[aoa.length] = 24;
+      styleAt(aoa.length, 0, S.title);
+      aoa.push([section.heading]);
+
+      rows.forEach((row) => {
+        styleAt(aoa.length, 0, S.coverLabel);
+        styleAt(aoa.length, 1, S.coverValue);
+        aoa.push(row);
+        if (row.length > widest) widest = row.length;
+      });
+      return;
+    }
+
+    // How wide the banner and the bars need to be. The banner spans the table
+    // so a section reads as one block rather than as a stray coloured cell.
+    const span = (section.head ? section.head.length : rows[0].length)
+      + (section.barColumn === undefined ? 0 : 1);
+
+    if (section.heading) {
+      rowHeights[aoa.length] = 20;
+      for (let c = 0; c < span; c += 1) styleAt(aoa.length, c, S.section);
+      aoa.push([section.heading]);
+    }
+
+    if (section.head) {
+      const head = section.head.slice();
+      if (section.barColumn !== undefined) head.push('');
+      for (let c = 0; c < span; c += 1) styleAt(aoa.length, c, S.head);
+      aoa.push(head);
+    }
+
+    // The bar scale is per section: a bar is "biggest row in this table", never
+    // a share of some other table's maximum.
+    let max = 0;
+    if (section.barColumn !== undefined) {
+      rows.forEach((row) => {
+        const value = Number(row[section.barColumn]);
+        if (Number.isFinite(value) && value > max) max = value;
+      });
+    }
+
+    rows.forEach((row, index) => {
+      const tone = section.tones ? section.tones[index] : undefined;
+      const out = row.slice();
+
+      row.forEach((value, c) => {
+        let base = S.label;
+        if (typeof value === 'number') {
+          // The share column is the one carrying a fraction; everything else
+          // numeric is a count and wants no decimal places.
+          base = section.head && /%/.test(String(section.head[c])) ? S.percent : S.number;
+        }
+        styleAt(aoa.length, c, toned(base, tone));
+      });
+
+      if (section.barColumn !== undefined) {
+        out.push(barCell(Number(row[section.barColumn]), max));
+        styleAt(aoa.length, row.length, toned(S.bar, tone));
+      }
+
+      aoa.push(out);
+      if (out.length > widest) widest = out.length;
     });
   });
 
-  const sheet = window.XLSX.utils.aoa_to_sheet(aoa);
+  const sheet = XLSX.utils.aoa_to_sheet(aoa);
 
-  // Column widths are the only presentation this build can write, and the first
-  // column carries every label and heading, so it gets the room.
+  styles.forEach(({ r, c, s }) => {
+    const address = XLSX.utils.encode_cell({ r, c });
+    // A banner or header cell past the end of its row has no cell to style, so
+    // create an empty one — otherwise the fill stops mid-way across the table.
+    if (!sheet[address]) sheet[address] = { t: 's', v: '' };
+    sheet[address].s = s;
+  });
+
+  // The first column carries every label and heading, so it gets the room; the
+  // last is the bar column, where there is one, and must fit BAR_WIDTH blocks.
+  const hasBars = sections.some((s) => s && s.barColumn !== undefined);
   const cols = [{ wch: 42 }];
-  for (let i = 1; i < widest; i += 1) cols.push({ wch: 14 });
+  for (let i = 1; i < widest; i += 1) {
+    cols.push({ wch: hasBars && i === widest - 1 ? BAR_WIDTH + 2 : 14 });
+  }
   sheet['!cols'] = cols;
+
+  // rowHeights is sparse, and map preserves the holes — so only the rows given
+  // a height get one, and every other row keeps Excel's default.
+  sheet['!rows'] = rowHeights.map((hpt) => ({ hpt }));
 
   return sheet;
 }
