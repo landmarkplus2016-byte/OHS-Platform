@@ -405,7 +405,8 @@ function dqEmployeeFindings_(rows, today, moduleSettings) {
 
 /**
  * @private
- * The counts a human reads to spot what the checks are forbidden to assert.
+ * The counts a human reads to spot what the checks are forbidden to assert,
+ * AND the records behind them.
  *
  * Section 3.10 rules out raising "this N/A flag looks wrong" as a finding,
  * because it is not mechanically decidable. But the *shape* of the data is
@@ -413,11 +414,22 @@ function dqEmployeeFindings_(rows, today, moduleSettings) {
  * is a pattern somebody who knows the roster can read in a second and the
  * platform cannot read at all.
  *
- * Returned as data, rendered as a note, never counted as a problem.
+ * THE RECORDS SHIP WITH THE COUNTS, AND MUST
+ * ------------------------------------------
+ * A count on its own is a dead end. "7 Site Engineers have their medical marked
+ * N/A" is only useful to somebody who can then look at those seven and say
+ * which are wrong — and if the page cannot show them, it has asked a question
+ * it gives nobody the means to answer. So each title carries its employees, and
+ * the page makes them navigable to the form that fixes them.
+ *
+ * This does not soften the rule it sits beside. The platform still asserts
+ * nothing about whether any of these flags is correct; it just stops hiding who
+ * they belong to.
  */
 function dqEmployeePatterns_(rows) {
   var naByCert = {};
   var mcuNaByTitle = {};
+  var mcuNaEmployees = [];
 
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
@@ -434,13 +446,34 @@ function dqEmployeePatterns_(rows) {
       naByCert[key] = (naByCert[key] || 0) + 1;
 
       if (key === 'mcu') {
+        var employeeId = normalizeString(row.employee_id);
+        mcuNaEmployees.push({
+          employee_id: employeeId,
+          name: normalizeString(row.name),
+          title: normalizeString(row.title) || '(no title)',
+          team: normalizeString(row.team).toLowerCase(),
+          subcontractor: normalizeString(row.subcontractor),
+          edit_route: 'employee/' + employeeId + '/edit'
+        });
+
         var title = normalizeString(row.title) || '(no title)';
         mcuNaByTitle[title] = (mcuNaByTitle[title] || 0) + 1;
       }
     }
   }
 
-  return { na_by_cert: naByCert, mcu_na_by_title: mcuNaByTitle };
+  // Sorted by title then name, so the page can group without re-sorting and the
+  // order is stable between calls.
+  mcuNaEmployees.sort(function (a, b) {
+    if (a.title !== b.title) return a.title < b.title ? -1 : 1;
+    return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+  });
+
+  return {
+    na_by_cert: naByCert,
+    mcu_na_by_title: mcuNaByTitle,
+    mcu_na_employees: mcuNaEmployees
+  };
 }
 
 // ---------------------------------------------------------------------------

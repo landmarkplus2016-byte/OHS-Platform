@@ -923,3 +923,16 @@
 /* The pattern table is reference, not work — narrower and quieter than the
    worklist above it, so it cannot be mistaken for more findings. */
 .dq-patterns .tbl { max-width: 460px; }
+
+/* A person under an expanded job title. Indented and tinted so the hierarchy
+   is readable without a second table nested inside the first. */
+.dq-patterns .dq-subrow > td:first-child { padding-inline-start: 28px; }
+.dq-patterns .dq-subrow { background: var(--bg); }
+
+/* The open/closed marker on a job-title row. */
+.dq-caret {
+  display: inline-block;
+  width: 14px;
+  color: var(--muted);
+  font-size: 11px;
+}

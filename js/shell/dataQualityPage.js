@@ -62,6 +62,7 @@ function pageState() {
       search: '',
       page: 1,
       checkOptions: null, // held from the first unfiltered load
+      openTitle: '',      // which pattern title is expanded
     };
   }
   return UI.dataQuality;
@@ -307,8 +308,16 @@ function renderPager(s) {
  *
  * The checks are forbidden from asserting that an N/A flag is wrong, because
  * that is not mechanically decidable. But the shape of the data is worth
- * showing: somebody who knows the roster reads "6 Site Engineers have their
+ * showing: somebody who knows the roster reads "7 Site Engineers have their
  * medical marked N/A" in a second, and the platform cannot read it at all.
+ *
+ * EVERY TITLE OPENS
+ * -----------------
+ * A count nobody can drill into is a dead end — it poses a question and gives
+ * the reader no way to answer it. So each title expands to the employees behind
+ * it, and each of those goes to the form that fixes it, exactly like a finding
+ * row. The platform still asserts nothing about whether any flag is correct; it
+ * just stops hiding whose flags they are.
  *
  * Below the worklist rather than above it — it is context, not work, and it
  * must never be the first thing between an admin and the table.
@@ -325,12 +334,49 @@ function renderPatterns(s) {
     .sort((a, b) => b.count - a.count);
   if (!rows.length) return '';
 
+  const people = (patterns.mcu_na_employees) || [];
   const total = rows.reduce((sum, row) => sum + row.count, 0);
+  const open = s.openTitle;
+
+  // An older deployment returns counts with no records. Rather than render rows
+  // that look clickable and do nothing, the whole table stays flat until the
+  // server is new enough to say who they are.
+  const drillable = people.length > 0;
+
+  const titleRow = (row) => {
+    const isOpen = drillable && open === row.title;
+    const caret = drillable ? `<span class="dq-caret">${isOpen ? '▾' : '▸'}</span>` : '';
+
+    const head = `
+      <tr class="${drillable ? 'row-clickable' : ''}"${
+        drillable ? ` data-dq-title="${escapeHtml(row.title)}"` : ''
+      }>
+        <td>${caret}${escapeHtml(row.title)}</td>
+        <td>${row.count}</td>
+      </tr>`;
+
+    if (!isOpen) return head;
+
+    const members = people.filter((p) => p.title === row.title);
+    return head + members.map((p) => `
+      <tr class="row-clickable dq-subrow" data-dq-route="${escapeHtml(p.edit_route)}">
+        <td>
+          <b>${escapeHtml(p.name)}</b>
+          <div class="cell-sub">${escapeHtml(p.employee_id)}${
+            p.subcontractor ? ' · ' + escapeHtml(p.subcontractor) : ''
+          }</div>
+        </td>
+        <td data-stop-row-click><button type="button" class="btn btn-ghost btn-sm"
+                    data-dq-route="${escapeHtml(p.edit_route)}">${escapeHtml(t('dq_fix'))}</button></td>
+      </tr>`).join('');
+  };
 
   return `
     <section class="dq-patterns">
       <div class="section-head">${escapeHtml(t('dq_patterns_title', { count: total }))}</div>
-      <div class="dq-patterns-note">${escapeHtml(t('dq_patterns_note'))}</div>
+      <div class="dq-patterns-note">${escapeHtml(t(
+        drillable ? 'dq_patterns_note' : 'dq_patterns_note_flat'
+      ))}</div>
       <table class="tbl">
         <thead>
           <tr>
@@ -338,13 +384,7 @@ function renderPatterns(s) {
             <th>${escapeHtml(t('dq_col_count'))}</th>
           </tr>
         </thead>
-        <tbody>
-          ${rows.map((row) => `
-            <tr>
-              <td>${escapeHtml(row.title)}</td>
-              <td>${row.count}</td>
-            </tr>`).join('')}
-        </tbody>
+        <tbody>${rows.map(titleRow).join('')}</tbody>
       </table>
     </section>`;
 }
@@ -400,6 +440,18 @@ export function bindDataQualityPageEvents() {
       s.status = 'idle';
       s.data = null;
       ensureData();
+    });
+  });
+
+  // Expand a pattern title to the people behind the count. One open at a time:
+  // the table is reference sitting under the real worklist, and every title
+  // open at once would push the page length back to what it was before.
+  root.querySelectorAll('[data-dq-title]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const s = pageState();
+      const title = el.getAttribute('data-dq-title');
+      s.openTitle = s.openTitle === title ? '' : title;
+      render();
     });
   });
 

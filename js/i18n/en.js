@@ -115,7 +115,8 @@ export const en = {
   dq_all_clear: 'No issues found. Every record is internally consistent.',
   dq_no_modules: 'You do not have view access to any module yet.',
   dq_patterns_title: 'Medicals marked N/A, by job title ({count})',
-  dq_patterns_note: 'Not a finding — the platform cannot tell whether an N/A is correct. Shown so you can spot a role that looks wrong.',
+  dq_patterns_note: 'Not a finding — the platform cannot tell whether an N/A is correct. Open a job title to see who they are and judge for yourself.',
+  dq_patterns_note_flat: 'Not a finding — the platform cannot tell whether an N/A is correct. Shown so you can spot a role that looks wrong.',
 
   // Check names
   dq_check_cert_na_and_suspended: 'Certificate marked both N/A and suspended',
