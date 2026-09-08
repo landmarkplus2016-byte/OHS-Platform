@@ -17,6 +17,22 @@
    No export *formatting* is here. Shaping and file writing live in
    js/utils/exportHelpers.js, exactly as in OHS-DB.
 
+   THE TWO SPREADSHEETS
+   --------------------
+   `Excel` is the full record: every raw Sheet column, re-importable as-is.
+   `Report` is what goes to management and to a customer — a Dashboard sheet of
+   aggregates, then the same records with the internal columns dropped.
+
+   They are two cards rather than one, because the thing that makes the Excel
+   export useful (raw column names, every audit field, the derived block) is
+   exactly what makes it wrong to hand to a customer, and the thing that makes
+   the report readable is what would break `bulk_import_employees` if it were the
+   only export. Neither can be the other's default.
+
+   Both the omitted-column rule and the Dashboard content live here rather than
+   in exportHelpers.js: they name fields of specific modules, and that file
+   deliberately names none.
+
    CAPS
    ----
    OHS-DB's limits, unchanged: 100 records for PDF, 5,000 for Excel and CSV.
@@ -24,16 +40,16 @@
    is never silently truncated.
    ========================================================================== */
 
-import { UI } from '../state.js';
+import { UI, CONFIG } from '../state.js';
 import { api } from '../api.js';
 import { render } from '../render.js';
 import { t } from '../i18n/i18n.js';
-import { escapeHtml } from '../utils/format.js';
+import { escapeHtml, fmtDate, todayISO } from '../utils/format.js';
 import { canView } from '../utils/permissions.js';
 import { MODULE_NAMES } from '../constants/globals.js';
 import { toast, toastError } from '../components/toast.js';
 import {
-  exportToExcel, exportToCSV, exportToPDF, exportBlockReason,
+  exportToExcel, exportToCSV, exportToPDF, exportToReport, exportBlockReason,
   pdfDate, pdfFlag, pdfText, SPREADSHEET_ROW_CAP, PDF_ROW_CAP,
 } from '../utils/exportHelpers.js';
 
@@ -70,6 +86,155 @@ function certKeysOf(employee) {
     .map((key) => /^cert_(.+)_expiry$/.exec(key))
     .filter(Boolean)
     .map((match) => match[1]);
+}
+
+/* ---------- Report shaping ------------------------------------------------ */
+
+/**
+ * Columns the report drops by name.
+ *
+ * Three groups, each for its own reason:
+ *
+ *   audit trail   who touched the row and when. Internal bookkeeping — it tells
+ *                 a customer nothing about their equipment or their people.
+ *   national_id   personal data. A compliance report leaves the building; a
+ *                 roster of national ID numbers should not go with it.
+ *   admin fields  `comments` is explicitly admin-only (Section 7.6), and
+ *                 `rejected_by` is an author column like the rest.
+ *
+ * `archived` and `rejected` are dropped for a different reason: both are already
+ * decided by the filter that produced the set, so the column repeats the filter
+ * on every row and can only confuse a reader who does not know what it means.
+ */
+const REPORT_OMITTED_COLUMNS = new Set([
+  'created_at', 'created_by', 'updated_at', 'updated_by',
+  'archived', 'archived_at', 'archived_by',
+  'national_id',
+  'rejected', 'rejected_by',
+  'comments',
+]);
+
+/**
+ * True when a column has no place in a report.
+ *
+ * Beyond the named set: the `derived_` block (the aggregates it summarises are
+ * on the Dashboard, where a manager can read them without counting rows), the
+ * certificate `_link` / `_na` / `_suspended` columns (a Drive URL is dead text
+ * in print and the two flags are admin decisions, not facts about the person),
+ * and the retired `wave_N_*` columns, which nothing has written since the log
+ * moved to InspectionWaves.
+ *
+ * The certificate `_expiry` dates stay. They are the report.
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+function omitReportColumn(key) {
+  if (REPORT_OMITTED_COLUMNS.has(key)) return true;
+  if (key.indexOf('derived_') === 0) return true;
+  if (/^cert_.+_(link|na|suspended)$/.test(key)) return true;
+  if (/^wave_\d+_(date|result)$/.test(key)) return true;
+  return false;
+}
+
+/** A share of the whole as a percentage, to one decimal. 0 when there is no whole. */
+function sharePct(part, total) {
+  return total === 0 ? 0 : Math.round((part / total) * 1000) / 10;
+}
+
+/**
+ * Counts per group, sorted by count descending, ties broken by label so the
+ * order is stable between two exports of the same set.
+ *
+ * @param {Array<Object>} records
+ * @param {function(Object): string} labelOf  '' for a record with nothing recorded
+ * @param {string} blankLabel                 what to call the '' bucket
+ * @returns {Array<{label: string, total: number, blocked: number, warning: number}>}
+ */
+function groupByLabel(records, labelOf, blankLabel) {
+  const groups = new Map();
+
+  records.forEach((record) => {
+    const raw = (labelOf(record) || '').trim();
+    const label = raw === '' ? blankLabel : raw;
+
+    if (!groups.has(label)) groups.set(label, { label, total: 0, blocked: 0, warning: 0 });
+
+    const group = groups.get(label);
+    group.total += 1;
+
+    const verdict = (record.derived || {}).verdict;
+    if (verdict === 'blocked') group.blocked += 1;
+    else if (verdict === 'warning') group.warning += 1;
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    if (a.total !== b.total) return b.total - a.total;
+    return a.label < b.label ? -1 : (a.label > b.label ? 1 : 0);
+  });
+}
+
+/** The filters that produced this set, spelled out for the Dashboard. */
+function describeFilters(module, selection) {
+  const parts = [];
+
+  module.filters.forEach((filter) => {
+    const value = selection[filter.key];
+    if (!value) return;
+
+    const label = t(filter.labelKey);
+
+    if (filter.kind === 'checkbox') parts.push(label);
+    else if (filter.kind === 'static') {
+      const option = filter.options.find((o) => o.value === value);
+      parts.push(`${label}: ${option ? t(option.labelKey) : value}`);
+    } else parts.push(`${label}: ${value}`);
+  });
+
+  return parts.length === 0 ? t('export_report_no_filters') : parts.join('  ·  ');
+}
+
+/**
+ * The block every report opens with: what this is, who it is about, when it was
+ * run, and — the part that matters most when somebody queries a number six weeks
+ * later — which filters produced it.
+ */
+function coverSection(module, selection, records) {
+  return {
+    heading: t('export_report_title', { module: t(module.labelKey) }),
+    rows: [
+      [t('export_report_company'), CONFIG.company_name || ''],
+      [t('export_report_generated'), fmtDate(todayISO())],
+      [t('export_report_filters'), describeFilters(module, selection)],
+      [t('export_report_total'), records.length],
+    ],
+  };
+}
+
+/** Verdict counts. The same three values both modules derive (Section 6). */
+function verdictSection(records) {
+  const counts = { cleared: 0, warning: 0, blocked: 0 };
+  records.forEach((record) => {
+    const verdict = (record.derived || {}).verdict;
+    if (counts[verdict] !== undefined) counts[verdict] += 1;
+  });
+
+  return {
+    heading: t('export_dash_verdict'),
+    head: [t('export_dash_verdict'), t('export_dash_count'), t('export_dash_share')],
+    rows: VERDICTS.map((verdict) => [
+      t('verdict_' + verdict), counts[verdict], sharePct(counts[verdict], records.length),
+    ]),
+  };
+}
+
+/** A group table: label, total, and how many of them are blocked or warning. */
+function groupSection(heading, labelHeading, groups) {
+  return {
+    heading,
+    head: [labelHeading, t('export_dash_count'), t('verdict_blocked'), t('verdict_warning')],
+    rows: groups.map((g) => [g.label, g.total, g.blocked, g.warning]),
+  };
 }
 
 /**
@@ -112,6 +277,101 @@ const EXPORT_MODULES = [
         include_archived: !!selection.include_archived,
         filters,
       };
+    },
+
+    report: {
+      /**
+       * The Dashboard sheet for an employee report.
+       *
+       * Read top to bottom it answers, in order: what is this, how many people
+       * can work today, how bad is the certificate position, which certificates
+       * are driving it, and whose people they are. That last one is the question
+       * a subcontractor meeting opens with and no other sheet answers.
+       */
+      sections(records, selection, module) {
+        const total = records.length;
+
+        // Certificate keys in the order the records carry them, restricted to
+        // the ones that actually apply to somebody — per_cert only holds a
+        // team's applicable certs, so a field-only export never prints a
+        // scaffolding row that would read as "nobody has it" (Section 6.1).
+        const certKeys = [];
+        const seenCert = new Set();
+        records.forEach((employee) => {
+          Object.keys((employee.derived || {}).per_cert || {}).forEach((key) => {
+            if (seenCert.has(key)) return;
+            seenCert.add(key);
+            certKeys.push(key);
+          });
+        });
+
+        const stateCounts = {};
+        const certCounts = {};
+        certKeys.forEach((key) => { certCounts[key] = {}; });
+
+        records.forEach((employee) => {
+          const derived = employee.derived || {};
+
+          const worst = derived.worst_state;
+          if (worst) stateCounts[worst] = (stateCounts[worst] || 0) + 1;
+
+          const perCert = derived.per_cert || {};
+          Object.keys(perCert).forEach((key) => {
+            if (!certCounts[key]) return;
+            const state = perCert[key];
+            certCounts[key][state] = (certCounts[key][state] || 0) + 1;
+          });
+        });
+
+        return [
+          coverSection(module, selection, records),
+          verdictSection(records),
+
+          {
+            // Counted over people, not certificates — one employee with four
+            // expired certs is one row here and four in the table below. The
+            // two never sum to each other and are not meant to.
+            heading: t('export_dash_worst_state'),
+            head: [t('export_dash_state'), t('export_dash_count'), t('export_dash_share')],
+            rows: CERT_STATES
+              .filter((state) => (stateCounts[state] || 0) > 0)
+              .map((state) => [
+                t('state_' + state), stateCounts[state], sharePct(stateCounts[state], total),
+              ]),
+          },
+
+          {
+            heading: t('export_dash_by_cert'),
+            head: [
+              t('export_dash_certificate'),
+              t('state_expired'), t('state_urgent'), t('state_soon'), t('state_suspended'),
+            ],
+            rows: certKeys.map((key) => [
+              t('cert_' + key),
+              certCounts[key].expired || 0,
+              certCounts[key].urgent || 0,
+              certCounts[key].soon || 0,
+              certCounts[key].suspended || 0,
+            ]),
+          },
+
+          groupSection(
+            t('export_dash_by_subcontractor'),
+            t('emp_filter_subcontractor'),
+            groupByLabel(records, (e) => e.subcontractor, t('export_dash_not_recorded'))
+          ),
+
+          groupSection(
+            t('export_dash_by_team'),
+            t('emp_col_team'),
+            groupByLabel(
+              records,
+              (e) => t(e.team === 'safety' ? 'team_safety' : 'team_field'),
+              t('export_dash_not_recorded')
+            )
+          ),
+        ];
+      },
     },
 
     pdf: {
@@ -205,6 +465,59 @@ const EXPORT_MODULES = [
         include_rejected: !!selection.include_rejected,
         filters,
       };
+    },
+
+    report: {
+      /**
+       * The Dashboard sheet for an equipment report.
+       *
+       * The owning-company table is the one the dashboard chart exists for
+       * (Section 5.5) and the reason `subcontractor` was added to the tab at
+       * all: "whose expired harness is this" is the question a report to a
+       * customer has to be able to answer.
+       */
+      sections(records, selection, module) {
+        const total = records.length;
+
+        const thirdParty = {};
+        records.forEach((item) => {
+          const state = (item.derived || {}).third_party_state;
+          if (state) thirdParty[state] = (thirdParty[state] || 0) + 1;
+        });
+
+        return [
+          coverSection(module, selection, records),
+          verdictSection(records),
+
+          {
+            heading: t('export_dash_third_party'),
+            head: [t('export_dash_state'), t('export_dash_count'), t('export_dash_share')],
+            // `suspended` is absent: it is applied on top of a date by the
+            // employee derivation only, and a third-party inspection has no
+            // flag columns to suspend it with (Section 6.5).
+            rows: CERT_STATES
+              .filter((state) => state !== 'suspended' && (thirdParty[state] || 0) > 0)
+              .map((state) => [
+                t('state_' + state), thirdParty[state], sharePct(thirdParty[state], total),
+              ]),
+          },
+
+          groupSection(
+            t('export_dash_by_item'),
+            t('eqp_filter_item'),
+            groupByLabel(records, (q) => q.item, t('export_dash_not_recorded'))
+          ),
+
+          groupSection(
+            t('export_dash_by_owner'),
+            t('eqp_filter_subcontractor'),
+            // The blank bucket is real and is never dropped: the column was
+            // added after the tab was in use and nothing was backfilled, so
+            // hiding it would understate the fleet (Section 2).
+            groupByLabel(records, (q) => q.subcontractor, t('export_dash_not_recorded'))
+          ),
+        ];
+      },
     },
 
     pdf: {
@@ -527,6 +840,7 @@ export function renderExportPage() {
       </div>
 
       <div class="export-cards">
+        ${renderFormatCard('report', '▦', s)}
         ${renderFormatCard('excel', '▤', s)}
         ${renderFormatCard('csv', '▥', s)}
         ${renderFormatCard('pdf', '▨', s)}
@@ -564,7 +878,15 @@ async function runExport(format) {
       return;
     }
 
-    if (format === 'excel') {
+    if (format === 'report') {
+      exportToReport(records, {
+        sheetName: module.sheetName,
+        filePrefix: module.filePrefix,
+        dashboardName: t('export_sheet_dashboard'),
+        sections: module.report.sections(records, selection, module),
+        omitColumn: omitReportColumn,
+      });
+    } else if (format === 'excel') {
       exportToExcel(records, { sheetName: module.sheetName, filePrefix: module.filePrefix });
     } else if (format === 'csv') {
       exportToCSV(records, { filePrefix: module.filePrefix });

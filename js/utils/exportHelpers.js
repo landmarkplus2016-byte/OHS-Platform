@@ -18,6 +18,26 @@
    already a valid import file. Translated labels appear only in the PDF, which
    is for reading rather than re-importing.
 
+   THE REPORT IS A SECOND WRITER, NOT A CHANGE TO THE FIRST
+   -------------------------------------------------------
+   `exportToReport` writes a workbook for management and customers: a Dashboard
+   sheet of aggregates, then the records with the internal columns dropped. It is
+   deliberately additive. The moment the report replaced the full export, the
+   round trip above would be gone and nobody would notice until an import failed
+   on a file that used to work.
+
+   Which columns it drops and what the Dashboard says are both the caller's
+   business — this file still names no field of any module.
+
+   NO CELL FORMATTING, ANYWHERE
+   ----------------------------
+   The SheetJS build index.html loads from the CDN is the community one, which
+   cannot write fills, fonts or borders, and there is no styled build to reach
+   for without an npm dependency. Column widths (`!cols`) are the one thing it
+   does write, so that is the whole of the presentation budget here. A workbook
+   that comes out of this file is black on white by construction; any colour in
+   one has been added after the download.
+
    CAPS
    ----
    The two limits below are OHS-DB's, unchanged. They are enforced by the caller
@@ -123,10 +143,17 @@ function unionColumns(rows) {
   return seen;
 }
 
-/** A worksheet with a stable column order and no missing cells. */
-function toSheet(records) {
+/**
+ * A worksheet with a stable column order and no missing cells.
+ *
+ * @param {Array<Object>} records
+ * @param {function(string): boolean} [omitColumn]  true to drop that column
+ */
+function toSheet(records, omitColumn) {
   const rows = records.map(flattenForSpreadsheet);
-  const header = unionColumns(rows);
+
+  let header = unionColumns(rows);
+  if (omitColumn) header = header.filter((key) => !omitColumn(key));
 
   const filled = rows.map((row) => {
     const out = {};
@@ -148,6 +175,73 @@ export function exportToExcel(records, spec) {
   window.XLSX.utils.book_append_sheet(workbook, toSheet(records), spec.sheetName);
 
   window.XLSX.writeFile(workbook, filenameFor(spec.filePrefix, 'xlsx'));
+}
+
+/**
+ * A Dashboard worksheet from the caller's sections.
+ *
+ * A section is `{heading, head, rows}` — a title line, an optional header row,
+ * and the body. Sections are stacked down one column with a blank line between,
+ * because a management sheet is read top to bottom and a grid of side-by-side
+ * tables is a layout no spreadsheet reader agrees on.
+ *
+ * An empty section is dropped rather than printed as a bare heading, the same
+ * rule `exportToPDF` applies — "By subcontractor" over nothing says the data is
+ * missing when in fact nothing matched.
+ *
+ * @param {Array<{heading: string, head?: Array<string>, rows: Array<Array>}>} sections
+ * @returns {Object} an XLSX worksheet
+ */
+function dashboardSheet(sections) {
+  const aoa = [];
+  let widest = 2;
+
+  sections.forEach((section) => {
+    if (!section) return;
+    const rows = section.rows || [];
+    if (rows.length === 0) return;
+
+    if (aoa.length > 0) aoa.push([]);
+    if (section.heading) aoa.push([section.heading]);
+    if (section.head) aoa.push(section.head);
+
+    rows.forEach((row) => {
+      aoa.push(row);
+      if (row.length > widest) widest = row.length;
+    });
+  });
+
+  const sheet = window.XLSX.utils.aoa_to_sheet(aoa);
+
+  // Column widths are the only presentation this build can write, and the first
+  // column carries every label and heading, so it gets the room.
+  const cols = [{ wch: 42 }];
+  for (let i = 1; i < widest; i += 1) cols.push({ wch: 14 });
+  sheet['!cols'] = cols;
+
+  return sheet;
+}
+
+/**
+ * Download a report .xlsx: a Dashboard sheet, then the records.
+ *
+ * @param {Array<Object>} records
+ * @param {{sheetName: string, filePrefix: string, dashboardName: string,
+ *          sections: Array<Object>, omitColumn: function(string): boolean}} spec
+ */
+export function exportToReport(records, spec) {
+  const workbook = window.XLSX.utils.book_new();
+
+  // Dashboard first, so the workbook opens on the summary rather than on row 1
+  // of a thousand-row table.
+  window.XLSX.utils.book_append_sheet(
+    workbook, dashboardSheet(spec.sections), spec.dashboardName
+  );
+  window.XLSX.utils.book_append_sheet(
+    workbook, toSheet(records, spec.omitColumn), spec.sheetName
+  );
+
+  window.XLSX.writeFile(workbook, filenameFor(spec.filePrefix + '-Report', 'xlsx'));
 }
 
 /**
@@ -252,7 +346,11 @@ export function pdfText(value) {
  * Having nothing to export blocks as firmly as having too much — a zero-row
  * spreadsheet is a support call, not a download.
  *
- * @param {string} format 'excel' | 'csv' | 'pdf'
+ * `report` is a spreadsheet and takes the spreadsheet cap — the test is written
+ * as "not pdf" rather than as a list, so a fourth spreadsheet flavour is capped
+ * correctly on the day it is added rather than uncapped until somebody notices.
+ *
+ * @param {string} format 'report' | 'excel' | 'csv' | 'pdf'
  * @param {number} count
  * @returns {string} already-translated reason, or ''
  */
